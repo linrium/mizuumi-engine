@@ -11,7 +11,7 @@ From the repository root, run `./scripts/bootstrap.sh` for the full Keycloak →
 ./scripts/forward.sh
 ```
 
-`setup_vault.sh` creates `k8s/vault/tls/` (ignored by Git) and a `vault-tls` Kubernetes Secret. `init_vault.sh` saves the unseal key and initial root token to ignored, mode-600 `k8s/vault/init.json`. Back up this file securely outside the machine. A restart seals Vault; run `./scripts/unseal_vault.sh` before using it again. The UI is `https://localhost:8200/ui`; trust `k8s/vault/tls/ca.crt` in your browser or TLS client.
+`setup_vault.sh` creates a local CA and CA-signed server certificate in `k8s/vault/tls/` (ignored by Git) and a `vault-tls` Kubernetes Secret. If the server certificate changes, it restarts Vault and unseals it when the local init file is available. `init_vault.sh` saves the unseal key and initial root token to ignored, mode-600 `k8s/vault/init.json`. Back up this file securely outside the machine. A later restart seals Vault; run `./scripts/unseal_vault.sh` before using it again. The UI is `https://localhost:8200/ui`; trust `k8s/vault/tls/ca.crt` in your browser or TLS client.
 
 The old dev-mode StatefulSet has no PVC, and Kubernetes cannot add one in place. If `setup_vault.sh` detects it, it stops before changing anything. After exporting any dev data you need, run `helm -n vault uninstall vault`, then rerun the setup, init, and bootstrap commands. The old in-memory Vault state is destroyed by that uninstall. Keycloak data remains in its PostgreSQL PVC.
 

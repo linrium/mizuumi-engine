@@ -105,8 +105,8 @@ start_forward storage
 echo "Keycloak API/UI: https://localhost:8080"
 echo "Vault API:       https://localhost:8200/v1"
 echo "Vault UI:        https://localhost:8200/ui"
-echo "RustFS S3/API:   http://localhost:9000"
-echo "RustFS Console:  http://localhost:9001"
+echo "RustFS S3/API:   https://localhost:9000"
+echo "RustFS Console:  https://localhost:9001"
 echo "Press Ctrl-C to stop the forwards."
 
 while true; do

@@ -32,23 +32,10 @@ if kubectl -n "$namespace" get statefulset "$release" -o json 2>/dev/null | \
   exit 1
 fi
 tls_dir="$repo_root/k8s/vault/tls"
-if [[ ! -f "$tls_dir/tls.crt" || ! -f "$tls_dir/tls.key" ]]; then
-  if [[ -e "$tls_dir/tls.crt" || -e "$tls_dir/tls.key" ]]; then
-    echo "Incomplete Vault TLS keypair in $tls_dir; refusing to replace it." >&2
-    exit 1
-  fi
-  umask 077
-  mkdir -p "$tls_dir"
-  openssl req -x509 -newkey rsa:3072 -sha256 -nodes -days 365 \
-    -config "$repo_root/k8s/vault/tls.cnf" \
-    -keyout "$tls_dir/tls.key" -out "$tls_dir/tls.crt"
-  cp "$tls_dir/tls.crt" "$tls_dir/ca.crt"
-  echo "Generated local Vault TLS certificate in $tls_dir."
-fi
-if [[ ! -f "$tls_dir/ca.crt" ]]; then
-  echo "Missing $tls_dir/ca.crt; refusing to deploy." >&2
-  exit 1
-fi
+previous_cert="$(openssl x509 -in "$tls_dir/tls.crt" -noout -fingerprint -sha256 2>/dev/null || true)"
+"$repo_root/scripts/ensure_local_tls.sh" "$tls_dir" \
+  "$repo_root/k8s/vault/tls.cnf" "$repo_root/k8s/vault/ca.cnf"
+current_cert="$(openssl x509 -in "$tls_dir/tls.crt" -noout -fingerprint -sha256)"
 kubectl create namespace "$namespace" --dry-run=client -o yaml | kubectl apply -f -
 kubectl -n "$namespace" create secret generic vault-tls \
   --from-file=tls.crt="$tls_dir/tls.crt" \
@@ -82,6 +69,23 @@ if [[ -n "$desired_revision" && "$pod_revision" != "$desired_revision" ]]; then
   echo "Back up any existing dev-mode data before replacing the pod. Then run:" >&2
   echo "  kubectl -n $namespace delete pod $release-0" >&2
   exit 1
+fi
+
+if [[ -n "$previous_cert" && "$previous_cert" != "$current_cert" ]]; then
+  echo "Restarting Vault to load its new TLS certificate."
+  kubectl -n "$namespace" delete pod "$release-0"
+  for attempt in {1..120}; do
+    pod_phase="$(kubectl -n "$namespace" get pod "$release-0" -o jsonpath='{.status.phase}' 2>/dev/null || true)"
+    [[ "$pod_phase" == Running ]] && break
+    if [[ "$attempt" -eq 120 ]]; then
+      echo "Vault pod did not return to Running after its certificate restart." >&2
+      exit 1
+    fi
+    sleep 2
+  done
+  if [[ -f "$repo_root/k8s/vault/init.json" ]]; then
+    "$repo_root/scripts/unseal_vault.sh"
+  fi
 fi
 
 echo "Vault is deployed. On first install, initialize and unseal with ./scripts/init_vault.sh."

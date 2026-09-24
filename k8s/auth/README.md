@@ -11,7 +11,7 @@ This chart installs one Keycloak replica and, by default, a PostgreSQL StatefulS
    ./scripts/setup_auth.sh
    ```
 
-The script uses your current Kubernetes context, creates the `auth` namespace and credentials Secret if needed, generates a local TLS certificate in the ignored `k8s/auth/tls/` directory, and installs or upgrades the Helm release. It leaves an existing credentials Secret unchanged, so editing `credentials.env` after the first install does not rotate the database password.
+The script uses your current Kubernetes context, creates the `auth` namespace and credentials Secret if needed, generates a local CA and CA-signed server certificate in the ignored `k8s/auth/tls/` directory, and installs or upgrades the Helm release. It leaves an existing credentials Secret unchanged, so editing `credentials.env` after the first install does not rotate the database password. If the server certificate changes, it restarts Keycloak after updating the TLS Secret.
 
 To access Keycloak and Vault together after installation:
 

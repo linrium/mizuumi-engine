@@ -7,8 +7,8 @@ prompt = no
 CN = vault.vault.svc.cluster.local
 
 [ext]
-basicConstraints = critical,CA:TRUE
-keyUsage = critical,digitalSignature,keyEncipherment,keyCertSign
+basicConstraints = critical,CA:FALSE
+keyUsage = critical,digitalSignature,keyEncipherment
 extendedKeyUsage = serverAuth
 subjectAltName = @san
 
