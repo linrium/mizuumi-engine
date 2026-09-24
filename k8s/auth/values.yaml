@@ -1,0 +1,58 @@
+keycloak:
+  backchannelDynamic: true
+  image:
+    repository: quay.io/keycloak/keycloak
+    tag: "26.7.4"
+    pullPolicy: IfNotPresent
+  # Port-forwarding default. Set to the public HTTPS URL when enabling ingress.
+  hostname: https://localhost:8080
+  tlsSecretName: keycloak-tls
+  bootstrapAdminUsername: admin
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      memory: 2Gi
+
+# The Secret must contain ADMIN_PASSWORD and DB_PASSWORD keys.
+credentials:
+  secretName: keycloak-credentials
+
+postgresql:
+  enabled: true
+  image:
+    repository: postgres
+    tag: "17.6-alpine"
+    pullPolicy: IfNotPresent
+  database: keycloak
+  username: keycloak
+  persistence:
+    size: 8Gi
+    # Empty uses the cluster's default StorageClass.
+    storageClassName: ""
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 1Gi
+
+# Used only when postgresql.enabled is false. The credentials Secret's
+# DB_PASSWORD key is used for this database too.
+externalDatabase:
+  url: ""
+  username: keycloak
+
+service:
+  type: ClusterIP
+  port: 8080
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  host: auth.example.com
+  tls:
+    enabled: false
+    secretName: ""

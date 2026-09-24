@@ -1,0 +1,17 @@
+{{- if .Values.postgresql.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "keycloak.name" . }}-postgresql
+  labels:
+    {{- include "keycloak.labels" . | nindent 4 }}
+spec:
+  clusterIP: None
+  selector:
+    {{- include "keycloak.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: postgresql
+  ports:
+    - name: postgresql
+      port: 5432
+      targetPort: postgresql
+{{- end }}

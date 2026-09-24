@@ -1,0 +1,52 @@
+global:
+  tlsDisable: false
+
+server:
+  dev:
+    enabled: false
+  standalone:
+    enabled: true
+    config: |
+      ui = true
+      disable_mlock = true
+      listener "tcp" {
+        address = "[::]:8200"
+        cluster_address = "[::]:8201"
+        tls_disable = 0
+        tls_cert_file = "/vault/tls/tls.crt"
+        tls_key_file = "/vault/tls/tls.key"
+      }
+      storage "file" {
+        path = "/vault/data"
+      }
+  dataStorage:
+    enabled: true
+    size: 10Gi
+    storageClass: standard
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Retain
+  volumes:
+    - name: vault-tls
+      secret:
+        secretName: vault-tls
+  volumeMounts:
+    - name: vault-tls
+      mountPath: /vault/tls
+      readOnly: true
+  extraEnvironmentVars:
+    VAULT_CACERT: /vault/tls/ca.crt
+  extraContainers:
+    - name: keycloak-loopback
+      image: alpine/socat:1.8.0.3
+      command: ["socat"]
+      args:
+        - TCP-LISTEN:8080,bind=127.0.0.1,fork,reuseaddr
+        - TCP:keycloak.auth.svc.cluster.local:8080
+
+ui:
+  enabled: true
+injector:
+  enabled: false
+csi:
+  enabled: false

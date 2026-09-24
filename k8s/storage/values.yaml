@@ -1,0 +1,68 @@
+# Official rustfs/rustfs chart 0.12.0; local single-node installation.
+mode:
+  standalone:
+    enabled: true
+  distributed:
+    enabled: false
+
+secret:
+  existingSecret: rustfs-credentials
+
+extraVolumes:
+  - name: vault-ca
+    secret:
+      secretName: rustfs-vault-ca
+extraVolumeMounts:
+  - name: vault-ca
+    mountPath: /etc/rustfs/vault-ca
+    readOnly: true
+
+storageclass:
+  name: standard
+  dataStorageSize: 8Gi
+  logStorageSize: 1Gi
+
+ingress:
+  enabled: false
+
+serviceAccount:
+  automount: false
+
+config:
+  rustfs:
+    obs_environment: production
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    memory: 2Gi
+
+# The confidential client secret is read from rustfs-credentials via envFrom.
+# The callback is on the API port (9000); the Console runs on port 9001.
+extraEnv:
+  - name: SSL_CERT_FILE
+    value: /etc/rustfs/vault-ca/ca.crt
+  - name: RUSTFS_BROWSER_REDIRECT_URL
+    value: http://localhost:9001
+  - name: RUSTFS_IDENTITY_OPENID_ENABLE
+    value: "on"
+  - name: RUSTFS_IDENTITY_OPENID_CONFIG_URL
+    value: https://keycloak.auth.svc.cluster.local:8080/realms/sovico
+  - name: RUSTFS_IDENTITY_OPENID_CLIENT_ID
+    value: rustfs-console
+  - name: RUSTFS_IDENTITY_OPENID_SCOPES
+    value: openid,profile,email
+  - name: RUSTFS_IDENTITY_OPENID_REDIRECT_URI
+    value: http://localhost:9000/rustfs/admin/v3/oidc/callback/default
+  - name: RUSTFS_IDENTITY_OPENID_REDIRECT_URI_DYNAMIC
+    value: "off"
+  - name: RUSTFS_IDENTITY_OPENID_DISPLAY_NAME
+    value: Keycloak
+  - name: RUSTFS_IDENTITY_OPENID_GROUPS_CLAIM
+    value: groups
+  - name: RUSTFS_IDENTITY_OPENID_USERNAME_CLAIM
+    value: preferred_username
+  - name: RUSTFS_OUTBOUND_ALLOW_ORIGINS
+    value: https://keycloak.auth.svc.cluster.local:8080,https://localhost:8080

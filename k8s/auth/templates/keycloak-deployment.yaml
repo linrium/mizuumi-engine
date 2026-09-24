@@ -1,0 +1,98 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "keycloak.name" . }}
+  labels:
+    {{- include "keycloak.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "keycloak.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: server
+  template:
+    metadata:
+      labels:
+        {{- include "keycloak.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: server
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: keycloak
+          image: "{{ .Values.keycloak.image.repository }}:{{ .Values.keycloak.image.tag }}"
+          imagePullPolicy: {{ .Values.keycloak.image.pullPolicy }}
+          args: ["start"]
+          ports:
+            - name: https
+              containerPort: 8443
+            - name: management
+              containerPort: 9000
+          env:
+            - name: KC_DB
+              value: postgres
+            - name: KC_DB_URL
+              {{- if .Values.postgresql.enabled }}
+              value: {{ printf "jdbc:postgresql://%s-postgresql:5432/%s" (include "keycloak.name" .) .Values.postgresql.database | quote }}
+              {{- else }}
+              value: {{ required "externalDatabase.url is required when postgresql.enabled=false" .Values.externalDatabase.url | quote }}
+              {{- end }}
+            - name: KC_DB_USERNAME
+              value: {{ ternary .Values.postgresql.username .Values.externalDatabase.username .Values.postgresql.enabled | quote }}
+            - name: KC_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.credentials.secretName | quote }}
+                  key: DB_PASSWORD
+            - name: KC_BOOTSTRAP_ADMIN_USERNAME
+              value: {{ .Values.keycloak.bootstrapAdminUsername | quote }}
+            - name: KC_BOOTSTRAP_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.credentials.secretName | quote }}
+                  key: ADMIN_PASSWORD
+            - name: KC_HOSTNAME
+              value: {{ .Values.keycloak.hostname | quote }}
+            - name: KC_HOSTNAME_BACKCHANNEL_DYNAMIC
+              value: {{ .Values.keycloak.backchannelDynamic | quote }}
+            - name: KC_HTTP_ENABLED
+              value: "false"
+            - name: KC_HTTPS_CERTIFICATE_FILE
+              value: /etc/keycloak/tls/tls.crt
+            - name: KC_HTTPS_CERTIFICATE_KEY_FILE
+              value: /etc/keycloak/tls/tls.key
+            - name: KC_HTTP_MANAGEMENT_SCHEME
+              value: http
+            - name: KC_HEALTH_ENABLED
+              value: "true"
+            {{- if .Values.ingress.enabled }}
+            - name: KC_PROXY_HEADERS
+              value: xforwarded
+            {{- end }}
+          startupProbe:
+            httpGet:
+              path: /health/started
+              port: management
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: management
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: management
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.keycloak.resources | nindent 12 }}
+          volumeMounts:
+            - name: keycloak-tls
+              mountPath: /etc/keycloak/tls
+              readOnly: true
+      volumes:
+        - name: keycloak-tls
+          secret:
+            secretName: {{ .Values.keycloak.tlsSecretName | quote }}
