@@ -57,5 +57,5 @@ kubectl -n "$namespace" create secret generic keycloak-tls \
 helm upgrade --install "$release" "$repo_root/k8s/auth" \
   --namespace "$namespace" --wait --timeout 10m
 
-echo "Keycloak is ready. Run: ./scripts/forward.sh --keycloak-only"
+echo "Keycloak is ready. Run: ./scripts/forward.sh to forward Keycloak, Vault, and RustFS."
 echo "Open https://localhost:8080 (trust k8s/auth/tls/ca.crt in your browser)."

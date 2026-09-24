@@ -19,8 +19,6 @@ To access Keycloak and Vault together after installation:
 ./scripts/forward.sh
 ```
 
-For the Keycloak Administration Console without a Vault port-forward, run `./scripts/forward.sh --keycloak-only`.
-
 Visit `https://localhost:8080` and sign in to the Administration Console with username `admin` and the `ADMIN_PASSWORD` Secret value. Trust `k8s/auth/tls/ca.crt` in your browser to avoid the self-signed certificate warning. Restart any running `forward.sh` process after upgrading from HTTP. `keycloak.hostname` defaults to this port-forward URL, so change it for a shared installation. Dynamic backchannel URLs let in-cluster clients reach token and JWKS endpoints over HTTPS.
 
 ## Vault login through Keycloak

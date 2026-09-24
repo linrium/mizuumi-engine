@@ -6,25 +6,14 @@ if ! command -v kubectl >/dev/null 2>&1; then
   exit 1
 fi
 
-keycloak_only=false
-case "${1:-}" in
-  "") ;;
-  --keycloak-only) keycloak_only=true ;;
-  *) echo "Usage: $0 [--keycloak-only]" >&2; exit 2 ;;
-esac
-if [[ $# -gt 1 ]]; then
-  echo "Usage: $0 [--keycloak-only]" >&2
+if [[ $# -ne 0 ]]; then
+  echo "Usage: $0" >&2
   exit 2
 fi
 
 kubectl -n auth get service keycloak >/dev/null
-storage_available=false
-if [[ "$keycloak_only" == false ]]; then
-  kubectl -n vault get pod vault-0 >/dev/null
-fi
-if [[ "$keycloak_only" == false ]] && kubectl -n rustfs get service rustfs-svc >/dev/null 2>&1; then
-  storage_available=true
-fi
+kubectl -n vault get pod vault-0 >/dev/null
+kubectl -n rustfs get service rustfs-svc >/dev/null
 
 auth_pid=""
 vault_pid=""
@@ -106,31 +95,19 @@ check_forward() {
 }
 
 start_forward auth
-if [[ "$keycloak_only" == false ]]; then
-  start_forward vault
-  if [[ "$storage_available" == true ]]; then
-    start_forward storage
-  fi
-fi
+start_forward vault
+start_forward storage
 
 echo "Keycloak API/UI: https://localhost:8080"
-if [[ "$keycloak_only" == false ]]; then
-  echo "Vault API:       https://localhost:8200/v1"
-  echo "Vault UI:        https://localhost:8200/ui"
-fi
-if [[ "$storage_available" == true ]]; then
-  echo "RustFS S3/API:   http://localhost:9000"
-  echo "RustFS Console:  http://localhost:9001"
-fi
+echo "Vault API:       https://localhost:8200/v1"
+echo "Vault UI:        https://localhost:8200/ui"
+echo "RustFS S3/API:   http://localhost:9000"
+echo "RustFS Console:  http://localhost:9001"
 echo "Press Ctrl-C to stop the forwards."
 
 while true; do
   check_forward auth
-  if [[ "$keycloak_only" == false ]]; then
-    check_forward vault
-    if [[ "$storage_available" == true ]]; then
-      check_forward storage
-    fi
-  fi
+  check_forward vault
+  check_forward storage
   sleep 1
 done
