@@ -16,6 +16,8 @@ The individual steps are:
 ./scripts/forward.sh
 ```
 
+For on-demand forwarding with [autotunnel](https://github.com/atas/autotunnel), install it with `brew install atas/tap/autotunnel`, then run `./scripts/forward.sh --autotunnel`. This uses the current Kubernetes context and the same local ports and URLs as the default script. Autotunnel starts each tunnel when a connection arrives and closes it after 60 minutes idle. Stop it with Ctrl-C; do not run both forwarding modes at once because they use the same ports.
+
 The storage bootstrap creates the `rustfs-console` confidential Keycloak client in the `sovico` realm, a `groups` claim mapper and a `readonly` group for the initial `vault-user`. It also enables Vault Transit, creates a non-exportable `rustfs` key and a restricted token, and creates the `rustfs-credentials` and `rustfs-vault-ca` Kubernetes Secrets. The latter contains a CA bundle for Vault and Keycloak. The generated root access/secret keys and client/KMS secrets are held in ignored, mode-600 `k8s/storage/credentials.env`, never in Helm values. Back up this file securely. The Vault token has a 720-hour TTL; renew or rotate it before expiration.
 
 After starting `forward.sh`, open the Console at `http://localhost:9001`. The S3 endpoint is `http://localhost:9000`; the OIDC callback is on port 9000. Keycloak must also remain forwarded at `https://localhost:8080` during login. The browser OIDC flow and Vault KMS connectivity should be verified on your cluster before storing important objects. `SSL_CERT_FILE` points RustFS at the local Vault and Keycloak CA bundle; do not enable RustFS's insecure KMS override. If you change either local TLS certificate, rerun the bootstrap and `setup_storage.sh` to update the Secret and restart RustFS.

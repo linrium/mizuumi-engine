@@ -6,9 +6,13 @@ if ! command -v kubectl >/dev/null 2>&1; then
   exit 1
 fi
 
-if [[ $# -ne 0 ]]; then
-  echo "Usage: $0" >&2
+if [[ $# -gt 1 || ( $# -eq 1 && "$1" != "--autotunnel" ) ]]; then
+  echo "Usage: $0 [--autotunnel]" >&2
   exit 2
+fi
+
+if [[ "${1:-}" == "--autotunnel" ]]; then
+  exec "$(dirname "${BASH_SOURCE[0]}")/forward_autotunnel.sh"
 fi
 
 kubectl -n auth get service keycloak >/dev/null
