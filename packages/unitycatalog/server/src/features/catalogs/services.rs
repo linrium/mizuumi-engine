@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use deadpool_postgres::Pool;
 use serde_json::Value;
 use tokio_postgres::error::SqlState;
-use unitycatalog_queries::queries::catalogs as queries;
+use unitycatalog_queries::queries::{catalogs as queries, schemas as schema_queries};
 
 use crate::error::AppError;
 
@@ -152,8 +152,18 @@ impl CatalogService for DefaultCatalogService {
         request: DeleteCatalogRequest,
     ) -> Result<(), AppError> {
         ensure_name(&name)?;
-        let _force = request.force.unwrap_or(false);
+        let force = request.force.unwrap_or(false);
         let client = self.pool.get().await?;
+        let child_schemas = schema_queries::list_schemas()
+            .bind(&client, &name, &String::new(), &1)
+            .all()
+            .await?;
+        if !child_schemas.is_empty() && !force {
+            return Err(AppError::FailedPrecondition(
+                "cannot delete catalog with schemas. Use force=true to force deletion.".to_string(),
+            ));
+        }
+
         queries::delete_catalog()
             .bind(&client, &name)
             .opt()

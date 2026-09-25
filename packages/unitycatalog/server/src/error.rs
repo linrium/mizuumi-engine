@@ -10,6 +10,8 @@ pub enum AppError {
     Conflict(String),
     #[error("invalid parameter: {0}")]
     InvalidParameter(String),
+    #[error("failed precondition: {0}")]
+    FailedPrecondition(String),
     #[error("json conversion failed")]
     Json(#[from] serde_json::Error),
     #[error("postgres query failed")]
@@ -37,6 +39,7 @@ impl IntoResponse for AppError {
             AppError::NotFound(_) => StatusCode::NOT_FOUND,
             AppError::Conflict(_) => StatusCode::CONFLICT,
             AppError::InvalidParameter(_) => StatusCode::BAD_REQUEST,
+            AppError::FailedPrecondition(_) => StatusCode::BAD_REQUEST,
             AppError::Json(_) => StatusCode::INTERNAL_SERVER_ERROR,
             AppError::Postgres(_)
             | AppError::Pool(_)
