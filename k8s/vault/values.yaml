@@ -13,6 +13,7 @@ server:
         address = "[::]:8200"
         cluster_address = "[::]:8201"
         tls_disable = 0
+        tls_disable_client_certs = true
         tls_cert_file = "/vault/tls/tls.crt"
         tls_key_file = "/vault/tls/tls.key"
       }

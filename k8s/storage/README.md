@@ -16,9 +16,10 @@ The individual steps are:
 ./scripts/forward.sh
 ```
 
-For on-demand forwarding with [autotunnel](https://github.com/atas/autotunnel), install it with `brew install atas/tap/autotunnel`, then run `./scripts/forward.sh --autotunnel`. If the Homebrew autotunnel service is running, stop it first with `brew services stop autotunnel`; it also listens on port 8989. This uses the current Kubernetes context. It keeps the default `localhost` ports for the configured OIDC redirects and adds friendly HTTPS routes on port 8989: `auth.localhost`, `vault.localhost`, `storage.localhost` (S3/API), and `storage-console.localhost` (Console). Autotunnel starts each tunnel when a connection arrives and closes it after 60 minutes idle. Stop it with Ctrl-C; do not run both forwarding modes at once because they use the same ports.
-
-Before using the friendly HTTPS names on an existing installation, rerun `./scripts/setup_auth.sh`, `./scripts/setup_vault.sh`, and `./scripts/setup_storage.sh`. They renew the server certificates to include the new hostnames while keeping the same local CAs. Vault may need to be unsealed after its certificate restart. Trust the three local CA certificates in your browser or client. The OIDC clients and callbacks remain configured for `localhost` ports; use the original URLs for Vault and RustFS Console login.
+On macOS, use `./scripts/forward.sh --trust --open` the first time. This trusts
+the generated Keycloak, Vault, and RustFS CAs in your user keychain and opens
+their browser UIs without certificate warnings. Trust persists, so later runs
+only need `./scripts/forward.sh --open`.
 
 The storage bootstrap creates the `rustfs-console` confidential Keycloak client in the `sovico` realm, a `groups` claim mapper and a `readonly` group for the initial `khaopad`. It also enables Vault Transit, creates a non-exportable `rustfs` key and a restricted token, and creates the `rustfs-credentials` and `rustfs-vault-ca` Kubernetes Secrets. The Vault policy permits encrypt/decrypt for the `rustfs` key and listing Transit key names for RustFS's startup health check. The CA Secret contains a bundle for Vault and Keycloak. The generated root access/secret keys and client/KMS secrets are held in ignored, mode-600 `k8s/storage/credentials.env`, never in Helm values. Back up this file securely. The Vault token has a 720-hour TTL; renew or rotate it before expiration.
 

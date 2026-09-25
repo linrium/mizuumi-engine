@@ -55,7 +55,8 @@ fi
 openssl req -new -newkey rsa:3072 -sha256 -nodes -config "$server_config" \
   -keyout "$server_key.new" -out "$tls_dir/tls.csr"
 openssl x509 -req -in "$tls_dir/tls.csr" -CA "$tls_dir/ca.crt" -CAkey "$tls_dir/ca.key" \
-  -CAcreateserial -days 365 -sha256 -extfile "$server_config" -extensions ext \
+  -CAserial "$tls_dir/ca.srl" -CAcreateserial \
+  -days 365 -sha256 -extfile "$server_config" -extensions ext \
   -out "$server_cert.new"
 openssl verify -CAfile "$tls_dir/ca.crt" "$server_cert.new"
 mv "$server_key.new" "$server_key"

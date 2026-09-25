@@ -40,7 +40,8 @@ keycloak_url=https://127.0.0.1:18080
 vault_url=https://127.0.0.1:18200
 issuer=https://localhost:8080/realms/sovico
 discovery_url=$issuer
-ui_callback=https://localhost:8200/ui/vault/auth/oidc/oidc/callback
+vault_browser_origin=https://vault.localhost:8200
+ui_callback=$vault_browser_origin/ui/vault/auth/oidc/oidc/callback
 cli_callback=http://localhost:8250/oidc/callback
 if [[ ! -f "$vault_ca" ]]; then
   echo "Missing Vault CA $vault_ca; run ./scripts/setup_vault.sh first." >&2
@@ -97,13 +98,16 @@ for attempt in {1..60}; do
   sleep 1
 done
 
-admin_token="$(printf '%s' "$admin_password" | keycloak_curl -fsS -X POST \
-  --data-urlencode 'password@-' \
-  --data-urlencode "username=$admin_user" \
-  --data-urlencode 'client_id=admin-cli' \
-  --data-urlencode 'grant_type=password' \
-  "$keycloak_url/realms/master/protocol/openid-connect/token" | jq -er '.access_token')"
-unset admin_password
+get_admin_token() {
+  printf '%s' "$admin_password" | keycloak_curl -fsS -X POST \
+    --data-urlencode 'password@-' \
+    --data-urlencode "username=$admin_user" \
+    --data-urlencode 'client_id=admin-cli' \
+    --data-urlencode 'grant_type=password' \
+    "$keycloak_url/realms/master/protocol/openid-connect/token" | jq -er '.access_token'
+}
+
+admin_token="$(get_admin_token)"
 
 keycloak_request() {
   local method="$1" path="$2"
@@ -139,8 +143,8 @@ esac
 
 clients="$(keycloak_request GET '/admin/realms/sovico/clients?clientId=vault')"
 client_uuid="$(printf '%s' "$clients" | jq -r '[.[] | select(.clientId == "vault")][0].id // empty')"
-client_payload="$(jq -cn --arg ui "$ui_callback" --arg cli "$cli_callback" \
-  '{clientId:"vault",enabled:true,protocol:"openid-connect",publicClient:false,clientAuthenticatorType:"client-secret",standardFlowEnabled:true,directAccessGrantsEnabled:false,serviceAccountsEnabled:false,redirectUris:[$ui,$cli],webOrigins:["https://localhost:8200"]}')"
+client_payload="$(jq -cn --arg ui "$ui_callback" --arg cli "$cli_callback" --arg origin "$vault_browser_origin" \
+  '{clientId:"vault",enabled:true,protocol:"openid-connect",publicClient:false,clientAuthenticatorType:"client-secret",standardFlowEnabled:true,directAccessGrantsEnabled:false,serviceAccountsEnabled:false,redirectUris:[$ui,$cli],webOrigins:[$origin]}')"
 if [[ -z "$client_uuid" ]]; then
   keycloak_request POST /admin/realms/sovico/clients "$client_payload" >/dev/null
   clients="$(keycloak_request GET '/admin/realms/sovico/clients?clientId=vault')"
@@ -148,8 +152,8 @@ if [[ -z "$client_uuid" ]]; then
   echo 'Created Keycloak client vault.'
 else
   current_client="$(keycloak_request GET "/admin/realms/sovico/clients/$client_uuid")"
-  client_payload="$(printf '%s' "$current_client" | jq -c --arg ui "$ui_callback" --arg cli "$cli_callback" \
-    '.enabled=true | .publicClient=false | .clientAuthenticatorType="client-secret" | .standardFlowEnabled=true | .directAccessGrantsEnabled=false | .serviceAccountsEnabled=false | .redirectUris=[$ui,$cli] | .webOrigins=["https://localhost:8200"]')"
+  client_payload="$(printf '%s' "$current_client" | jq -c --arg ui "$ui_callback" --arg cli "$cli_callback" --arg origin "$vault_browser_origin" \
+    '.enabled=true | .publicClient=false | .clientAuthenticatorType="client-secret" | .standardFlowEnabled=true | .directAccessGrantsEnabled=false | .serviceAccountsEnabled=false | .redirectUris=[$ui,$cli] | .webOrigins=[$origin]')"
   keycloak_request PUT "/admin/realms/sovico/clients/$client_uuid" "$client_payload" >/dev/null
   echo 'Updated Keycloak client vault.'
 fi
@@ -184,12 +188,15 @@ else
     echo 'User password cannot be empty.' >&2
     exit 1
   fi
+  # The initial admin token can expire while waiting at the interactive prompt.
+  admin_token="$(get_admin_token)"
   user_payload="$(printf '%s' "$SOVICO_USER_PASSWORD" | jq -Rs \
     '{username:"khaopad",enabled:true,credentials:[{type:"password",value:.,temporary:false}]}')"
   keycloak_request POST /admin/realms/sovico/users "$user_payload" >/dev/null
   unset SOVICO_USER_PASSWORD user_payload
   echo 'Created Keycloak user khaopad.'
 fi
+unset admin_password admin_token
 
 auth_mounts="$(vault_request GET /v1/sys/auth)"
 if ! printf '%s' "$auth_mounts" | jq -e 'has("oidc/")' >/dev/null; then
@@ -215,5 +222,5 @@ if [[ "$auth_url" != "$issuer/protocol/openid-connect/auth"* ]]; then
 fi
 
 echo 'Vault OIDC is configured for Keycloak realm sovico.'
-echo 'Run ./scripts/forward.sh, then open https://localhost:8200/ui and choose OIDC login.'
+echo 'Run ./scripts/forward.sh, then open https://vault.localhost:8200/ui/ and choose OIDC login.'
 echo 'Sign in as khaopad with the password set during bootstrap.'

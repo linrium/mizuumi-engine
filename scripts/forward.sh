@@ -1,8 +1,84 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+trust_local_cas=0
+open_browser=0
+
+usage() {
+  cat <<'EOF'
+Usage: ./scripts/forward.sh [--trust] [--open]
+
+  --trust  Trust the generated local CAs in the macOS user keychain.
+  --open   Open the Keycloak, Vault, and RustFS browser UIs.
+  -h, --help
+           Show this help.
+
+Run with --trust once to remove browser certificate warnings. The trust
+setting persists, so subsequent runs only need --open.
+EOF
+}
+
+while (( $# > 0 )); do
+  case "$1" in
+    --trust) trust_local_cas=1 ;;
+    --open) open_browser=1 ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: $1" >&2
+      usage >&2
+      exit 2
+      ;;
+  esac
+  shift
+done
+
 if ! command -v kubectl >/dev/null 2>&1; then
   echo "Missing required command: kubectl" >&2
+  exit 1
+fi
+
+trust_cas() {
+  if [[ "$(uname -s)" != "Darwin" ]]; then
+    echo "--trust currently supports the macOS user keychain only." >&2
+    exit 1
+  fi
+  if ! command -v security >/dev/null 2>&1; then
+    echo "Missing required command: security" >&2
+    exit 1
+  fi
+
+  local login_keychain ca
+  login_keychain="$(security default-keychain -d user |
+    sed -E 's/^[[:space:]]*"//; s/"[[:space:]]*$//')"
+  if [[ -z "$login_keychain" || ! -f "$login_keychain" ]]; then
+    echo "Could not find the default macOS user keychain." >&2
+    exit 1
+  fi
+
+  for ca in \
+    "$repo_root/k8s/auth/tls/ca.crt" \
+    "$repo_root/k8s/vault/tls/ca.crt" \
+    "$repo_root/k8s/storage/tls/ca.crt"; do
+    if [[ ! -f "$ca" ]]; then
+      echo "Missing local CA: $ca" >&2
+      echo "Run ./scripts/bootstrap.sh --no-forward first." >&2
+      exit 1
+    fi
+    security add-trusted-cert -r trustRoot -p ssl -k "$login_keychain" "$ca"
+  done
+  echo "Trusted the Keycloak, Vault, and RustFS local CAs in $login_keychain."
+}
+
+if (( trust_local_cas )); then
+  trust_cas
+fi
+
+if (( open_browser )) && [[ "$(uname -s)" != "Darwin" ]]; then
+  echo "--open currently supports macOS only." >&2
   exit 1
 fi
 
@@ -95,10 +171,19 @@ start_forward storage
 
 echo "Keycloak API/UI: https://localhost:8080"
 echo "Vault API:       https://localhost:8200/v1"
-echo "Vault UI:        https://localhost:8200/ui"
+echo "Vault UI:        https://vault.localhost:8200/ui/"
 echo "RustFS S3/API:   https://localhost:9000"
 echo "RustFS Console:  https://localhost:9001"
 echo "Press Ctrl-C to stop the forwards."
+
+if (( open_browser )); then
+  # Give kubectl a moment to establish its listeners before launching the tabs.
+  sleep 1
+  open \
+    "https://localhost:8080" \
+    "https://vault.localhost:8200/ui/" \
+    "https://localhost:9001"
+fi
 
 while true; do
   check_forward auth
