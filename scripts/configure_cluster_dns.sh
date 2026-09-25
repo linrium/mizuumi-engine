@@ -3,7 +3,7 @@ set -euo pipefail
 
 namespace=auth
 service=keycloak-gateway
-hostnames=(auth.mizuumi.test vault.mizuumi.test storage.mizuumi.test api.storage.mizuumi.test uc.mizuumi.test)
+hostnames=(auth.mizuumi.test vault.mizuumi.test storage.mizuumi.test api.storage.mizuumi.test unitycatalog.mizuumi.test)
 hostnames_joined="${hostnames[*]}"
 marker_begin='    # BEGIN mizuumi auth DNS'
 marker_end='    # END mizuumi auth DNS'

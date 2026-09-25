@@ -1,0 +1,97 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "unitycatalog.serverName" . }}
+  labels:
+    {{- include "unitycatalog.labels" . | nindent 4 }}
+    app.kubernetes.io/component: server
+spec:
+  replicas: {{ .Values.server.replicas }}
+  selector:
+    matchLabels:
+      {{- include "unitycatalog.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: server
+  template:
+    metadata:
+      labels:
+        {{- include "unitycatalog.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: server
+    spec:
+      serviceAccountName: {{ include "unitycatalog.serviceAccountName" . }}
+      automountServiceAccountToken: {{ .Values.serviceAccount.automount }}
+      containers:
+        - name: server
+          image: "{{ .Values.server.image.repository }}:{{ .Values.server.image.tag }}"
+          imagePullPolicy: {{ .Values.server.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.server.port }}
+          env:
+            - name: UNITYCATALOG_CONFIG
+              value: {{ .Values.server.configPath | quote }}
+            - name: UNITYCATALOG__SERVER__HOST
+              value: "0.0.0.0"
+            - name: UNITYCATALOG__SERVER__PORT
+              value: {{ .Values.server.port | quote }}
+            - name: UNITYCATALOG__POSTGRES__HOST
+              value: {{ include "unitycatalog.postgresqlHost" . | quote }}
+            - name: UNITYCATALOG__POSTGRES__PORT
+              value: {{ include "unitycatalog.postgresqlPort" . | quote }}
+            - name: UNITYCATALOG__POSTGRES__USER
+              value: {{ include "unitycatalog.postgresqlUsername" . | quote }}
+            - name: UNITYCATALOG__POSTGRES__DATABASE
+              value: {{ include "unitycatalog.postgresqlDatabase" . | quote }}
+            - name: UNITYCATALOG__POSTGRES__PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "unitycatalog.postgresqlSecretName" . }}
+                  key: {{ include "unitycatalog.postgresqlPasswordKey" . | quote }}
+            - name: UNITYCATALOG__VENDING__ENDPOINT_URL
+              value: {{ .Values.vending.endpointUrl | quote }}
+            - name: UNITYCATALOG__VENDING__REGION
+              value: {{ .Values.vending.region | quote }}
+            - name: UNITYCATALOG__VENDING__DURATION_SECONDS
+              value: {{ .Values.vending.durationSeconds | quote }}
+            - name: UNITYCATALOG__VENDING__FORCE_PATH_STYLE
+              value: {{ .Values.vending.forcePathStyle | quote }}
+            - name: UNITYCATALOG__VENDING__ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.server.credentialsSecretName | quote }}
+                  key: {{ .Values.vending.accessKeySecretKey | quote }}
+            - name: UNITYCATALOG__VENDING__SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.server.credentialsSecretName | quote }}
+                  key: {{ .Values.vending.secretKeySecretKey | quote }}
+            - name: AWS_CA_BUNDLE
+              value: /etc/unitycatalog/trust/rustfs-ca.crt
+            - name: SSL_CERT_FILE
+              value: /etc/unitycatalog/trust/rustfs-ca.crt
+          volumeMounts:
+            - name: config
+              mountPath: {{ dir .Values.server.configPath }}
+              readOnly: true
+            - name: trust
+              mountPath: /etc/unitycatalog/trust
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /health/readyz
+              port: http
+            periodSeconds: 10
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /health/livez
+              port: http
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.server.resources | nindent 12 }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "unitycatalog.serverName" . }}-config
+        - name: trust
+          secret:
+            secretName: {{ .Values.server.trustSecretName | quote }}

@@ -1,0 +1,65 @@
+server:
+  image:
+    repository: mizuumi/unitycatalog-server
+    tag: latest
+    pullPolicy: Always
+  replicas: 1
+  port: 8080
+  credentialsSecretName: unitycatalog-credentials
+  trustSecretName: unitycatalog-trust
+  configPath: /etc/unitycatalog/config.toml
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
+
+service:
+  type: ClusterIP
+  port: 8080
+
+postgresql:
+  enabled: true
+  image:
+    repository: postgres
+    tag: "19beta4"
+    pullPolicy: Always
+  database: unitycatalog
+  username: unitycatalog
+  password: unitycatalog
+  existingSecretName: ""
+  passwordKey: password
+  persistence:
+    size: 8Gi
+    storageClassName: ""
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 1Gi
+
+externalPostgresql:
+  host: ""
+  port: 5432
+  database: unitycatalog
+  username: unitycatalog
+  existingSecretName: ""
+  passwordKey: password
+
+vending:
+  endpointUrl: https://rustfs-svc.storage.svc.cluster.local:9000
+  region: us-east-1
+  durationSeconds: 3600
+  forcePathStyle: true
+  # These are key names inside server.credentialsSecretName, not literal
+  # credentials. Create/populate the Secret with:
+  # ./scripts/create_unitycatalog_rustfs_user.sh
+  accessKeySecretKey: S3_ACCESS_KEY
+  secretKeySecretKey: S3_SECRET_KEY
+
+serviceAccount:
+  create: true
+  name: ""
+  automount: false

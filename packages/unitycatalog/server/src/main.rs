@@ -33,7 +33,10 @@ async fn main() -> anyhow::Result<()> {
     let state = AppState {
         health: Arc::new(DefaultHealthService::new(pool.clone())),
         hello: Arc::new(DefaultHelloService::new(pool)),
-        vending: Arc::new(DefaultVendingService::new(settings.vending.clone())),
+        vending: Arc::new(
+            DefaultVendingService::new(settings.vending.clone())
+                .context("failed to create vending service")?,
+        ),
     };
 
     let app = Router::new()

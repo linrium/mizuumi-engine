@@ -4,18 +4,19 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 namespace="${UNITYCATALOG_NAMESPACE:-tower}"
 release="${UNITYCATALOG_RELEASE:-unitycatalog}"
-jwt_secret="${UNITYCATALOG_JWT_SECRET:-unitycatalog-jwt}"
 credentials_secret="${UNITYCATALOG_CREDENTIALS_SECRET:-unitycatalog-credentials}"
 trust_secret="${UNITYCATALOG_TRUST_SECRET:-unitycatalog-trust}"
-uc_email="${UNITYCATALOG_USER_EMAIL:-khaopad@mizuumi.test}"
-rustfs_role_arn="${UNITYCATALOG_RUSTFS_ROLE_ARN:-arn:aws:iam::000000000000:role/unitycatalog}"
+image_repository="${UNITYCATALOG_IMAGE_REPOSITORY:-mizuumi/unitycatalog-server}"
+image_tag="${UNITYCATALOG_IMAGE_TAG:-latest}"
+skip_image_build="${UNITYCATALOG_SKIP_IMAGE_BUILD:-0}"
 chart="$repo_root/k8s/unitycatalog"
-key_dir=""
+server_dir="$repo_root/packages/unitycatalog/server"
+temp_dir=""
 vault_pid=""
 
 cleanup() {
   [[ -z "$vault_pid" ]] || { kill "$vault_pid" 2>/dev/null || true; wait "$vault_pid" 2>/dev/null || true; }
-  [[ -z "$key_dir" ]] || rm -rf "$key_dir"
+  [[ -z "$temp_dir" ]] || rm -rf "$temp_dir"
 }
 trap cleanup EXIT
 
@@ -23,17 +24,19 @@ usage() {
   cat <<'EOF'
 Usage: ./scripts/setup_unitycatalog.sh [helm upgrade options]
 
-Installs or upgrades Unity Catalog OSS in the current Kubernetes context.
+Installs or upgrades the Rust Unity Catalog server in the current Kubernetes context.
 Additional arguments are forwarded to `helm upgrade --install`, for example:
-  ./scripts/setup_unitycatalog.sh --set server.persistence.size=10Gi
+  ./scripts/setup_unitycatalog.sh --set postgresql.persistence.size=10Gi
   ./scripts/setup_unitycatalog.sh --values /path/to/values.yaml
 
 Environment overrides:
   UNITYCATALOG_NAMESPACE   Kubernetes namespace (default: tower)
   UNITYCATALOG_RELEASE     Helm release name (default: unitycatalog)
-  UNITYCATALOG_JWT_SECRET  Signing-key Secret name (default: unitycatalog-jwt)
-  UNITYCATALOG_USER_EMAIL  Keycloak/UC user email (default: khaopad@mizuumi.test)
-  UNITYCATALOG_RUSTFS_ROLE_ARN  RustFS STS role ARN
+  UNITYCATALOG_CREDENTIALS_SECRET  RustFS IAM Secret name (default: unitycatalog-credentials)
+  UNITYCATALOG_TRUST_SECRET        CA bundle Secret name (default: unitycatalog-trust)
+  UNITYCATALOG_IMAGE_REPOSITORY    Docker image repository (default: mizuumi/unitycatalog-server)
+  UNITYCATALOG_IMAGE_TAG           Docker image tag (default: latest)
+  UNITYCATALOG_SKIP_IMAGE_BUILD    Set to 1 to skip docker build/load
 EOF
 }
 
@@ -44,12 +47,15 @@ case "${1:-}" in
     ;;
 esac
 
-for command in kubectl helm openssl curl jq; do
+for command in kubectl helm curl jq; do
   if ! command -v "$command" >/dev/null 2>&1; then
     echo "Missing required command: $command" >&2
     exit 1
   fi
 done
+if [[ "$skip_image_build" != 1 ]]; then
+  command -v docker >/dev/null 2>&1 || { echo "Missing required command: docker" >&2; exit 1; }
+fi
 
 context="$(kubectl config current-context)"
 case "$context" in
@@ -58,6 +64,53 @@ case "$context" in
 esac
 echo "Using Kubernetes context: $context"
 
+image="$image_repository:$image_tag"
+if [[ "$skip_image_build" != 1 ]]; then
+  echo "Building Unity Catalog server image: $image"
+  docker build -t "$image" "$server_dir"
+
+  case "$context" in
+    kind-*)
+      if command -v kind >/dev/null 2>&1; then
+        cluster="${context#kind-}"
+        echo "Loading image into kind cluster: $cluster"
+        kind load docker-image "$image" --name "$cluster"
+      else
+        echo "Kubernetes context is kind but the kind CLI is missing." >&2
+        exit 1
+      fi
+      ;;
+    k3d-*)
+      if command -v k3d >/dev/null 2>&1; then
+        cluster="${context#k3d-}"
+        echo "Importing image into k3d cluster: $cluster"
+        k3d image import "$image" --cluster "$cluster"
+      else
+        echo "Kubernetes context is k3d but the k3d CLI is missing." >&2
+        exit 1
+      fi
+      ;;
+    minikube|minikube-*)
+      if command -v minikube >/dev/null 2>&1; then
+        echo "Loading image into minikube."
+        minikube image load "$image"
+      else
+        echo "Kubernetes context is minikube but the minikube CLI is missing." >&2
+        exit 1
+      fi
+      ;;
+    docker-desktop|rancher-desktop|orbstack|colima)
+      echo "Using Docker-local image for context: $context"
+      ;;
+    microk8s)
+      echo "Built $image; ensure microk8s can access the local Docker image or push it to a registry." >&2
+      ;;
+    k3s)
+      echo "Built $image; ensure k3s can access the local Docker image or push it to a registry." >&2
+      ;;
+  esac
+fi
+
 for required in \
   "$repo_root/k8s/auth/tls/ca.crt" \
   "$repo_root/k8s/storage/tls/ca.crt" \
@@ -65,32 +118,13 @@ for required in \
   [[ -f "$required" ]] || { echo "Missing $required; bootstrap auth, Vault, and storage first." >&2; exit 1; }
 done
 
-if ! kubectl -n auth get configmap keycloak-gateway -o jsonpath='{.data.Caddyfile}' 2>/dev/null | grep -q 'uc.mizuumi.test'; then
-  echo "Updating the shared gateway and certificate for uc.mizuumi.test."
+if ! kubectl -n auth get configmap keycloak-gateway -o jsonpath='{.data.Caddyfile}' 2>/dev/null | grep -q 'unitycatalog.mizuumi.test'; then
+  echo "Updating the shared gateway and certificate for unitycatalog.mizuumi.test."
   "$repo_root/scripts/setup_auth.sh"
 fi
 
 if ! kubectl get namespace "$namespace" >/dev/null 2>&1; then
   kubectl create namespace "$namespace"
-fi
-
-if kubectl -n "$namespace" get secret "$jwt_secret" >/dev/null 2>&1; then
-  echo "Using existing Secret: $jwt_secret"
-else
-  key_dir="$(mktemp -d "${TMPDIR:-/tmp}/unitycatalog-keys.XXXXXX")"
-
-  openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 \
-    -out "$key_dir/private_key.pem" 2>/dev/null
-  openssl pkcs8 -topk8 -inform PEM -outform DER -nocrypt \
-    -in "$key_dir/private_key.pem" -out "$key_dir/private_key.der"
-  openssl pkey -in "$key_dir/private_key.pem" -pubout -outform DER \
-    -out "$key_dir/public_key.der"
-  openssl rand -hex 32 > "$key_dir/key_id.txt"
-
-  kubectl -n "$namespace" create secret generic "$jwt_secret" \
-    --from-file=private_key.der="$key_dir/private_key.der" \
-    --from-file=public_key.der="$key_dir/public_key.der" \
-    --from-file=key_id.txt="$key_dir/key_id.txt"
 fi
 
 if [[ -n "${VAULT_TOKEN:-}" ]]; then
@@ -116,13 +150,12 @@ vault_secret="$(curl -fsS --cacert "$repo_root/k8s/vault/tls/ca.crt" \
   }
 unset vault_token
 
-credentials_file="$(mktemp "${TMPDIR:-/tmp}/unitycatalog-credentials.XXXXXX")"
-key_dir="${key_dir:-$(mktemp -d "${TMPDIR:-/tmp}/unitycatalog-cleanup.XXXXXX")}"
-mv "$credentials_file" "$key_dir/credentials.env"
-jq -r '.data.data | to_entries[] | "\(.key)=\(.value)"' <<<"$vault_secret" > "$key_dir/credentials.env"
+temp_dir="$(mktemp -d "${TMPDIR:-/tmp}/unitycatalog-setup.XXXXXX")"
+credentials_file="$temp_dir/credentials.env"
+jq -r '.data.data | to_entries[] | "\(.key)=\(.value)"' <<<"$vault_secret" > "$credentials_file"
 unset vault_secret
 kubectl -n "$namespace" create secret generic "$credentials_secret" \
-  --from-env-file="$key_dir/credentials.env" --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+  --from-env-file="$credentials_file" --dry-run=client -o yaml | kubectl apply -f - >/dev/null
 kubectl -n "$namespace" create secret generic "$trust_secret" \
   --from-file=keycloak-ca.crt="$repo_root/k8s/auth/tls/ca.crt" \
   --from-file=rustfs-ca.crt="$repo_root/k8s/storage/tls/ca.crt" \
@@ -130,7 +163,8 @@ kubectl -n "$namespace" create secret generic "$trust_secret" \
 
 helm upgrade --install "$release" "$chart" \
   --namespace "$namespace" \
-  --set-string "server.jwt.secretName=$jwt_secret" \
+  --set-string "server.image.repository=$image_repository" \
+  --set-string "server.image.tag=$image_tag" \
   --set-string "server.credentialsSecretName=$credentials_secret" \
   --set-string "server.trustSecretName=$trust_secret" \
   --wait --timeout 10m "$@"
@@ -141,32 +175,13 @@ server_deployment="$(kubectl -n "$namespace" get deployment \
 server_service="$(kubectl -n "$namespace" get service \
   -l "app.kubernetes.io/instance=$release,app.kubernetes.io/component=server" \
   -o jsonpath='{.items[0].metadata.name}')"
+if [[ "$skip_image_build" != 1 ]]; then
+  kubectl -n "$namespace" rollout restart deployment/"$server_deployment"
+fi
 kubectl -n "$namespace" rollout status deployment/"$server_deployment" --timeout=5m
-
-run_uc_admin() {
-  local output
-  if output="$(kubectl -n "$namespace" exec deployment/"$server_deployment" -c server -- \
-    /bin/bash -ec 'token="$(< /home/unitycatalog/etc/conf/token.txt)"; exec bin/uc --auth_token "$token" "$@"' -- "$@" 2>&1)"; then
-    return 0
-  fi
-  if [[ "$output" == *ALREADY_EXISTS* || "$output" == *"already exists"* ]]; then
-    return 0
-  fi
-  printf '%s\n' "$output" >&2
-  return 1
-}
-
-run_uc_admin credential create --name rustfs_unitycatalog --aws_iam_role_arn "$rustfs_role_arn"
-run_uc_admin external_location create --name rustfs_unitycatalog --url s3://unitycatalog --credential_name rustfs_unitycatalog
-run_uc_admin catalog create --name unity --storage_root s3://unitycatalog
-run_uc_admin schema create --catalog unity --name default
-run_uc_admin user create --name khaopad --email "$uc_email"
-run_uc_admin permission create --securable_type catalog --name unity --privilege 'USE CATALOG' --principal "$uc_email"
-run_uc_admin permission create --securable_type schema --name unity.default --privilege 'USE SCHEMA' --principal "$uc_email"
 
 "$repo_root/scripts/configure_cluster_dns.sh"
 
-echo "Unity Catalog is ready."
-echo "API: https://uc.mizuumi.test"
+echo "Rust Unity Catalog server is ready."
+echo "API: https://unitycatalog.mizuumi.test"
 echo "Local fallback: kubectl -n $namespace port-forward service/$server_service 8080:8080"
-echo "Use the Unity Catalog CLI to authenticate with the sovico Keycloak realm."

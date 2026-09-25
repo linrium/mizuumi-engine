@@ -97,7 +97,7 @@ data:
       }
     }
 
-    https://uc.mizuumi.test:8443 {
+    https://unitycatalog.mizuumi.test:8443 {
       tls /etc/caddy/gateway-tls/tls.crt /etc/caddy/gateway-tls/tls.key
       reverse_proxy http://unitycatalog-server.tower.svc.cluster.local:8080 {
         header_up -Forwarded

@@ -9,11 +9,9 @@ pub enum AppError {
     #[error("postgres pool failed")]
     Pool(#[from] deadpool_postgres::PoolError),
     #[error("rustfs sts request failed")]
-    StsRequest(#[from] reqwest::Error),
-    #[error("rustfs sts request signing failed")]
-    StsSigning,
-    #[error("rustfs sts returned an invalid response")]
-    StsResponse,
+    Sts,
+    #[error("rustfs sts response did not include credentials")]
+    StsCredentials,
     #[error("s3 request failed")]
     S3,
 }
@@ -30,9 +28,8 @@ impl IntoResponse for AppError {
         let status = match self {
             AppError::Postgres(_)
             | AppError::Pool(_)
-            | AppError::StsRequest(_)
-            | AppError::StsSigning
-            | AppError::StsResponse
+            | AppError::Sts
+            | AppError::StsCredentials
             | AppError::S3 => StatusCode::SERVICE_UNAVAILABLE,
         };
 
