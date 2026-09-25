@@ -38,6 +38,7 @@ kubectl -n "$namespace" create secret generic rustfs-tls \
   --from-file=rustfs_cert.pem="$tls_dir/rustfs_cert.pem" \
   --from-file=rustfs_key.pem="$tls_dir/rustfs_key.pem" \
   --dry-run=client -o yaml | kubectl apply -f -
+"$repo_root/scripts/update_gateway_trust.sh"
 
 echo "Using Kubernetes context: $context"
 helm repo add rustfs https://charts.rustfs.com --force-update
@@ -53,13 +54,13 @@ helm upgrade --install "$release" rustfs/rustfs \
   --namespace "$namespace" --create-namespace \
   --timeout 10m
 
-# Chart 1.0.0 hardcodes HTTP probes and has no sidecar setting. Keycloak's
-# public issuer is auth.localhost, so RustFS needs a pod-local tunnel to it.
+# Chart 1.0.0 hardcodes HTTP probes. Remove the obsolete loopback sidecar
+# during migration from older installations.
 kubectl -n "$namespace" patch deployment "$release" --type=strategic --field-manager=helm -p \
-  '{"spec":{"template":{"spec":{"containers":[{"name":"rustfs","livenessProbe":{"httpGet":{"scheme":"HTTPS"}},"readinessProbe":{"httpGet":{"scheme":"HTTPS"}}},{"name":"keycloak-loopback","image":"alpine/socat:1.8.0.3","command":["socat"],"args":["TCP-LISTEN:443,bind=127.0.0.1,fork,reuseaddr","TCP:keycloak.auth.svc.cluster.local:8080"],"resources":{"requests":{"cpu":"10m","memory":"16Mi"},"limits":{"memory":"64Mi"}},"securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"runAsNonRoot":true}}]}}}}'
+  '{"spec":{"template":{"spec":{"containers":[{"name":"rustfs","livenessProbe":{"httpGet":{"scheme":"HTTPS"}},"readinessProbe":{"httpGet":{"scheme":"HTTPS"}}},{"name":"keycloak-loopback","$patch":"delete"}]}}}}'
 if [[ -n "$previous_cert" && "$previous_cert" != "$current_cert" ]]; then
   kubectl -n "$namespace" rollout restart deployment/"$release"
 fi
 kubectl -n "$namespace" rollout status deployment/"$release" --timeout=10m
 
-echo "RustFS is ready. Run ./scripts/forward.sh, then use https://storage.localhost and https://api.storage.localhost."
+echo "RustFS is ready. Run ./scripts/forward.sh, then use https://storage.mizuumi.test and https://api.storage.mizuumi.test."

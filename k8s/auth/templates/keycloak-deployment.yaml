@@ -56,6 +56,8 @@ spec:
               value: {{ .Values.keycloak.hostname | quote }}
             - name: KC_HOSTNAME_BACKCHANNEL_DYNAMIC
               value: {{ .Values.keycloak.backchannelDynamic | quote }}
+            - name: KC_PROXY_HEADERS
+              value: xforwarded
             - name: KC_HTTP_ENABLED
               value: "false"
             - name: KC_HTTPS_CERTIFICATE_FILE
@@ -66,10 +68,6 @@ spec:
               value: http
             - name: KC_HEALTH_ENABLED
               value: "true"
-            {{- if .Values.ingress.enabled }}
-            - name: KC_PROXY_HEADERS
-              value: xforwarded
-            {{- end }}
           startupProbe:
             httpGet:
               path: /health/started

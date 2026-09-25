@@ -2,31 +2,34 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-trust_local_cas=0
+trust_local_ca=0
 open_browser=0
-force_stop=0
 
 usage() {
   cat <<'EOF'
-Usage: ./scripts/forward.sh [--trust] [--open] [--force]
+Usage: ./scripts/forward.sh [--trust] [--open]
 
-  --trust  Trust the generated local CAs and Caddy's local CA on macOS.
+  --trust  Trust the generated local gateway CA on macOS.
   --open   Open the Keycloak, Vault, and RustFS browser UIs.
   --force, --force-stop
-           Stop processes using the required local ports before starting.
+            Accepted for compatibility; no local forwarding process remains.
   -h, --help
-           Show this help.
+            Show this help.
 
-Run with --trust once to remove browser certificate warnings. The trust
-setting persists, so subsequent runs only need --open.
+The in-cluster gateway is exposed directly by a LoadBalancer Service, so this
+script only verifies access, optionally trusts the CA, and opens the UIs.
+Before the first run, configure the workstation DNS entry with:
+  sudo ./scripts/configure_workstation_dns.sh
 EOF
 }
 
 while (( $# > 0 )); do
   case "$1" in
-    --trust) trust_local_cas=1 ;;
+    --trust) trust_local_ca=1 ;;
     --open) open_browser=1 ;;
-    --force|--force-stop) force_stop=1 ;;
+    --force|--force-stop)
+      echo "$1 is no longer needed; the gateway has no local forwarding process." >&2
+      ;;
     -h|--help)
       usage
       exit 0
@@ -40,240 +43,74 @@ while (( $# > 0 )); do
   shift
 done
 
-if ! command -v kubectl >/dev/null 2>&1; then
-  echo "Missing required command: kubectl" >&2
-  exit 1
-fi
-if ! command -v caddy >/dev/null 2>&1; then
-  echo "Missing required command: caddy (install with: brew install caddy)" >&2
-  exit 1
-fi
+for command in kubectl curl; do
+  command -v "$command" >/dev/null || { echo "Missing required command: $command" >&2; exit 1; }
+done
 
-trust_cas() {
-  if [[ "$(uname -s)" != "Darwin" ]]; then
+public_hosts=(auth.mizuumi.test vault.mizuumi.test storage.mizuumi.test api.storage.mizuumi.test)
+for hostname in "${public_hosts[@]}"; do
+  if ! awk -v hostname="$hostname" '$1 == "127.0.0.1" { for (i = 2; i <= NF; i++) if ($i == hostname) found = 1 } END { exit !found }' /etc/hosts; then
+    echo "$hostname is not mapped to 127.0.0.1." >&2
+    echo "Run: sudo ./scripts/configure_workstation_dns.sh" >&2
+    exit 1
+  fi
+done
+
+if (( trust_local_ca )); then
+  if [[ "$(uname -s)" != Darwin ]]; then
     echo "--trust currently supports the macOS user keychain only." >&2
     exit 1
   fi
-  if ! command -v security >/dev/null 2>&1; then
-    echo "Missing required command: security" >&2
-    exit 1
-  fi
-
-  local login_keychain ca
-  login_keychain="$(security default-keychain -d user |
-    sed -E 's/^[[:space:]]*"//; s/"[[:space:]]*$//')"
+  command -v security >/dev/null || { echo "Missing required command: security" >&2; exit 1; }
+  login_keychain="$(security default-keychain -d user | sed -E 's/^[[:space:]]*"//; s/"[[:space:]]*$//')"
+  ca="$repo_root/k8s/auth/tls/ca.crt"
   if [[ -z "$login_keychain" || ! -f "$login_keychain" ]]; then
     echo "Could not find the default macOS user keychain." >&2
     exit 1
   fi
-
-  for ca in \
-    "$repo_root/k8s/auth/tls/ca.crt" \
-    "$repo_root/k8s/vault/tls/ca.crt" \
-    "$repo_root/k8s/storage/tls/ca.crt"; do
-    if [[ ! -f "$ca" ]]; then
-      echo "Missing local CA: $ca" >&2
-      echo "Run ./scripts/bootstrap.sh --no-forward first." >&2
-      exit 1
-    fi
-    security add-trusted-cert -r trustRoot -p ssl -k "$login_keychain" "$ca"
-  done
-  caddy trust
-  echo "Trusted the Keycloak, Vault, and RustFS local CAs in $login_keychain."
-  echo "Trusted Caddy's local CA for the portless HTTPS endpoints."
-}
-
-if (( trust_local_cas )); then
-  trust_cas
+  if [[ ! -f "$ca" ]]; then
+    echo "Missing local gateway CA: $ca" >&2
+    echo "Run ./scripts/setup_auth.sh first." >&2
+    exit 1
+  fi
+  security add-trusted-cert -r trustRoot -p ssl -k "$login_keychain" "$ca"
+  echo "Trusted the local gateway CA in $login_keychain."
 fi
 
-if (( open_browser )) && [[ "$(uname -s)" != "Darwin" ]]; then
-  echo "--open currently supports macOS only." >&2
+kubectl -n auth get service keycloak-gateway >/dev/null
+external_address="$(kubectl -n auth get service keycloak-gateway -o jsonpath='{.status.loadBalancer.ingress[0].ip}{.status.loadBalancer.ingress[0].hostname}')"
+if [[ -z "$external_address" ]]; then
+  echo "The keycloak-gateway LoadBalancer has no external address." >&2
+  echo "Enable your local cluster's LoadBalancer integration (for example, minikube tunnel)." >&2
   exit 1
 fi
 
-required_ports=(443 8080 8200 9000 9001)
-
-list_listener_pids() {
-  local port
-  for port in "${required_ports[@]}"; do
-    lsof -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null || true
-  done | sort -u
-}
-
-if (( force_stop )); then
-  if ! command -v lsof >/dev/null 2>&1; then
-    echo "--force requires lsof." >&2
+for attempt in {1..30}; do
+  if curl --fail --silent --show-error --cacert "$repo_root/k8s/auth/tls/ca.crt" \
+    https://auth.mizuumi.test/realms/sovico/.well-known/openid-configuration >/dev/null 2>&1; then
+    break
+  fi
+  if [[ "$attempt" -eq 30 ]]; then
+    echo "The local gateway is not reachable at https://auth.mizuumi.test." >&2
     exit 1
   fi
-
-  listener_pids="$(list_listener_pids)"
-  if [[ -n "$listener_pids" ]]; then
-    echo "Stopping processes that own the required local ports:"
-    while IFS= read -r pid; do
-      [[ "$pid" =~ ^[0-9]+$ ]] || continue
-      ps -p "$pid" -o pid=,command= 2>/dev/null || true
-      kill -TERM "$pid" 2>/dev/null || true
-    done <<< "$listener_pids"
-
-    for _ in {1..50}; do
-      [[ -z "$(list_listener_pids)" ]] && break
-      sleep 0.1
-    done
-
-    listener_pids="$(list_listener_pids)"
-    if [[ -n "$listener_pids" ]]; then
-      echo "Some listeners did not stop after 5 seconds; forcing them to exit." >&2
-      while IFS= read -r pid; do
-        [[ "$pid" =~ ^[0-9]+$ ]] || continue
-        kill -KILL "$pid" 2>/dev/null || true
-      done <<< "$listener_pids"
-      sleep 1
-    fi
-  fi
-fi
-
-if command -v lsof >/dev/null 2>&1; then
-  busy_ports=()
-  for port in "${required_ports[@]}"; do
-    if lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1; then
-      busy_ports+=("$port")
-    fi
-  done
-  if (( ${#busy_ports[@]} > 0 )); then
-    echo "Cannot start: local port(s) ${busy_ports[*]} already in use." >&2
-    echo "Stop the existing ./scripts/forward.sh with Ctrl-C, or stop the processes below:" >&2
-    for port in "${busy_ports[@]}"; do
-      lsof -nP -iTCP:"$port" -sTCP:LISTEN 2>/dev/null >&2 || true
-    done
-    exit 1
-  fi
-fi
-
-kubectl -n auth get service keycloak >/dev/null
-kubectl -n vault get pod vault-0 >/dev/null
-kubectl -n storage get service rustfs-svc >/dev/null
-
-auth_pid=""
-vault_pid=""
-storage_pid=""
-caddy_pid=""
-auth_started=0
-vault_started=0
-storage_started=0
-auth_failures=0
-vault_failures=0
-storage_failures=0
-cleanup() {
-  if [[ -n "$caddy_pid" ]]; then
-    kill "$caddy_pid" 2>/dev/null || true
-    wait "$caddy_pid" 2>/dev/null || true
-  fi
-  if [[ -n "$auth_pid" ]]; then
-    kill "$auth_pid" 2>/dev/null || true
-    wait "$auth_pid" 2>/dev/null || true
-  fi
-  if [[ -n "$vault_pid" ]]; then
-    kill "$vault_pid" 2>/dev/null || true
-    wait "$vault_pid" 2>/dev/null || true
-  fi
-  if [[ -n "$storage_pid" ]]; then
-    kill "$storage_pid" 2>/dev/null || true
-    wait "$storage_pid" 2>/dev/null || true
-  fi
-}
-trap cleanup EXIT
-trap 'exit 130' INT
-trap 'exit 143' TERM
-
-start_forward() {
-  case "$1" in
-    auth)
-      kubectl -n auth port-forward --address 127.0.0.1 service/keycloak 8080:8080 &
-      auth_pid=$!
-      auth_started=$SECONDS
-      ;;
-    vault)
-      kubectl -n vault port-forward --address 127.0.0.1 pod/vault-0 8200:8200 &
-      vault_pid=$!
-      vault_started=$SECONDS
-      ;;
-    storage)
-      kubectl -n storage port-forward --address 127.0.0.1 service/rustfs-svc 9000:9000 9001:9001 &
-      storage_pid=$!
-      storage_started=$SECONDS
-      ;;
-  esac
-}
-
-check_forward() {
-  local name="$1" pid started failures
-  case "$name" in
-    auth) pid="$auth_pid"; started="$auth_started"; failures="$auth_failures" ;;
-    vault) pid="$vault_pid"; started="$vault_started"; failures="$vault_failures" ;;
-    storage) pid="$storage_pid"; started="$storage_started"; failures="$storage_failures" ;;
-  esac
-  if kill -0 "$pid" 2>/dev/null; then
-    return
-  fi
-  wait "$pid" || true
-  # A healthy tunnel may be dropped after serving a request. Only count
-  # failures that happen immediately (for example, a local port conflict).
-  if (( SECONDS - started < 3 )); then
-    failures=$((failures + 1))
-  else
-    failures=1
-  fi
-  if (( failures >= 5 )); then
-    echo "$name port-forward failed repeatedly; stopping. Check the pod and local port." >&2
-    exit 1
-  fi
-  echo "$name port-forward dropped; reconnecting in 2 seconds ($failures/5)." >&2
-  sleep 2
-  case "$name" in
-    auth) auth_failures="$failures" ;;
-    vault) vault_failures="$failures" ;;
-    storage) storage_failures="$failures" ;;
-  esac
-  start_forward "$name"
-}
-
-start_forward auth
-start_forward vault
-start_forward storage
-
-MIZUUMI_REPO_ROOT="$repo_root" \
-  caddy run --config "$repo_root/Caddyfile" --adapter caddyfile &
-caddy_pid=$!
-sleep 1
-if ! kill -0 "$caddy_pid" 2>/dev/null; then
-  wait "$caddy_pid" || true
-  echo "Caddy failed to start. Check whether local port 443 is already in use." >&2
-  exit 1
-fi
-
-echo "Keycloak API/UI: https://auth.localhost"
-echo "Vault API:       https://vault.localhost/v1"
-echo "Vault UI:        https://vault.localhost/ui/"
-echo "RustFS S3/API:   https://api.storage.localhost"
-echo "RustFS Console:  https://storage.localhost"
-echo "Press Ctrl-C to stop the forwards."
-
-if (( open_browser )); then
-  open \
-    "https://auth.localhost" \
-    "https://vault.localhost/ui/" \
-    "https://storage.localhost"
-fi
-
-while true; do
-  if ! kill -0 "$caddy_pid" 2>/dev/null; then
-    wait "$caddy_pid" || true
-    echo "Caddy stopped unexpectedly." >&2
-    exit 1
-  fi
-  check_forward auth
-  check_forward vault
-  check_forward storage
   sleep 1
 done
+
+echo "Gateway:          $external_address"
+echo "Keycloak API/UI: https://auth.mizuumi.test"
+echo "Vault API:       https://vault.mizuumi.test/v1"
+echo "Vault UI:        https://vault.mizuumi.test/ui/"
+echo "RustFS S3/API:   https://api.storage.mizuumi.test"
+echo "RustFS Console:  https://storage.mizuumi.test"
+
+if (( open_browser )); then
+  if [[ "$(uname -s)" != Darwin ]]; then
+    echo "--open currently supports macOS only." >&2
+    exit 1
+  fi
+  open \
+    "https://auth.mizuumi.test" \
+    "https://vault.mizuumi.test/ui/" \
+    "https://storage.mizuumi.test"
+fi

@@ -34,8 +34,8 @@ run_step bootstrap_storage.sh
 run_step setup_storage.sh
 
 if [[ "$forward" == true ]]; then
-  echo "==> forward.sh (press Ctrl-C to stop port-forwards and Caddy)"
+  echo "==> forward.sh (verify the local gateway)"
   exec "$repo_root/scripts/forward.sh"
 fi
 
-echo "Bootstrap complete. Run ./scripts/forward.sh when you need local access."
+echo "Bootstrap complete. Run ./scripts/forward.sh to verify local access."

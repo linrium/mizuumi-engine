@@ -24,12 +24,12 @@ kubectl -n auth get deployment keycloak >/dev/null
 kubectl -n vault get pod vault-0 >/dev/null
 
 hostname="$(kubectl -n auth get deployment keycloak -o json | jq -r '.spec.template.spec.containers[] | select(.name == "keycloak") | .env[] | select(.name == "KC_HOSTNAME") | .value')"
-if [[ "$hostname" != "https://auth.localhost" ]]; then
-  echo "Keycloak must use the local https://auth.localhost hostname for this bootstrap." >&2
+if [[ "$hostname" != "https://auth.mizuumi.test" ]]; then
+  echo "Keycloak must use the local https://auth.mizuumi.test hostname for this bootstrap." >&2
   exit 1
 fi
-if ! kubectl -n vault get pod vault-0 -o json | jq -e '.spec.containers | any(.name == "keycloak-loopback")' >/dev/null; then
-  echo "Run ./scripts/setup_vault.sh to add Vault's Keycloak loopback proxy first." >&2
+if ! kubectl -n auth get service keycloak-gateway >/dev/null 2>&1; then
+  echo "Run ./scripts/setup_auth.sh to install the Keycloak gateway first." >&2
   exit 1
 fi
 
@@ -38,9 +38,9 @@ admin_password="$(kubectl -n auth get secret keycloak-credentials -o json | jq -
 
 keycloak_url=https://127.0.0.1:18080
 vault_url=https://127.0.0.1:18200
-issuer=https://auth.localhost/realms/sovico
+issuer=https://auth.mizuumi.test/realms/sovico
 discovery_url=$issuer
-vault_browser_origin=https://vault.localhost
+vault_browser_origin=https://vault.mizuumi.test
 ui_callback=$vault_browser_origin/ui/vault/auth/oidc/oidc/callback
 cli_callback=http://localhost:8250/oidc/callback
 if [[ ! -f "$vault_ca" ]]; then
@@ -222,5 +222,5 @@ if [[ "$auth_url" != "$issuer/protocol/openid-connect/auth"* ]]; then
 fi
 
 echo 'Vault OIDC is configured for Keycloak realm sovico.'
-echo 'Run ./scripts/forward.sh, then open https://vault.localhost/ui/ and choose OIDC login.'
+echo 'Run ./scripts/forward.sh, then open https://vault.mizuumi.test/ui/ and choose OIDC login.'
 echo 'Sign in as khaopad with the password set during bootstrap.'

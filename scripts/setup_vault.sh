@@ -23,6 +23,11 @@ case "$context" in
     ;;
 esac
 echo "Using Kubernetes context: $context"
+had_keycloak_loopback=0
+if kubectl -n "$namespace" get pod "$release-0" -o json 2>/dev/null | \
+   jq -e '.spec.containers | any(.name == "keycloak-loopback")' >/dev/null 2>&1; then
+  had_keycloak_loopback=1
+fi
 if kubectl -n "$namespace" get statefulset "$release" -o json 2>/dev/null | \
    jq -e '.spec.template.spec.containers[] | select(.name == "vault") | .env[] | select(.name == "VAULT_DEV_ROOT_TOKEN_ID")' >/dev/null 2>&1; then
   echo "Existing Vault is in dev mode. Its StatefulSet has no PVC, and Kubernetes cannot add one in place." >&2
@@ -49,6 +54,7 @@ helm upgrade --install "$release" hashicorp/vault \
   --version "$chart_version" \
   --values "$repo_root/k8s/vault/values.yaml" \
   --namespace "$namespace" --create-namespace
+"$repo_root/scripts/update_gateway_trust.sh"
 
 for attempt in {1..120}; do
   pod_phase="$(kubectl -n "$namespace" get pod "$release-0" -o jsonpath='{.status.phase}' 2>/dev/null || true)"
@@ -65,10 +71,32 @@ done
 desired_revision="$(kubectl -n "$namespace" get statefulset "$release" -o jsonpath='{.status.updateRevision}')"
 pod_revision="$(kubectl -n "$namespace" get pod "$release-0" -o jsonpath='{.metadata.labels.controller-revision-hash}')"
 if [[ -n "$desired_revision" && "$pod_revision" != "$desired_revision" ]]; then
-  echo "Vault's pod still uses the previous chart revision." >&2
-  echo "Back up any existing dev-mode data before replacing the pod. Then run:" >&2
-  echo "  kubectl -n $namespace delete pod $release-0" >&2
-  exit 1
+  if (( had_keycloak_loopback )); then
+    echo "Replacing Vault's pod to remove the obsolete Keycloak loopback sidecar."
+    kubectl -n "$namespace" delete pod "$release-0"
+    for attempt in {1..120}; do
+      pod_phase="$(kubectl -n "$namespace" get pod "$release-0" -o jsonpath='{.status.phase}' 2>/dev/null || true)"
+      [[ "$pod_phase" == Running ]] && break
+      if [[ "$attempt" -eq 120 ]]; then
+        echo "Vault pod did not return to Running after removing the loopback sidecar." >&2
+        exit 1
+      fi
+      sleep 2
+    done
+    if [[ -f "$repo_root/k8s/vault/init.json" ]]; then
+      "$repo_root/scripts/unseal_vault.sh"
+    fi
+    pod_revision="$(kubectl -n "$namespace" get pod "$release-0" -o jsonpath='{.metadata.labels.controller-revision-hash}')"
+    if [[ "$pod_revision" != "$desired_revision" ]]; then
+      echo "Vault pod did not adopt the updated StatefulSet revision." >&2
+      exit 1
+    fi
+  else
+    echo "Vault's pod still uses the previous chart revision." >&2
+    echo "Back up any existing dev-mode data before replacing the pod. Then run:" >&2
+    echo "  kubectl -n $namespace delete pod $release-0" >&2
+    exit 1
+  fi
 fi
 
 if [[ -n "$previous_cert" && "$previous_cert" != "$current_cert" ]]; then
@@ -90,4 +118,4 @@ fi
 
 echo "Vault is deployed. On first install, initialize and unseal with ./scripts/init_vault.sh."
 echo "After each restart, unseal with ./scripts/unseal_vault.sh."
-echo "Local UI: https://vault.localhost/ui/ after starting ./scripts/forward.sh."
+echo "Local UI: https://vault.mizuumi.test/ui/ after running ./scripts/forward.sh."

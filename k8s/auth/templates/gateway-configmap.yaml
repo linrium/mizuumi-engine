@@ -1,0 +1,80 @@
+{{- if .Values.gateway.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "keycloak.name" . }}-gateway
+  labels:
+    {{- include "keycloak.labels" . | nindent 4 }}
+    app.kubernetes.io/component: gateway
+data:
+  Caddyfile: |
+    {
+      admin off
+      auto_https off
+      log default {
+        level ERROR
+      }
+    }
+
+    https://{{ trimPrefix "https://" .Values.keycloak.hostname }}:8443 {
+      tls /etc/caddy/gateway-tls/tls.crt /etc/caddy/gateway-tls/tls.key
+      reverse_proxy https://{{ include "keycloak.name" . }}:{{ .Values.service.port }} {
+        # Never pass client-supplied forwarding metadata to Keycloak.
+        header_up -Forwarded
+        header_up X-Forwarded-For {http.request.remote.host}
+        header_up X-Forwarded-Host {host}
+        header_up X-Forwarded-Port 443
+        header_up X-Forwarded-Proto https
+        transport http {
+          tls_trust_pool file /etc/caddy/upstream-cas/ca.crt
+          tls_server_name {{ include "keycloak.name" . }}.{{ .Release.Namespace }}.svc.cluster.local
+        }
+      }
+    }
+
+    https://vault.mizuumi.test:8443 {
+      tls /etc/caddy/gateway-tls/tls.crt /etc/caddy/gateway-tls/tls.key
+      reverse_proxy https://vault.vault.svc.cluster.local:8200 {
+        header_up -Forwarded
+        header_up X-Forwarded-For {http.request.remote.host}
+        header_up X-Forwarded-Host {host}
+        header_up X-Forwarded-Port 443
+        header_up X-Forwarded-Proto https
+        transport http {
+          tls_trust_pool file /etc/caddy/upstream-cas/ca.crt
+          tls_server_name vault.vault.svc.cluster.local
+        }
+      }
+    }
+
+    https://storage.mizuumi.test:8443 {
+      tls /etc/caddy/gateway-tls/tls.crt /etc/caddy/gateway-tls/tls.key
+      redir / /rustfs/console/ 308
+      reverse_proxy https://rustfs-svc.storage.svc.cluster.local:9001 {
+        header_up -Forwarded
+        header_up X-Forwarded-For {http.request.remote.host}
+        header_up X-Forwarded-Host {host}
+        header_up X-Forwarded-Port 443
+        header_up X-Forwarded-Proto https
+        transport http {
+          tls_trust_pool file /etc/caddy/upstream-cas/ca.crt
+          tls_server_name rustfs-svc.storage.svc.cluster.local
+        }
+      }
+    }
+
+    https://api.storage.mizuumi.test:8443 {
+      tls /etc/caddy/gateway-tls/tls.crt /etc/caddy/gateway-tls/tls.key
+      reverse_proxy https://rustfs-svc.storage.svc.cluster.local:9000 {
+        header_up -Forwarded
+        header_up X-Forwarded-For {http.request.remote.host}
+        header_up X-Forwarded-Host {host}
+        header_up X-Forwarded-Port 443
+        header_up X-Forwarded-Proto https
+        transport http {
+          tls_trust_pool file /etc/caddy/upstream-cas/ca.crt
+          tls_server_name rustfs-svc.storage.svc.cluster.local
+        }
+      }
+    }
+{{- end }}

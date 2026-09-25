@@ -37,13 +37,6 @@ server:
       readOnly: true
   extraEnvironmentVars:
     VAULT_CACERT: /vault/tls/ca.crt
-  extraContainers:
-    - name: keycloak-loopback
-      image: alpine/socat:1.8.0.3
-      command: ["socat"]
-      args:
-        - TCP-LISTEN:443,bind=127.0.0.1,fork,reuseaddr
-        - TCP:keycloak.auth.svc.cluster.local:8080
 
 ui:
   enabled: true

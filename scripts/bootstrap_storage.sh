@@ -80,8 +80,8 @@ vault() {
 
 clients="$(kc GET '/admin/realms/sovico/clients?clientId=rustfs-console')"
 client_uuid="$(printf '%s' "$clients" | jq -r '[.[] | select(.clientId == "rustfs-console")][0].id // empty')"
-callback=https://api.storage.localhost/rustfs/admin/v3/oidc/callback/default
-console_origin=https://storage.localhost
+callback=https://api.storage.mizuumi.test/rustfs/admin/v3/oidc/callback/default
+console_origin=https://storage.mizuumi.test
 client_payload="$(jq -cn --arg callback "$callback" --arg origin "$console_origin" '{clientId:"rustfs-console",enabled:true,protocol:"openid-connect",publicClient:false,clientAuthenticatorType:"client-secret",standardFlowEnabled:true,directAccessGrantsEnabled:false,serviceAccountsEnabled:false,redirectUris:[$callback],webOrigins:[$origin],attributes:{"pkce.code.challenge.method":"S256"}}')"
 if [[ -z "$client_uuid" ]]; then
   kc POST /admin/realms/sovico/clients "$client_payload" >/dev/null

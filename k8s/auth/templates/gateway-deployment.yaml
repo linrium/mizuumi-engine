@@ -1,0 +1,88 @@
+{{- if .Values.gateway.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "keycloak.name" . }}-gateway
+  labels:
+    {{- include "keycloak.labels" . | nindent 4 }}
+    app.kubernetes.io/component: gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "keycloak.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: gateway
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/gateway-configmap.yaml") . | sha256sum }}
+      labels:
+        {{- include "keycloak.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: gateway
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        fsGroup: 1000
+        runAsGroup: 1000
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: caddy
+          image: "{{ .Values.gateway.image.repository }}:{{ .Values.gateway.image.tag }}"
+          imagePullPolicy: {{ .Values.gateway.image.pullPolicy }}
+          # The upstream binary carries a low-port file capability. Copying it
+          # drops that unused attribute so it can run with every capability
+          # removed; this gateway listens on unprivileged port 8443.
+          command: ["/bin/sh", "-ec"]
+          args: ["cp /usr/bin/caddy /tmp/caddy && exec /tmp/caddy run --config /etc/caddy/Caddyfile --adapter caddyfile"]
+          ports:
+            - name: https
+              containerPort: 8443
+          readinessProbe:
+            tcpSocket:
+              port: https
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: https
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.gateway.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: config
+              mountPath: /etc/caddy
+              readOnly: true
+            - name: gateway-tls
+              mountPath: /etc/caddy/gateway-tls
+              readOnly: true
+            - name: upstream-cas
+              mountPath: /etc/caddy/upstream-cas
+              readOnly: true
+            - name: data
+              mountPath: /data
+            - name: runtime-config
+              mountPath: /config
+            - name: runtime-bin
+              mountPath: /tmp
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "keycloak.name" . }}-gateway
+        - name: gateway-tls
+          secret:
+            secretName: local-gateway-tls
+        - name: upstream-cas
+          secret:
+            secretName: local-gateway-upstream-cas
+        - name: data
+          emptyDir: {}
+        - name: runtime-config
+          emptyDir: {}
+        - name: runtime-bin
+          emptyDir: {}
+{{- end }}
