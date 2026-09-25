@@ -79,14 +79,15 @@ vault() {
 
 clients="$(kc GET '/admin/realms/sovico/clients?clientId=rustfs-console')"
 client_uuid="$(printf '%s' "$clients" | jq -r '[.[] | select(.clientId == "rustfs-console")][0].id // empty')"
-callback=https://localhost:9000/rustfs/admin/v3/oidc/callback/default
-client_payload="$(jq -cn --arg callback "$callback" '{clientId:"rustfs-console",enabled:true,protocol:"openid-connect",publicClient:false,clientAuthenticatorType:"client-secret",standardFlowEnabled:true,directAccessGrantsEnabled:false,serviceAccountsEnabled:false,redirectUris:[$callback],webOrigins:["https://localhost:9001"],attributes:{"pkce.code.challenge.method":"S256"}}')"
+callback=https://api.storage.localhost/rustfs/admin/v3/oidc/callback/default
+console_origin=https://storage.localhost
+client_payload="$(jq -cn --arg callback "$callback" --arg origin "$console_origin" '{clientId:"rustfs-console",enabled:true,protocol:"openid-connect",publicClient:false,clientAuthenticatorType:"client-secret",standardFlowEnabled:true,directAccessGrantsEnabled:false,serviceAccountsEnabled:false,redirectUris:[$callback],webOrigins:[$origin],attributes:{"pkce.code.challenge.method":"S256"}}')"
 if [[ -z "$client_uuid" ]]; then
   kc POST /admin/realms/sovico/clients "$client_payload" >/dev/null
   client_uuid="$(kc GET '/admin/realms/sovico/clients?clientId=rustfs-console' | jq -er '[.[] | select(.clientId == "rustfs-console")][0].id')"
 else
   current_client="$(kc GET "/admin/realms/sovico/clients/$client_uuid")"
-  client_payload="$(printf '%s' "$current_client" | jq -c --arg callback "$callback" '.enabled=true | .publicClient=false | .clientAuthenticatorType="client-secret" | .standardFlowEnabled=true | .directAccessGrantsEnabled=false | .serviceAccountsEnabled=false | .redirectUris=[$callback] | .webOrigins=["https://localhost:9001"] | .attributes["pkce.code.challenge.method"]="S256"')"
+  client_payload="$(printf '%s' "$current_client" | jq -c --arg callback "$callback" --arg origin "$console_origin" '.enabled=true | .publicClient=false | .clientAuthenticatorType="client-secret" | .standardFlowEnabled=true | .directAccessGrantsEnabled=false | .serviceAccountsEnabled=false | .redirectUris=[$callback] | .webOrigins=[$origin] | .attributes["pkce.code.challenge.method"]="S256"')"
   kc PUT "/admin/realms/sovico/clients/$client_uuid" "$client_payload" >/dev/null
 fi
 mapper_list="$(kc GET "/admin/realms/sovico/clients/$client_uuid/protocol-mappers/models")"

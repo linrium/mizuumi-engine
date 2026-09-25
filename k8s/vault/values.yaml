@@ -42,7 +42,7 @@ server:
       image: alpine/socat:1.8.0.3
       command: ["socat"]
       args:
-        - TCP-LISTEN:8080,bind=127.0.0.1,fork,reuseaddr
+        - TCP-LISTEN:443,bind=127.0.0.1,fork,reuseaddr
         - TCP:keycloak.auth.svc.cluster.local:8080
 
 ui:

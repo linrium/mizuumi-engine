@@ -1,0 +1,49 @@
+{
+	admin off
+	auto_https disable_redirects
+}
+
+auth.localhost {
+	tls internal
+	reverse_proxy https://127.0.0.1:8080 {
+		header_up Host {host}
+		transport http {
+			tls_trust_pool file {$MIZUUMI_REPO_ROOT}/k8s/auth/tls/ca.crt
+			tls_server_name localhost
+		}
+	}
+}
+
+vault.localhost {
+	tls internal
+	reverse_proxy https://127.0.0.1:8200 {
+		header_up Host {host}
+		transport http {
+			tls_trust_pool file {$MIZUUMI_REPO_ROOT}/k8s/vault/tls/ca.crt
+			tls_server_name localhost
+		}
+	}
+}
+
+storage.localhost {
+	tls internal
+	redir / /rustfs/console/ 308
+	reverse_proxy https://127.0.0.1:9001 {
+		header_up Host {host}
+		transport http {
+			tls_trust_pool file {$MIZUUMI_REPO_ROOT}/k8s/storage/tls/ca.crt
+			tls_server_name localhost
+		}
+	}
+}
+
+api.storage.localhost {
+	tls internal
+	reverse_proxy https://127.0.0.1:9000 {
+		header_up Host {host}
+		transport http {
+			tls_trust_pool file {$MIZUUMI_REPO_ROOT}/k8s/storage/tls/ca.crt
+			tls_server_name localhost
+		}
+	}
+}

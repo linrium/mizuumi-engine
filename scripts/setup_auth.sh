@@ -49,4 +49,4 @@ if [[ -n "$previous_cert" && "$previous_cert" != "$current_cert" ]]; then
 fi
 
 echo "Keycloak is ready. Run: ./scripts/forward.sh to forward Keycloak, Vault, and RustFS."
-echo "Open https://localhost:8080 (trust k8s/auth/tls/ca.crt in your browser)."
+echo "Open https://auth.localhost after starting ./scripts/forward.sh."

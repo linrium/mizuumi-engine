@@ -90,4 +90,4 @@ fi
 
 echo "Vault is deployed. On first install, initialize and unseal with ./scripts/init_vault.sh."
 echo "After each restart, unseal with ./scripts/unseal_vault.sh."
-echo "Local UI: https://vault.localhost:8200/ui/ (trust k8s/vault/tls/ca.crt)."
+echo "Local UI: https://vault.localhost/ui/ after starting ./scripts/forward.sh."

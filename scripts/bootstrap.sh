@@ -34,7 +34,7 @@ run_step bootstrap_storage.sh
 run_step setup_storage.sh
 
 if [[ "$forward" == true ]]; then
-  echo "==> forward.sh (press Ctrl-C to stop port-forwards)"
+  echo "==> forward.sh (press Ctrl-C to stop port-forwards and Caddy)"
   exec "$repo_root/scripts/forward.sh"
 fi
 

@@ -19,11 +19,11 @@ To access Keycloak and Vault together after installation:
 ./scripts/forward.sh
 ```
 
-Visit `https://localhost:8080` and sign in to the Administration Console with username `admin` and the `ADMIN_PASSWORD` Secret value. On macOS, run `./scripts/forward.sh --trust --open` once to trust all three local CAs in your user keychain and open the browser UIs without certificate warnings; later runs only need `--open`. Restart any running `forward.sh` process after upgrading from HTTP. `keycloak.hostname` defaults to this port-forward URL, so change it for a shared installation. Dynamic backchannel URLs let in-cluster clients reach token and JWKS endpoints over HTTPS.
+Visit `https://auth.localhost` and sign in to the Administration Console with username `admin` and the `ADMIN_PASSWORD` Secret value. `forward.sh` keeps private Kubernetes tunnels on ports 8080, 8200, 9000, and 9001 while Caddy exposes the portless local HTTPS names. On macOS, run `./scripts/forward.sh --trust --open` once to trust the local CAs and open the browser UIs without certificate warnings; later runs only need `--open`. Dynamic backchannel URLs let in-cluster clients reach token and JWKS endpoints over HTTPS.
 
 ## Vault login through Keycloak
 
-After installing Keycloak and initializing/unsealing Vault, run `./scripts/bootstrap_sovico.sh`. It creates the `sovico` realm, a confidential `vault` OIDC client, and an initial `khaopad` account. The script prompts for the account password when run interactively. In noninteractive runs it generates a password in the ignored, mode-600 file `k8s/auth/sovico-user-password`; you can instead set `SOVICO_USER_PASSWORD` in its environment. Existing user passwords are left unchanged. It then configures Vault's `oidc` auth method and `sovico` role. Run `./scripts/forward.sh` while signing in to Vault at `https://vault.localhost:8200/ui/` (trust the local Vault CA first).
+After installing Keycloak and initializing/unsealing Vault, run `./scripts/bootstrap_sovico.sh`. It creates the `sovico` realm, a confidential `vault` OIDC client, and an initial `khaopad` account. The script prompts for the account password when run interactively. In noninteractive runs it generates a password in the ignored, mode-600 file `k8s/auth/sovico-user-password`; you can instead set `SOVICO_USER_PASSWORD` in its environment. Existing user passwords are left unchanged. It then configures Vault's `oidc` auth method and `sovico` role. Run `./scripts/forward.sh` while signing in to Vault at `https://vault.localhost/ui/`.
 
 ## Public HTTPS ingress
 

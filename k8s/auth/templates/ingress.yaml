@@ -1,5 +1,5 @@
 {{- if .Values.ingress.enabled }}
-{{- if eq .Values.keycloak.hostname "https://localhost:8080" }}
+{{- if eq .Values.keycloak.hostname "https://auth.localhost" }}
 {{- fail "set keycloak.hostname to the public URL when ingress.enabled=true" }}
 {{- end }}
 apiVersion: networking.k8s.io/v1

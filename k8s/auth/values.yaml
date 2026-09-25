@@ -4,8 +4,8 @@ keycloak:
     repository: quay.io/keycloak/keycloak
     tag: "26.7.4"
     pullPolicy: IfNotPresent
-  # Port-forwarding default. Set to the public HTTPS URL when enabling ingress.
-  hostname: https://localhost:8080
+  # Portless local URL served by Caddy in front of the port-forward.
+  hostname: https://auth.localhost
   tlsSecretName: keycloak-tls
   bootstrapAdminUsername: admin
   resources:

@@ -54,12 +54,12 @@ helm upgrade --install "$release" rustfs/rustfs \
   --timeout 10m
 
 # Chart 1.0.0 hardcodes HTTP probes and has no sidecar setting. Keycloak's
-# public issuer is localhost, so RustFS needs a pod-local tunnel to that issuer.
+# public issuer is auth.localhost, so RustFS needs a pod-local tunnel to it.
 kubectl -n "$namespace" patch deployment "$release" --type=strategic --field-manager=helm -p \
-  '{"spec":{"template":{"spec":{"containers":[{"name":"rustfs","livenessProbe":{"httpGet":{"scheme":"HTTPS"}},"readinessProbe":{"httpGet":{"scheme":"HTTPS"}}},{"name":"keycloak-loopback","image":"alpine/socat:1.8.0.3","command":["socat"],"args":["TCP-LISTEN:8080,bind=127.0.0.1,fork,reuseaddr","TCP:keycloak.auth.svc.cluster.local:8080"],"resources":{"requests":{"cpu":"10m","memory":"16Mi"},"limits":{"memory":"64Mi"}},"securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"runAsNonRoot":true}}]}}}}'
+  '{"spec":{"template":{"spec":{"containers":[{"name":"rustfs","livenessProbe":{"httpGet":{"scheme":"HTTPS"}},"readinessProbe":{"httpGet":{"scheme":"HTTPS"}}},{"name":"keycloak-loopback","image":"alpine/socat:1.8.0.3","command":["socat"],"args":["TCP-LISTEN:443,bind=127.0.0.1,fork,reuseaddr","TCP:keycloak.auth.svc.cluster.local:8080"],"resources":{"requests":{"cpu":"10m","memory":"16Mi"},"limits":{"memory":"64Mi"}},"securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"runAsNonRoot":true}}]}}}}'
 if [[ -n "$previous_cert" && "$previous_cert" != "$current_cert" ]]; then
   kubectl -n "$namespace" rollout restart deployment/"$release"
 fi
 kubectl -n "$namespace" rollout status deployment/"$release" --timeout=10m
 
-echo "RustFS is ready over HTTPS. Run ./scripts/forward.sh for ports 9000 (S3/API) and 9001 (Console)."
+echo "RustFS is ready. Run ./scripts/forward.sh, then use https://storage.localhost and https://api.storage.localhost."

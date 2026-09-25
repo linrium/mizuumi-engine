@@ -9,7 +9,7 @@ usage() {
   cat <<'EOF'
 Usage: ./scripts/forward.sh [--trust] [--open]
 
-  --trust  Trust the generated local CAs in the macOS user keychain.
+  --trust  Trust the generated local CAs and Caddy's local CA on macOS.
   --open   Open the Keycloak, Vault, and RustFS browser UIs.
   -h, --help
            Show this help.
@@ -38,6 +38,10 @@ done
 
 if ! command -v kubectl >/dev/null 2>&1; then
   echo "Missing required command: kubectl" >&2
+  exit 1
+fi
+if ! command -v caddy >/dev/null 2>&1; then
+  echo "Missing required command: caddy (install with: brew install caddy)" >&2
   exit 1
 fi
 
@@ -70,7 +74,9 @@ trust_cas() {
     fi
     security add-trusted-cert -r trustRoot -p ssl -k "$login_keychain" "$ca"
   done
+  caddy trust
   echo "Trusted the Keycloak, Vault, and RustFS local CAs in $login_keychain."
+  echo "Trusted Caddy's local CA for the portless HTTPS endpoints."
 }
 
 if (( trust_local_cas )); then
@@ -89,6 +95,7 @@ kubectl -n rustfs get service rustfs-svc >/dev/null
 auth_pid=""
 vault_pid=""
 storage_pid=""
+caddy_pid=""
 auth_started=0
 vault_started=0
 storage_started=0
@@ -96,6 +103,10 @@ auth_failures=0
 vault_failures=0
 storage_failures=0
 cleanup() {
+  if [[ -n "$caddy_pid" ]]; then
+    kill "$caddy_pid" 2>/dev/null || true
+    wait "$caddy_pid" 2>/dev/null || true
+  fi
   if [[ -n "$auth_pid" ]]; then
     kill "$auth_pid" 2>/dev/null || true
     wait "$auth_pid" 2>/dev/null || true
@@ -169,23 +180,36 @@ start_forward auth
 start_forward vault
 start_forward storage
 
-echo "Keycloak API/UI: https://localhost:8080"
-echo "Vault API:       https://localhost:8200/v1"
-echo "Vault UI:        https://vault.localhost:8200/ui/"
-echo "RustFS S3/API:   https://localhost:9000"
-echo "RustFS Console:  https://localhost:9001"
+MIZUUMI_REPO_ROOT="$repo_root" \
+  caddy run --config "$repo_root/Caddyfile.local" --adapter caddyfile &
+caddy_pid=$!
+sleep 1
+if ! kill -0 "$caddy_pid" 2>/dev/null; then
+  wait "$caddy_pid" || true
+  echo "Caddy failed to start. Check whether local port 443 is already in use." >&2
+  exit 1
+fi
+
+echo "Keycloak API/UI: https://auth.localhost"
+echo "Vault API:       https://vault.localhost/v1"
+echo "Vault UI:        https://vault.localhost/ui/"
+echo "RustFS S3/API:   https://api.storage.localhost"
+echo "RustFS Console:  https://storage.localhost"
 echo "Press Ctrl-C to stop the forwards."
 
 if (( open_browser )); then
-  # Give kubectl a moment to establish its listeners before launching the tabs.
-  sleep 1
   open \
-    "https://localhost:8080" \
-    "https://vault.localhost:8200/ui/" \
-    "https://localhost:9001"
+    "https://auth.localhost" \
+    "https://vault.localhost/ui/" \
+    "https://storage.localhost"
 fi
 
 while true; do
+  if ! kill -0 "$caddy_pid" 2>/dev/null; then
+    wait "$caddy_pid" || true
+    echo "Caddy stopped unexpectedly." >&2
+    exit 1
+  fi
   check_forward auth
   check_forward vault
   check_forward storage
