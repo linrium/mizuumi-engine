@@ -37,7 +37,18 @@ if [[ -e "$server_cert" || -e "$server_key" ]]; then
   fi
   if ! openssl x509 -in "$server_cert" -noout -text | grep -q 'CA:TRUE'; then
     openssl verify -CAfile "$tls_dir/ca.crt" "$server_cert"
-    exit 0
+    san_line="$(openssl x509 -in "$server_cert" -noout -text | awk '/Subject Alternative Name/ { getline; print; exit }')"
+    renew=0
+    while IFS= read -r host; do
+      if [[ ",${san_line// /}," != *",DNS:$host,"* ]]; then
+        renew=1
+        break
+      fi
+    done < <(awk -F= '/^[[:space:]]*DNS\.[0-9]+[[:space:]]*=/ { gsub(/[[:space:]]/, "", $2); print $2 }' "$server_config")
+    if (( renew == 0 )); then
+      exit 0
+    fi
+    echo "Renewing $server_cert to include the configured DNS names."
   fi
 fi
 

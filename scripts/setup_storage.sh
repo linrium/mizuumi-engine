@@ -29,9 +29,11 @@ if ! kubectl -n "$namespace" get secret rustfs-vault-ca >/dev/null 2>&1; then
 fi
 
 tls_dir="$repo_root/k8s/storage/tls"
+previous_cert="$(openssl x509 -in "$tls_dir/rustfs_cert.pem" -noout -fingerprint -sha256 2>/dev/null || true)"
 "$repo_root/scripts/ensure_local_tls.sh" "$tls_dir" \
   "$repo_root/k8s/storage/tls.cnf" "$repo_root/k8s/storage/ca.cnf" \
   rustfs_cert.pem rustfs_key.pem
+current_cert="$(openssl x509 -in "$tls_dir/rustfs_cert.pem" -noout -fingerprint -sha256)"
 kubectl -n "$namespace" create secret generic rustfs-tls \
   --from-file=rustfs_cert.pem="$tls_dir/rustfs_cert.pem" \
   --from-file=rustfs_key.pem="$tls_dir/rustfs_key.pem" \
@@ -55,6 +57,9 @@ helm upgrade --install "$release" rustfs/rustfs \
 # public issuer is localhost, so RustFS needs a pod-local tunnel to that issuer.
 kubectl -n "$namespace" patch deployment "$release" --type=strategic --field-manager=helm -p \
   '{"spec":{"template":{"spec":{"containers":[{"name":"rustfs","livenessProbe":{"httpGet":{"scheme":"HTTPS"}},"readinessProbe":{"httpGet":{"scheme":"HTTPS"}}},{"name":"keycloak-loopback","image":"alpine/socat:1.8.0.3","command":["socat"],"args":["TCP-LISTEN:8080,bind=127.0.0.1,fork,reuseaddr","TCP:keycloak.auth.svc.cluster.local:8080"],"resources":{"requests":{"cpu":"10m","memory":"16Mi"},"limits":{"memory":"64Mi"}},"securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"runAsNonRoot":true}}]}}}}'
+if [[ -n "$previous_cert" && "$previous_cert" != "$current_cert" ]]; then
+  kubectl -n "$namespace" rollout restart deployment/"$release"
+fi
 kubectl -n "$namespace" rollout status deployment/"$release" --timeout=10m
 
 echo "RustFS is ready over HTTPS. Run ./scripts/forward.sh for ports 9000 (S3/API) and 9001 (Console)."
