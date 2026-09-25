@@ -102,7 +102,7 @@ echo "Keycloak API/UI: https://auth.mizuumi.test"
 echo "Vault API:       https://vault.mizuumi.test/v1"
 echo "Vault UI:        https://vault.mizuumi.test/ui/"
 echo "RustFS S3/API:   https://api.storage.mizuumi.test"
-echo "RustFS Console:  https://storage.mizuumi.test"
+echo "RustFS Console:  https://storage.mizuumi.test/rustfs/console/"
 
 if (( open_browser )); then
   if [[ "$(uname -s)" != Darwin ]]; then
@@ -112,5 +112,5 @@ if (( open_browser )); then
   open \
     "https://auth.mizuumi.test" \
     "https://vault.mizuumi.test/ui/" \
-    "https://storage.mizuumi.test"
+    "https://storage.mizuumi.test/rustfs/console/"
 fi

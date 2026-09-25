@@ -63,4 +63,4 @@ if [[ -n "$previous_cert" && "$previous_cert" != "$current_cert" ]]; then
 fi
 kubectl -n "$namespace" rollout status deployment/"$release" --timeout=10m
 
-echo "RustFS is ready. Run ./scripts/forward.sh, then use https://storage.mizuumi.test and https://api.storage.mizuumi.test."
+echo "RustFS is ready. Run ./scripts/forward.sh, then use https://storage.mizuumi.test/rustfs/console/ and https://api.storage.mizuumi.test."

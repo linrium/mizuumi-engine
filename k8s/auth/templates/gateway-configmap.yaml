@@ -49,16 +49,34 @@ data:
 
     https://storage.mizuumi.test:8443 {
       tls /etc/caddy/gateway-tls/tls.crt /etc/caddy/gateway-tls/tls.key
-      redir / /rustfs/console/ 308
-      reverse_proxy https://rustfs-svc.storage.svc.cluster.local:9001 {
-        header_up -Forwarded
-        header_up X-Forwarded-For {http.request.remote.host}
-        header_up X-Forwarded-Host {host}
-        header_up X-Forwarded-Port 443
-        header_up X-Forwarded-Proto https
-        transport http {
-          tls_trust_pool file /etc/caddy/upstream-cas/ca.crt
-          tls_server_name rustfs-svc.storage.svc.cluster.local
+      handle /rustfs/console/* {
+        reverse_proxy https://rustfs-svc.storage.svc.cluster.local:9001 {
+          header_up Host {host}
+          header_up -Forwarded
+          header_up X-Forwarded-For {http.request.remote.host}
+          header_up X-Forwarded-Host {host}
+          header_up X-Forwarded-Port 443
+          header_up X-Forwarded-Proto https
+          transport http {
+            tls_trust_pool file /etc/caddy/upstream-cas/ca.crt
+            tls_server_name rustfs-svc.storage.svc.cluster.local
+          }
+        }
+      }
+      # The console signs same-origin Admin and S3 requests. Send every
+      # non-console path directly to the API listener without changing Host.
+      handle {
+        reverse_proxy https://rustfs-svc.storage.svc.cluster.local:9000 {
+          header_up Host {host}
+          header_up -Forwarded
+          header_up X-Forwarded-For {http.request.remote.host}
+          header_up X-Forwarded-Host {host}
+          header_up X-Forwarded-Port 443
+          header_up X-Forwarded-Proto https
+          transport http {
+            tls_trust_pool file /etc/caddy/upstream-cas/ca.crt
+            tls_server_name rustfs-svc.storage.svc.cluster.local
+          }
         }
       }
     }
@@ -66,6 +84,7 @@ data:
     https://api.storage.mizuumi.test:8443 {
       tls /etc/caddy/gateway-tls/tls.crt /etc/caddy/gateway-tls/tls.key
       reverse_proxy https://rustfs-svc.storage.svc.cluster.local:9000 {
+        header_up Host {host}
         header_up -Forwarded
         header_up X-Forwarded-For {http.request.remote.host}
         header_up X-Forwarded-Host {host}
