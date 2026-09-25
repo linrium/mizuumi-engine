@@ -4,6 +4,14 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum AppError {
+    #[error("not found: {0}")]
+    NotFound(String),
+    #[error("already exists: {0}")]
+    Conflict(String),
+    #[error("invalid parameter: {0}")]
+    InvalidParameter(String),
+    #[error("json conversion failed")]
+    Json(#[from] serde_json::Error),
     #[error("postgres query failed")]
     Postgres(#[from] tokio_postgres::Error),
     #[error("postgres pool failed")]
@@ -26,6 +34,10 @@ impl IntoResponse for AppError {
         tracing::error!(error = %self, "request failed");
 
         let status = match self {
+            AppError::NotFound(_) => StatusCode::NOT_FOUND,
+            AppError::Conflict(_) => StatusCode::CONFLICT,
+            AppError::InvalidParameter(_) => StatusCode::BAD_REQUEST,
+            AppError::Json(_) => StatusCode::INTERNAL_SERVER_ERROR,
             AppError::Postgres(_)
             | AppError::Pool(_)
             | AppError::Sts

@@ -16,11 +16,12 @@ use crate::{
     app_state::AppState,
     config::Settings,
     features::{
+        catalogs::{DefaultCatalogService, catalog_router},
         health::{DefaultHealthService, health_router},
         hello::{DefaultHelloService, hello_router},
         vending::{DefaultVendingService, vending_router},
     },
-    infrastructure::postgres::create_pool,
+    infrastructure::postgres::{create_pool, run_migrations},
 };
 
 #[tokio::main]
@@ -29,10 +30,14 @@ async fn main() -> anyhow::Result<()> {
 
     let settings = Settings::load().context("failed to load configuration")?;
     let pool = create_pool(&settings.postgres).context("failed to create postgres pool")?;
+    run_migrations(&pool)
+        .await
+        .context("failed to run postgres migrations")?;
 
     let state = AppState {
+        catalogs: Arc::new(DefaultCatalogService::new(pool.clone())),
         health: Arc::new(DefaultHealthService::new(pool.clone())),
-        hello: Arc::new(DefaultHelloService::new(pool)),
+        hello: Arc::new(DefaultHelloService::new(pool.clone())),
         vending: Arc::new(
             DefaultVendingService::new(settings.vending.clone())
                 .context("failed to create vending service")?,
@@ -43,6 +48,7 @@ async fn main() -> anyhow::Result<()> {
         .merge(health_router())
         .merge(hello_router())
         .merge(vending_router())
+        .merge(catalog_router())
         .layer(TraceLayer::new_for_http())
         .with_state(state);
 

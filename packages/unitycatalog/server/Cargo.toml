@@ -14,7 +14,9 @@ axum = "0.8"
 axum-valid = "0.25"
 config = "0.15"
 deadpool-postgres = "0.14"
+regex = "1.11"
 serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 thiserror = "2.0"
 tokio = { version = "1.0", features = ["macros", "rt-multi-thread", "net", "signal"] }
 tokio-postgres = "0.7"

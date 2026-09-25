@@ -2529,7 +2529,9 @@ dependencies = [
  "axum-valid",
  "config",
  "deadpool-postgres",
+ "regex",
  "serde",
+ "serde_json",
  "thiserror",
  "tokio",
  "tokio-postgres",
@@ -3122,6 +3124,7 @@ dependencies = [
  "postgres-protocol",
  "postgres-types",
  "serde",
+ "serde_json",
  "tokio-postgres",
 ]
 

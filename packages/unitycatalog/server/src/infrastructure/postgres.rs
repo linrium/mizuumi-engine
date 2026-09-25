@@ -20,3 +20,11 @@ pub fn create_pool(settings: &PostgresSettings) -> Result<Pool, CreatePoolError>
 
     config.create_pool(Some(Runtime::Tokio1), NoTls)
 }
+
+pub async fn run_migrations(pool: &Pool) -> anyhow::Result<()> {
+    let client = pool.get().await?;
+    client
+        .batch_execute(include_str!("../../schema.sql"))
+        .await?;
+    Ok(())
+}
