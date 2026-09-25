@@ -1,0 +1,21 @@
+[package]
+name = "server"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0"
+async-trait = "0.1"
+axum = "0.8"
+axum-valid = "0.25"
+config = "0.15"
+deadpool-postgres = "0.14"
+serde = { version = "1.0", features = ["derive"] }
+thiserror = "2.0"
+tokio = { version = "1.0", features = ["macros", "rt-multi-thread", "net", "signal"] }
+tokio-postgres = "0.7"
+tower-http = { version = "0.6", features = ["trace"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+unitycatalog_queries = { path = "cornucopia" }
+validator = { version = "0.20", features = ["derive"] }

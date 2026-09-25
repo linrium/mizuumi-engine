@@ -1,0 +1,7 @@
+[manifest.package]
+name = "unitycatalog_queries"
+version = "0.0.0"
+publish = false
+
+[types]
+derive-traits = ["serde::Serialize", "serde::Deserialize"]

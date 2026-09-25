@@ -1,0 +1,9 @@
+use std::sync::Arc;
+
+use crate::features::{health::HealthService, hello::HelloService};
+
+#[derive(Clone)]
+pub struct AppState {
+    pub health: Arc<dyn HealthService>,
+    pub hello: Arc<dyn HelloService>,
+}

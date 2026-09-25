@@ -1,0 +1,1 @@
+-- The initial API query does not require schema objects.

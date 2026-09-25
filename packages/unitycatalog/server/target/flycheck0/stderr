@@ -1,0 +1,1584 @@
+   0.159579750s  INFO prepare_target{force=false package_id=server v0.1.0 (/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server) target="server"}: cargo::core::compiler::fingerprint: stale: missing "/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/target/debug/.fingerprint/encoding_rs-e90a2084af39be40/dep-build-script-build-script-build"
+   0.169301792s  INFO prepare_target{force=false package_id=server v0.1.0 (/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server) target="server"}: cargo::core::compiler::fingerprint: fingerprint error for server v0.1.0 (/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server)/Check { test: false }/TargetInner { name: "server", doc: true, ..: with_path("/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/src/main.rs", Edition2024) }
+   0.169316042s  INFO prepare_target{force=false package_id=server v0.1.0 (/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server) target="server"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/target/debug/.fingerprint/server-8f5f45a727e854ef/bin-server`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <std::backtrace::Backtrace>::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: <cargo::core::compiler::build_runner::BuildRunner>::compile
+   7: cargo::ops::cargo_compile::compile_ws
+   8: cargo::ops::cargo_compile::compile_with_exec
+   9: cargo::ops::cargo_compile::compile
+  10: cargo::commands::check::exec
+  11: <cargo::cli::Exec>::exec
+  12: cargo::main
+  13: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  14: std::rt::lang_start::<()>::{closure#0}
+  15: std::rt::lang_start_internal
+  16: _main
+   0.173580375s  INFO prepare_target{force=false package_id=axum v0.8.9 target="axum"}: cargo::core::compiler::fingerprint: fingerprint error for axum v0.8.9/Check { test: false }/TargetInner { ..: lib_target("axum", ["lib"], "/Users/linh.tran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/axum-0.8.9/src/lib.rs", Edition2021) }
+   0.173587500s  INFO prepare_target{force=false package_id=axum v0.8.9 target="axum"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/target/debug/.fingerprint/axum-857899bb51aed23f/lib-axum`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <std::backtrace::Backtrace>::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: cargo::core::compiler::compile
+   7: <cargo::core::compiler::build_runner::BuildRunner>::compile
+   8: cargo::ops::cargo_compile::compile_ws
+   9: cargo::ops::cargo_compile::compile_with_exec
+  10: cargo::ops::cargo_compile::compile
+  11: cargo::commands::check::exec
+  12: <cargo::cli::Exec>::exec
+  13: cargo::main
+  14: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  15: std::rt::lang_start::<()>::{closure#0}
+  16: std::rt::lang_start_internal
+  17: _main
+   0.174024500s  INFO prepare_target{force=false package_id=axum-core v0.5.6 target="axum_core"}: cargo::core::compiler::fingerprint: fingerprint error for axum-core v0.5.6/Check { test: false }/TargetInner { ..: lib_target("axum_core", ["lib"], "/Users/linh.tran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/axum-core-0.5.6/src/lib.rs", Edition2021) }
+   0.174027792s  INFO prepare_target{force=false package_id=axum-core v0.5.6 target="axum_core"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/target/debug/.fingerprint/axum-core-ea76411b4481dbae/lib-axum_core`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <std::backtrace::Backtrace>::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: cargo::core::compiler::compile
+   7: cargo::core::compiler::compile
+   8: <cargo::core::compiler::build_runner::BuildRunner>::compile
+   9: cargo::ops::cargo_compile::compile_ws
+  10: cargo::ops::cargo_compile::compile_with_exec
+  11: cargo::ops::cargo_compile::compile
+  12: cargo::commands::check::exec
+  13: <cargo::cli::Exec>::exec
+  14: cargo::main
+  15: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  16: std::rt::lang_start::<()>::{closure#0}
+  17: std::rt::lang_start_internal
+  18: _main
+   0.175514875s  INFO prepare_target{force=false package_id=tracing v0.1.44 target="tracing"}: cargo::core::compiler::fingerprint: fingerprint error for tracing v0.1.44/Check { test: false }/TargetInner { ..: lib_target("tracing", ["lib"], "/Users/linh.tran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tracing-0.1.44/src/lib.rs", Edition2018) }
+   0.175519458s  INFO prepare_target{force=false package_id=tracing v0.1.44 target="tracing"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/target/debug/.fingerprint/tracing-1dd80dd649a71be2/lib-tracing`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <std::backtrace::Backtrace>::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: cargo::core::compiler::compile
+   7: cargo::core::compiler::compile
+   8: cargo::core::compiler::compile
+   9: <cargo::core::compiler::build_runner::BuildRunner>::compile
+  10: cargo::ops::cargo_compile::compile_ws
+  11: cargo::ops::cargo_compile::compile_with_exec
+  12: cargo::ops::cargo_compile::compile
+  13: cargo::commands::check::exec
+  14: <cargo::cli::Exec>::exec
+  15: cargo::main
+  16: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  17: std::rt::lang_start::<()>::{closure#0}
+  18: std::rt::lang_start_internal
+  19: _main
+   0.176397750s  INFO prepare_target{force=false package_id=futures-util v0.3.34 target="futures_util"}: cargo::core::compiler::fingerprint: fingerprint error for futures-util v0.3.34/Check { test: false }/TargetInner { ..: lib_target("futures_util", ["lib"], "/Users/linh.tran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.34/src/lib.rs", Edition2018) }
+   0.176401250s  INFO prepare_target{force=false package_id=futures-util v0.3.34 target="futures_util"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/target/debug/.fingerprint/futures-util-001c24c4743cc597/lib-futures_util`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <std::backtrace::Backtrace>::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: cargo::core::compiler::compile
+   7: cargo::core::compiler::compile
+   8: <cargo::core::compiler::build_runner::BuildRunner>::compile
+   9: cargo::ops::cargo_compile::compile_ws
+  10: cargo::ops::cargo_compile::compile_with_exec
+  11: cargo::ops::cargo_compile::compile
+  12: cargo::commands::check::exec
+  13: <cargo::cli::Exec>::exec
+  14: cargo::main
+  15: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  16: std::rt::lang_start::<()>::{closure#0}
+  17: std::rt::lang_start_internal
+  18: _main
+   0.177346542s  INFO prepare_target{force=false package_id=hyper v1.11.1 target="hyper"}: cargo::core::compiler::fingerprint: fingerprint error for hyper v1.11.1/Check { test: false }/TargetInner { ..: lib_target("hyper", ["lib"], "/Users/linh.tran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/hyper-1.11.1/src/lib.rs", Edition2021) }
+   0.177351250s  INFO prepare_target{force=false package_id=hyper v1.11.1 target="hyper"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/target/debug/.fingerprint/hyper-68f68e5eef00977f/lib-hyper`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <std::backtrace::Backtrace>::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: cargo::core::compiler::compile
+   7: cargo::core::compiler::compile
+   8: <cargo::core::compiler::build_runner::BuildRunner>::compile
+   9: cargo::ops::cargo_compile::compile_ws
+  10: cargo::ops::cargo_compile::compile_with_exec
+  11: cargo::ops::cargo_compile::compile
+  12: cargo::commands::check::exec
+  13: <cargo::cli::Exec>::exec
+  14: cargo::main
+  15: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  16: std::rt::lang_start::<()>::{closure#0}
+  17: std::rt::lang_start_internal
+  18: _main
+   0.178376583s  INFO prepare_target{force=false package_id=tokio v1.53.1 target="tokio"}: cargo::core::compiler::fingerprint: fingerprint error for tokio v1.53.1/Check { test: false }/TargetInner { ..: lib_target("tokio", ["lib"], "/Users/linh.tran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/lib.rs", Edition2021) }
+   0.178381125s  INFO prepare_target{force=false package_id=tokio v1.53.1 target="tokio"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/target/debug/.fingerprint/tokio-d1379b3cdb9cd719/lib-tokio`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <std::backtrace::Backtrace>::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: cargo::core::compiler::compile
+   7: cargo::core::compiler::compile
+   8: cargo::core::compiler::compile
+   9: <cargo::core::compiler::build_runner::BuildRunner>::compile
+  10: cargo::ops::cargo_compile::compile_ws
+  11: cargo::ops::cargo_compile::compile_with_exec
+  12: cargo::ops::cargo_compile::compile
+  13: cargo::commands::check::exec
+  14: <cargo::cli::Exec>::exec
+  15: cargo::main
+  16: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  17: std::rt::lang_start::<()>::{closure#0}
+  18: std::rt::lang_start_internal
+  19: _main
+   0.179573958s  INFO prepare_target{force=false package_id=hyper-util v0.1.21 target="hyper_util"}: cargo::core::compiler::fingerprint: fingerprint error for hyper-util v0.1.21/Check { test: false }/TargetInner { ..: lib_target("hyper_util", ["lib"], "/Users/linh.tran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/hyper-util-0.1.21/src/lib.rs", Edition2024) }
+   0.179577750s  INFO prepare_target{force=false package_id=hyper-util v0.1.21 target="hyper_util"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/target/debug/.fingerprint/hyper-util-5dc34c3b9ca7d43d/lib-hyper_util`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <std::backtrace::Backtrace>::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: cargo::core::compiler::compile
+   7: cargo::core::compiler::compile
+   8: <cargo::core::compiler::build_runner::BuildRunner>::compile
+   9: cargo::ops::cargo_compile::compile_ws
+  10: cargo::ops::cargo_compile::compile_with_exec
+  11: cargo::ops::cargo_compile::compile
+  12: cargo::commands::check::exec
+  13: <cargo::cli::Exec>::exec
+  14: cargo::main
+  15: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  16: std::rt::lang_start::<()>::{closure#0}
+  17: std::rt::lang_start_internal
+  18: _main
+   0.181191250s  INFO prepare_target{force=false package_id=serde_urlencoded v0.7.1 target="serde_urlencoded"}: cargo::core::compiler::fingerprint: fingerprint error for serde_urlencoded v0.7.1/Check { test: false }/TargetInner { name_inferred: true, tested: false, ..: lib_target("serde_urlencoded", ["lib"], "/Users/linh.tran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde_urlencoded-0.7.1/src/lib.rs", Edition2018) }
+   0.181194875s  INFO prepare_target{force=false package_id=serde_urlencoded v0.7.1 target="serde_urlencoded"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/target/debug/.fingerprint/serde_urlencoded-62341e8ac2809b2f/lib-serde_urlencoded`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <std::backtrace::Backtrace>::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: cargo::core::compiler::compile
+   7: cargo::core::compiler::compile
+   8: <cargo::core::compiler::build_runner::BuildRunner>::compile
+   9: cargo::ops::cargo_compile::compile_ws
+  10: cargo::ops::cargo_compile::compile_with_exec
+  11: cargo::ops::cargo_compile::compile
+  12: cargo::commands::check::exec
+  13: <cargo::cli::Exec>::exec
+  14: cargo::main
+  15: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  16: std::rt::lang_start::<()>::{closure#0}
+  17: std::rt::lang_start_internal
+  18: _main
+   0.181479000s  INFO prepare_target{force=false package_id=serde v1.0.229 target="serde"}: cargo::core::compiler::fingerprint: fingerprint error for serde v1.0.229/Check { test: false }/TargetInner { ..: lib_target("serde", ["lib"], "/Users/linh.tran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/lib.rs", Edition2021) }
+   0.181483417s  INFO prepare_target{force=false package_id=serde v1.0.229 target="serde"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/target/debug/.fingerprint/serde-fc4e2a8d258bb0a1/lib-serde`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <std::backtrace::Backtrace>::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: cargo::core::compiler::compile
+   7: cargo::core::compiler::compile
+   8: cargo::core::compiler::compile
+   9: <cargo::core::compiler::build_runner::BuildRunner>::compile
+  10: cargo::ops::cargo_compile::compile_ws
+  11: cargo::ops::cargo_compile::compile_with_exec
+  12: cargo::ops::cargo_compile::compile
+  13: cargo::commands::check::exec
+  14: <cargo::cli::Exec>::exec
+  15: cargo::main
+  16: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  17: std::rt::lang_start::<()>::{closure#0}
+  18: std::rt::lang_start_internal
+  19: _main
+   0.182017417s  INFO prepare_target{force=false package_id=tower v0.5.3 target="tower"}: cargo::core::compiler::fingerprint: fingerprint error for tower v0.5.3/Check { test: false }/TargetInner { ..: lib_target("tower", ["lib"], "/Users/linh.tran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tower-0.5.3/src/lib.rs", Edition2018) }
+   0.182021250s  INFO prepare_target{force=false package_id=tower v0.5.3 target="tower"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/target/debug/.fingerprint/tower-2e68645d15ec90a9/lib-tower`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <std::backtrace::Backtrace>::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: cargo::core::compiler::compile
+   7: cargo::core::compiler::compile
+   8: <cargo::core::compiler::build_runner::BuildRunner>::compile
+   9: cargo::ops::cargo_compile::compile_ws
+  10: cargo::ops::cargo_compile::compile_with_exec
+  11: cargo::ops::cargo_compile::compile
+  12: cargo::commands::check::exec
+  13: <cargo::cli::Exec>::exec
+  14: cargo::main
+  15: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  16: std::rt::lang_start::<()>::{closure#0}
+  17: std::rt::lang_start_internal
+  18: _main
+   0.182237292s  INFO prepare_target{force=false package_id=axum-valid v0.25.0 target="axum_valid"}: cargo::core::compiler::fingerprint: fingerprint error for axum-valid v0.25.0/Check { test: false }/TargetInner { ..: lib_target("axum_valid", ["lib"], "/Users/linh.tran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/axum-valid-0.25.0/src/lib.rs", Edition2021) }
+   0.182243458s  INFO prepare_target{force=false package_id=axum-valid v0.25.0 target="axum_valid"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/target/debug/.fingerprint/axum-valid-b68d0ee0e77121f4/lib-axum_valid`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <std::backtrace::Backtrace>::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: cargo::core::compiler::compile
+   7: <cargo::core::compiler::build_runner::BuildRunner>::compile
+   8: cargo::ops::cargo_compile::compile_ws
+   9: cargo::ops::cargo_compile::compile_with_exec
+  10: cargo::ops::cargo_compile::compile
+  11: cargo::commands::check::exec
+  12: <cargo::cli::Exec>::exec
+  13: cargo::main
+  14: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  15: std::rt::lang_start::<()>::{closure#0}
+  16: std::rt::lang_start_internal
+  17: _main
+   0.182423292s  INFO prepare_target{force=false package_id=validator v0.20.0 target="validator"}: cargo::core::compiler::fingerprint: fingerprint error for validator v0.20.0/Check { test: false }/TargetInner { ..: lib_target("validator", ["lib"], "/Users/linh.tran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/validator-0.20.0/src/lib.rs", Edition2021) }
+   0.182425792s  INFO prepare_target{force=false package_id=validator v0.20.0 target="validator"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/target/debug/.fingerprint/validator-0d25223a36640acf/lib-validator`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <std::backtrace::Backtrace>::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: cargo::core::compiler::compile
+   7: cargo::core::compiler::compile
+   8: <cargo::core::compiler::build_runner::BuildRunner>::compile
+   9: cargo::ops::cargo_compile::compile_ws
+  10: cargo::ops::cargo_compile::compile_with_exec
+  11: cargo::ops::cargo_compile::compile
+  12: cargo::commands::check::exec
+  13: <cargo::cli::Exec>::exec
+  14: cargo::main
+  15: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  16: std::rt::lang_start::<()>::{closure#0}
+  17: std::rt::lang_start_internal
+  18: _main
+   0.182664125s  INFO prepare_target{force=false package_id=idna v1.1.0 target="idna"}: cargo::core::compiler::fingerprint: fingerprint error for idna v1.1.0/Check { test: false }/TargetInner { doctest: false, ..: lib_target("idna", ["lib"], "/Users/linh.tran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/idna-1.1.0/src/lib.rs", Edition2018) }
+   0.182666917s  INFO prepare_target{force=false package_id=idna v1.1.0 target="idna"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/target/debug/.fingerprint/idna-ee9a258f5fe5d5ed/lib-idna`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <std::backtrace::Backtrace>::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: cargo::core::compiler::compile
+   7: cargo::core::compiler::compile
+   8: cargo::core::compiler::compile
+   9: <cargo::core::compiler::build_runner::BuildRunner>::compile
+  10: cargo::ops::cargo_compile::compile_ws
+  11: cargo::ops::cargo_compile::compile_with_exec
+  12: cargo::ops::cargo_compile::compile
+  13: cargo::commands::check::exec
+  14: <cargo::cli::Exec>::exec
+  15: cargo::main
+  16: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  17: std::rt::lang_start::<()>::{closure#0}
+  18: std::rt::lang_start_internal
+  19: _main
+   0.182800708s  INFO prepare_target{force=false package_id=idna_adapter v1.2.2 target="idna_adapter"}: cargo::core::compiler::fingerprint: fingerprint error for idna_adapter v1.2.2/Check { test: false }/TargetInner { ..: lib_target("idna_adapter", ["lib"], "/Users/linh.tran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/idna_adapter-1.2.2/src/lib.rs", Edition2024) }
+   0.182803750s  INFO prepare_target{force=false package_id=idna_adapter v1.2.2 target="idna_adapter"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/target/debug/.fingerprint/idna_adapter-f1a39c885af3c82c/lib-idna_adapter`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <std::backtrace::Backtrace>::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: cargo::core::compiler::compile
+   7: cargo::core::compiler::compile
+   8: cargo::core::compiler::compile
+   9: cargo::core::compiler::compile
+  10: <cargo::core::compiler::build_runner::BuildRunner>::compile
+  11: cargo::ops::cargo_compile::compile_ws
+  12: cargo::ops::cargo_compile::compile_with_exec
+  13: cargo::ops::cargo_compile::compile
+  14: cargo::commands::check::exec
+  15: <cargo::cli::Exec>::exec
+  16: cargo::main
+  17: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  18: std::rt::lang_start::<()>::{closure#0}
+  19: std::rt::lang_start_internal
+  20: _main
+   0.182923625s  INFO prepare_target{force=false package_id=icu_normalizer v2.3.0 target="icu_normalizer"}: cargo::core::compiler::fingerprint: fingerprint error for icu_normalizer v2.3.0/Check { test: false }/TargetInner { ..: lib_target("icu_normalizer", ["lib"], "/Users/linh.tran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/icu_normalizer-2.3.0/src/lib.rs", Edition2024) }
+   0.182926458s  INFO prepare_target{force=false package_id=icu_normalizer v2.3.0 target="icu_normalizer"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/target/debug/.fingerprint/icu_normalizer-2956572b0fb29a3b/lib-icu_normalizer`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <std::backtrace::Backtrace>::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: cargo::core::compiler::compile
+   7: cargo::core::compiler::compile
+   8: cargo::core::compiler::compile
+   9: cargo::core::compiler::compile
+  10: cargo::core::compiler::compile
+  11: <cargo::core::compiler::build_runner::BuildRunner>::compile
+  12: cargo::ops::cargo_compile::compile_ws
+  13: cargo::ops::cargo_compile::compile_with_exec
+  14: cargo::ops::cargo_compile::compile
+  15: cargo::commands::check::exec
+  16: <cargo::cli::Exec>::exec
+  17: cargo::main
+  18: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  19: std::rt::lang_start::<()>::{closure#0}
+  20: std::rt::lang_start_internal
+  21: _main
+   0.183119292s  INFO prepare_target{force=false package_id=icu_collections v2.3.0 target="icu_collections"}: cargo::core::compiler::fingerprint: fingerprint error for icu_collections v2.3.0/Check { test: false }/TargetInner { benched: false, ..: lib_target("icu_collections", ["lib"], "/Users/linh.tran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/icu_collections-2.3.0/src/lib.rs", Edition2024) }
+   0.183122500s  INFO prepare_target{force=false package_id=icu_collections v2.3.0 target="icu_collections"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/target/debug/.fingerprint/icu_collections-565d5657258cfe29/lib-icu_collections`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <std::backtrace::Backtrace>::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: cargo::core::compiler::compile
+   7: cargo::core::compiler::compile
+   8: cargo::core::compiler::compile
+   9: cargo::core::compiler::compile
+  10: cargo::core::compiler::compile
+  11: cargo::core::compiler::compile
+  12: <cargo::core::compiler::build_runner::BuildRunner>::compile
+  13: cargo::ops::cargo_compile::compile_ws
+  14: cargo::ops::cargo_compile::compile_with_exec
+  15: cargo::ops::cargo_compile::compile
+  16: cargo::commands::check::exec
+  17: <cargo::cli::Exec>::exec
+  18: cargo::main
+  19: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  20: std::rt::lang_start::<()>::{closure#0}
+  21: std::rt::lang_start_internal
+  22: _main
+   0.183428958s  INFO prepare_target{force=false package_id=potential_utf v0.1.6 target="potential_utf"}: cargo::core::compiler::fingerprint: fingerprint error for potential_utf v0.1.6/Check { test: false }/TargetInner { ..: lib_target("potential_utf", ["lib"], "/Users/linh.tran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/potential_utf-0.1.6/src/lib.rs", Edition2021) }
+   0.183435042s  INFO prepare_target{force=false package_id=potential_utf v0.1.6 target="potential_utf"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/target/debug/.fingerprint/potential_utf-0e952bd8ed3e0655/lib-potential_utf`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <std::backtrace::Backtrace>::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: cargo::core::compiler::compile
+   7: cargo::core::compiler::compile
+   8: cargo::core::compiler::compile
+   9: cargo::core::compiler::compile
+  10: cargo::core::compiler::compile
+  11: cargo::core::compiler::compile
+  12: cargo::core::compiler::compile
+  13: <cargo::core::compiler::build_runner::BuildRunner>::compile
+  14: cargo::ops::cargo_compile::compile_ws
+  15: cargo::ops::cargo_compile::compile_with_exec
+  16: cargo::ops::cargo_compile::compile
+  17: cargo::commands::check::exec
+  18: <cargo::cli::Exec>::exec
+  19: cargo::main
+  20: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  21: std::rt::lang_start::<()>::{closure#0}
+  22: std::rt::lang_start_internal
+  23: _main
+   0.183545375s  INFO prepare_target{force=false package_id=zerovec v0.11.8 target="zerovec"}: cargo::core::compiler::fingerprint: fingerprint error for zerovec v0.11.8/Check { test: false }/TargetInner { benched: false, ..: lib_target("zerovec", ["lib"], "/Users/linh.tran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zerovec-0.11.8/src/lib.rs", Edition2021) }
+   0.183548625s  INFO prepare_target{force=false package_id=zerovec v0.11.8 target="zerovec"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/target/debug/.fingerprint/zerovec-e2c90e43ba508b6f/lib-zerovec`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <std::backtrace::Backtrace>::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: cargo::core::compiler::compile
+   7: cargo::core::compiler::compile
+   8: cargo::core::compiler::compile
+   9: cargo::core::compiler::compile
+  10: cargo::core::compiler::compile
+  11: cargo::core::compiler::compile
+  12: cargo::core::compiler::compile
+  13: cargo::core::compiler::compile
+  14: <cargo::core::compiler::build_runner::BuildRunner>::compile
+  15: cargo::ops::cargo_compile::compile_ws
+  16: cargo::ops::cargo_compile::compile_with_exec
+  17: cargo::ops::cargo_compile::compile
+  18: cargo::commands::check::exec
+  19: <cargo::cli::Exec>::exec
+  20: cargo::main
+  21: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  22: std::rt::lang_start::<()>::{closure#0}
+  23: std::rt::lang_start_internal
+  24: _main
+   0.183703167s  INFO prepare_target{force=false package_id=yoke v0.8.3 target="yoke"}: cargo::core::compiler::fingerprint: fingerprint error for yoke v0.8.3/Check { test: false }/TargetInner { ..: lib_target("yoke", ["lib"], "/Users/linh.tran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/yoke-0.8.3/src/lib.rs", Edition2021) }
+   0.183705500s  INFO prepare_target{force=false package_id=yoke v0.8.3 target="yoke"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/target/debug/.fingerprint/yoke-0d08e07c7492a622/lib-yoke`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <std::backtrace::Backtrace>::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: cargo::core::compiler::compile
+   7: cargo::core::compiler::compile
+   8: cargo::core::compiler::compile
+   9: cargo::core::compiler::compile
+  10: cargo::core::compiler::compile
+  11: cargo::core::compiler::compile
+  12: cargo::core::compiler::compile
+  13: cargo::core::compiler::compile
+  14: cargo::core::compiler::compile
+  15: <cargo::core::compiler::build_runner::BuildRunner>::compile
+  16: cargo::ops::cargo_compile::compile_ws
+  17: cargo::ops::cargo_compile::compile_with_exec
+  18: cargo::ops::cargo_compile::compile
+  19: cargo::commands::check::exec
+  20: <cargo::cli::Exec>::exec
+  21: cargo::main
+  22: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  23: std::rt::lang_start::<()>::{closure#0}
+  24: std::rt::lang_start_internal
+  25: _main
+   0.184275625s  INFO prepare_target{force=false package_id=zerofrom v0.1.8 target="zerofrom"}: cargo::core::compiler::fingerprint: fingerprint error for zerofrom v0.1.8/Check { test: false }/TargetInner { ..: lib_target("zerofrom", ["lib"], "/Users/linh.tran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zerofrom-0.1.8/src/lib.rs", Edition2021) }
+   0.184280708s  INFO prepare_target{force=false package_id=zerofrom v0.1.8 target="zerofrom"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/target/debug/.fingerprint/zerofrom-f1029063347cddb1/lib-zerofrom`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <std::backtrace::Backtrace>::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: cargo::core::compiler::compile
+   7: cargo::core::compiler::compile
+   8: cargo::core::compiler::compile
+   9: cargo::core::compiler::compile
+  10: cargo::core::compiler::compile
+  11: cargo::core::compiler::compile
+  12: cargo::core::compiler::compile
+  13: cargo::core::compiler::compile
+  14: cargo::core::compiler::compile
+  15: cargo::core::compiler::compile
+  16: <cargo::core::compiler::build_runner::BuildRunner>::compile
+  17: cargo::ops::cargo_compile::compile_ws
+  18: cargo::ops::cargo_compile::compile_with_exec
+  19: cargo::ops::cargo_compile::compile
+  20: cargo::commands::check::exec
+  21: <cargo::cli::Exec>::exec
+  22: cargo::main
+  23: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  24: std::rt::lang_start::<()>::{closure#0}
+  25: std::rt::lang_start_internal
+  26: _main
+   0.185212125s  INFO prepare_target{force=false package_id=icu_provider v2.3.1 target="icu_provider"}: cargo::core::compiler::fingerprint: fingerprint error for icu_provider v2.3.1/Check { test: false }/TargetInner { benched: false, ..: lib_target("icu_provider", ["lib"], "/Users/linh.tran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/icu_provider-2.3.1/src/lib.rs", Edition2024) }
+   0.185216583s  INFO prepare_target{force=false package_id=icu_provider v2.3.1 target="icu_provider"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/target/debug/.fingerprint/icu_provider-f1ea69a880f2f118/lib-icu_provider`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <std::backtrace::Backtrace>::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: cargo::core::compiler::compile
+   7: cargo::core::compiler::compile
+   8: cargo::core::compiler::compile
+   9: cargo::core::compiler::compile
+  10: cargo::core::compiler::compile
+  11: cargo::core::compiler::compile
+  12: <cargo::core::compiler::build_runner::BuildRunner>::compile
+  13: cargo::ops::cargo_compile::compile_ws
+  14: cargo::ops::cargo_compile::compile_with_exec
+  15: cargo::ops::cargo_compile::compile
+  16: cargo::commands::check::exec
+  17: <cargo::cli::Exec>::exec
+  18: cargo::main
+  19: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  20: std::rt::lang_start::<()>::{closure#0}
+  21: std::rt::lang_start_internal
+  22: _main
+   0.185443500s  INFO prepare_target{force=false package_id=icu_locale_core v2.3.0 target="icu_locale_core"}: cargo::core::compiler::fingerprint: fingerprint error for icu_locale_core v2.3.0/Check { test: false }/TargetInner { benched: false, ..: lib_target("icu_locale_core", ["lib"], "/Users/linh.tran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/icu_locale_core-2.3.0/src/lib.rs", Edition2024) }
+   0.185446583s  INFO prepare_target{force=false package_id=icu_locale_core v2.3.0 target="icu_locale_core"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/target/debug/.fingerprint/icu_locale_core-7520d97b11e27963/lib-icu_locale_core`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <std::backtrace::Backtrace>::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: cargo::core::compiler::compile
+   7: cargo::core::compiler::compile
+   8: cargo::core::compiler::compile
+   9: cargo::core::compiler::compile
+  10: cargo::core::compiler::compile
+  11: cargo::core::compiler::compile
+  12: cargo::core::compiler::compile
+  13: <cargo::core::compiler::build_runner::BuildRunner>::compile
+  14: cargo::ops::cargo_compile::compile_ws
+  15: cargo::ops::cargo_compile::compile_with_exec
+  16: cargo::ops::cargo_compile::compile
+  17: cargo::commands::check::exec
+  18: <cargo::cli::Exec>::exec
+  19: cargo::main
+  20: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  21: std::rt::lang_start::<()>::{closure#0}
+  22: std::rt::lang_start_internal
+  23: _main
+   0.185749833s  INFO prepare_target{force=false package_id=tinystr v0.8.4 target="tinystr"}: cargo::core::compiler::fingerprint: fingerprint error for tinystr v0.8.4/Check { test: false }/TargetInner { benched: false, ..: lib_target("tinystr", ["lib"], "/Users/linh.tran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tinystr-0.8.4/src/lib.rs", Edition2021) }
+   0.185753042s  INFO prepare_target{force=false package_id=tinystr v0.8.4 target="tinystr"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/target/debug/.fingerprint/tinystr-2656a675225ae3e0/lib-tinystr`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <std::backtrace::Backtrace>::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: cargo::core::compiler::compile
+   7: cargo::core::compiler::compile
+   8: cargo::core::compiler::compile
+   9: cargo::core::compiler::compile
+  10: cargo::core::compiler::compile
+  11: cargo::core::compiler::compile
+  12: cargo::core::compiler::compile
+  13: cargo::core::compiler::compile
+  14: <cargo::core::compiler::build_runner::BuildRunner>::compile
+  15: cargo::ops::cargo_compile::compile_ws
+  16: cargo::ops::cargo_compile::compile_with_exec
+  17: cargo::ops::cargo_compile::compile
+  18: cargo::commands::check::exec
+  19: <cargo::cli::Exec>::exec
+  20: cargo::main
+  21: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  22: std::rt::lang_start::<()>::{closure#0}
+  23: std::rt::lang_start_internal
+  24: _main
+   0.186025875s  INFO prepare_target{force=false package_id=zerotrie v0.2.5 target="zerotrie"}: cargo::core::compiler::fingerprint: fingerprint error for zerotrie v0.2.5/Check { test: false }/TargetInner { benched: false, ..: lib_target("zerotrie", ["lib"], "/Users/linh.tran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zerotrie-0.2.5/src/lib.rs", Edition2021) }
+   0.186029792s  INFO prepare_target{force=false package_id=zerotrie v0.2.5 target="zerotrie"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/target/debug/.fingerprint/zerotrie-0cb8525829861c2f/lib-zerotrie`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <std::backtrace::Backtrace>::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: cargo::core::compiler::compile
+   7: cargo::core::compiler::compile
+   8: cargo::core::compiler::compile
+   9: cargo::core::compiler::compile
+  10: cargo::core::compiler::compile
+  11: cargo::core::compiler::compile
+  12: cargo::core::compiler::compile
+  13: <cargo::core::compiler::build_runner::BuildRunner>::compile
+  14: cargo::ops::cargo_compile::compile_ws
+  15: cargo::ops::cargo_compile::compile_with_exec
+  16: cargo::ops::cargo_compile::compile
+  17: cargo::commands::check::exec
+  18: <cargo::cli::Exec>::exec
+  19: cargo::main
+  20: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  21: std::rt::lang_start::<()>::{closure#0}
+  22: std::rt::lang_start_internal
+  23: _main
+   0.186185375s  INFO prepare_target{force=false package_id=icu_properties v2.3.0 target="icu_properties"}: cargo::core::compiler::fingerprint: fingerprint error for icu_properties v2.3.0/Check { test: false }/TargetInner { ..: lib_target("icu_properties", ["lib"], "/Users/linh.tran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/icu_properties-2.3.0/src/lib.rs", Edition2024) }
+   0.186187958s  INFO prepare_target{force=false package_id=icu_properties v2.3.0 target="icu_properties"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/target/debug/.fingerprint/icu_properties-1509f666e581b3f1/lib-icu_properties`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <std::backtrace::Backtrace>::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: cargo::core::compiler::compile
+   7: cargo::core::compiler::compile
+   8: cargo::core::compiler::compile
+   9: cargo::core::compiler::compile
+  10: cargo::core::compiler::compile
+  11: <cargo::core::compiler::build_runner::BuildRunner>::compile
+  12: cargo::ops::cargo_compile::compile_ws
+  13: cargo::ops::cargo_compile::compile_with_exec
+  14: cargo::ops::cargo_compile::compile
+  15: cargo::commands::check::exec
+  16: <cargo::cli::Exec>::exec
+  17: cargo::main
+  18: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  19: std::rt::lang_start::<()>::{closure#0}
+  20: std::rt::lang_start_internal
+  21: _main
+   0.187162875s  INFO prepare_target{force=false package_id=url v2.5.8 target="url"}: cargo::core::compiler::fingerprint: fingerprint error for url v2.5.8/Check { test: false }/TargetInner { ..: lib_target("url", ["lib"], "/Users/linh.tran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/url-2.5.8/src/lib.rs", Edition2018) }
+   0.187169125s  INFO prepare_target{force=false package_id=url v2.5.8 target="url"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/target/debug/.fingerprint/url-f9df71f4eacd17af/lib-url`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <std::backtrace::Backtrace>::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: cargo::core::compiler::compile
+   7: cargo::core::compiler::compile
+   8: cargo::core::compiler::compile
+   9: <cargo::core::compiler::build_runner::BuildRunner>::compile
+  10: cargo::ops::cargo_compile::compile_ws
+  11: cargo::ops::cargo_compile::compile_with_exec
+  12: cargo::ops::cargo_compile::compile
+  13: cargo::commands::check::exec
+  14: <cargo::cli::Exec>::exec
+  15: cargo::main
+  16: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  17: std::rt::lang_start::<()>::{closure#0}
+  18: std::rt::lang_start_internal
+  19: _main
+   0.187344208s  INFO prepare_target{force=false package_id=validator_derive v0.20.1 target="validator_derive"}: cargo::core::compiler::fingerprint: fingerprint error for validator_derive v0.20.1/Build/TargetInner { for_host: true, proc_macro: true, ..: lib_target("validator_derive", ["proc-macro"], "/Users/linh.tran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/validator_derive-0.20.1/src/lib.rs", Edition2024) }
+   0.187348083s  INFO prepare_target{force=false package_id=validator_derive v0.20.1 target="validator_derive"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/target/debug/.fingerprint/validator_derive-cb446f334a4dc0eb/lib-validator_derive`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <std::backtrace::Backtrace>::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: cargo::core::compiler::compile
+   7: cargo::core::compiler::compile
+   8: cargo::core::compiler::compile
+   9: <cargo::core::compiler::build_runner::BuildRunner>::compile
+  10: cargo::ops::cargo_compile::compile_ws
+  11: cargo::ops::cargo_compile::compile_with_exec
+  12: cargo::ops::cargo_compile::compile
+  13: cargo::commands::check::exec
+  14: <cargo::cli::Exec>::exec
+  15: cargo::main
+  16: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  17: std::rt::lang_start::<()>::{closure#0}
+  18: std::rt::lang_start_internal
+  19: _main
+   0.187533667s  INFO prepare_target{force=false package_id=darling v0.23.0 target="darling"}: cargo::core::compiler::fingerprint: fingerprint error for darling v0.23.0/Build/TargetInner { ..: lib_target("darling", ["lib"], "/Users/linh.tran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/darling-0.23.0/src/lib.rs", Edition2021) }
+   0.187536958s  INFO prepare_target{force=false package_id=darling v0.23.0 target="darling"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/target/debug/.fingerprint/darling-62d32db8eb99850b/lib-darling`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <std::backtrace::Backtrace>::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: cargo::core::compiler::compile
+   7: cargo::core::compiler::compile
+   8: cargo::core::compiler::compile
+   9: cargo::core::compiler::compile
+  10: <cargo::core::compiler::build_runner::BuildRunner>::compile
+  11: cargo::ops::cargo_compile::compile_ws
+  12: cargo::ops::cargo_compile::compile_with_exec
+  13: cargo::ops::cargo_compile::compile
+  14: cargo::commands::check::exec
+  15: <cargo::cli::Exec>::exec
+  16: cargo::main
+  17: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  18: std::rt::lang_start::<()>::{closure#0}
+  19: std::rt::lang_start_internal
+  20: _main
+   0.188163500s  INFO prepare_target{force=false package_id=proc-macro-error3 v3.1.1 target="proc_macro_error3"}: cargo::core::compiler::fingerprint: fingerprint error for proc-macro-error3 v3.1.1/Build/TargetInner { ..: lib_target("proc_macro_error3", ["lib"], "/Users/linh.tran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/proc-macro-error3-3.1.1/src/lib.rs", Edition2021) }
+   0.188167083s  INFO prepare_target{force=false package_id=proc-macro-error3 v3.1.1 target="proc_macro_error3"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/target/debug/.fingerprint/proc-macro-error3-b57d16431ebddff9/lib-proc_macro_error3`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <std::backtrace::Backtrace>::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: cargo::core::compiler::compile
+   7: cargo::core::compiler::compile
+   8: cargo::core::compiler::compile
+   9: cargo::core::compiler::compile
+  10: <cargo::core::compiler::build_runner::BuildRunner>::compile
+  11: cargo::ops::cargo_compile::compile_ws
+  12: cargo::ops::cargo_compile::compile_with_exec
+  13: cargo::ops::cargo_compile::compile
+  14: cargo::commands::check::exec
+  15: <cargo::cli::Exec>::exec
+  16: cargo::main
+  17: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  18: std::rt::lang_start::<()>::{closure#0}
+  19: std::rt::lang_start_internal
+  20: _main
+   0.188442458s  INFO prepare_target{force=false package_id=config v0.15.26 target="config"}: cargo::core::compiler::fingerprint: fingerprint error for config v0.15.26/Check { test: false }/TargetInner { ..: lib_target("config", ["lib"], "/Users/linh.tran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/config-0.15.26/src/lib.rs", Edition2024) }
+   0.188446000s  INFO prepare_target{force=false package_id=config v0.15.26 target="config"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/target/debug/.fingerprint/config-79996ee8b6a87e7a/lib-config`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <std::backtrace::Backtrace>::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: cargo::core::compiler::compile
+   7: <cargo::core::compiler::build_runner::BuildRunner>::compile
+   8: cargo::ops::cargo_compile::compile_ws
+   9: cargo::ops::cargo_compile::compile_with_exec
+  10: cargo::ops::cargo_compile::compile
+  11: cargo::commands::check::exec
+  12: <cargo::cli::Exec>::exec
+  13: cargo::main
+  14: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  15: std::rt::lang_start::<()>::{closure#0}
+  16: std::rt::lang_start_internal
+  17: _main
+   0.188970750s  INFO prepare_target{force=false package_id=json5 v1.3.1 target="json5"}: cargo::core::compiler::fingerprint: fingerprint error for json5 v1.3.1/Check { test: false }/TargetInner { benched: false, ..: lib_target("json5", ["lib"], "/Users/linh.tran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/json5-1.3.1/src/lib.rs", Edition2024) }
+   0.188974083s  INFO prepare_target{force=false package_id=json5 v1.3.1 target="json5"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/target/debug/.fingerprint/json5-20b2fb73ffa145bb/lib-json5`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <std::backtrace::Backtrace>::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: cargo::core::compiler::compile
+   7: cargo::core::compiler::compile
+   8: <cargo::core::compiler::build_runner::BuildRunner>::compile
+   9: cargo::ops::cargo_compile::compile_ws
+  10: cargo::ops::cargo_compile::compile_with_exec
+  11: cargo::ops::cargo_compile::compile
+  12: cargo::commands::check::exec
+  13: <cargo::cli::Exec>::exec
+  14: cargo::main
+  15: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  16: std::rt::lang_start::<()>::{closure#0}
+  17: std::rt::lang_start_internal
+  18: _main
+   0.189352250s  INFO prepare_target{force=false package_id=ron v0.12.2 target="ron"}: cargo::core::compiler::fingerprint: fingerprint error for ron v0.12.2/Check { test: false }/TargetInner { ..: lib_target("ron", ["lib"], "/Users/linh.tran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ron-0.12.2/src/lib.rs", Edition2021) }
+   0.189358583s  INFO prepare_target{force=false package_id=ron v0.12.2 target="ron"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/target/debug/.fingerprint/ron-16742950115b8fa2/lib-ron`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <std::backtrace::Backtrace>::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: cargo::core::compiler::compile
+   7: cargo::core::compiler::compile
+   8: <cargo::core::compiler::build_runner::BuildRunner>::compile
+   9: cargo::ops::cargo_compile::compile_ws
+  10: cargo::ops::cargo_compile::compile_with_exec
+  11: cargo::ops::cargo_compile::compile
+  12: cargo::commands::check::exec
+  13: <cargo::cli::Exec>::exec
+  14: cargo::main
+  15: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  16: std::rt::lang_start::<()>::{closure#0}
+  17: std::rt::lang_start_internal
+  18: _main
+   0.190210625s  INFO prepare_target{force=false package_id=rust-ini v0.21.3 target="ini"}: cargo::core::compiler::fingerprint: fingerprint error for rust-ini v0.21.3/Check { test: false }/TargetInner { ..: lib_target("ini", ["lib"], "/Users/linh.tran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rust-ini-0.21.3/src/lib.rs", Edition2018) }
+   0.190215042s  INFO prepare_target{force=false package_id=rust-ini v0.21.3 target="ini"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/target/debug/.fingerprint/rust-ini-61f57a4667723888/lib-ini`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <std::backtrace::Backtrace>::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: cargo::core::compiler::compile
+   7: cargo::core::compiler::compile
+   8: <cargo::core::compiler::build_runner::BuildRunner>::compile
+   9: cargo::ops::cargo_compile::compile_ws
+  10: cargo::ops::cargo_compile::compile_with_exec
+  11: cargo::ops::cargo_compile::compile
+  12: cargo::commands::check::exec
+  13: <cargo::cli::Exec>::exec
+  14: cargo::main
+  15: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  16: std::rt::lang_start::<()>::{closure#0}
+  17: std::rt::lang_start_internal
+  18: _main
+   0.190431250s  INFO prepare_target{force=false package_id=ordered-multimap v0.7.3 target="ordered_multimap"}: cargo::core::compiler::fingerprint: fingerprint error for ordered-multimap v0.7.3/Check { test: false }/TargetInner { name_inferred: true, ..: lib_target("ordered_multimap", ["lib"], "/Users/linh.tran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ordered-multimap-0.7.3/src/lib.rs", Edition2021) }
+   0.190439042s  INFO prepare_target{force=false package_id=ordered-multimap v0.7.3 target="ordered_multimap"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/target/debug/.fingerprint/ordered-multimap-ce8278029cc9332e/lib-ordered_multimap`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <std::backtrace::Backtrace>::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: cargo::core::compiler::compile
+   7: cargo::core::compiler::compile
+   8: cargo::core::compiler::compile
+   9: <cargo::core::compiler::build_runner::BuildRunner>::compile
+  10: cargo::ops::cargo_compile::compile_ws
+  11: cargo::ops::cargo_compile::compile_with_exec
+  12: cargo::ops::cargo_compile::compile
+  13: cargo::commands::check::exec
+  14: <cargo::cli::Exec>::exec
+  15: cargo::main
+  16: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  17: std::rt::lang_start::<()>::{closure#0}
+  18: std::rt::lang_start_internal
+  19: _main
+   0.190557958s  INFO prepare_target{force=false package_id=dlv-list v0.5.2 target="dlv_list"}: cargo::core::compiler::fingerprint: fingerprint error for dlv-list v0.5.2/Check { test: false }/TargetInner { name_inferred: true, ..: lib_target("dlv_list", ["lib"], "/Users/linh.tran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/dlv-list-0.5.2/src/lib.rs", Edition2021) }
+   0.190560792s  INFO prepare_target{force=false package_id=dlv-list v0.5.2 target="dlv_list"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/target/debug/.fingerprint/dlv-list-20421e35ea7c417c/lib-dlv_list`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <std::backtrace::Backtrace>::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: cargo::core::compiler::compile
+   7: cargo::core::compiler::compile
+   8: cargo::core::compiler::compile
+   9: cargo::core::compiler::compile
+  10: <cargo::core::compiler::build_runner::BuildRunner>::compile
+  11: cargo::ops::cargo_compile::compile_ws
+  12: cargo::ops::cargo_compile::compile_with_exec
+  13: cargo::ops::cargo_compile::compile
+  14: cargo::commands::check::exec
+  15: <cargo::cli::Exec>::exec
+  16: cargo::main
+  17: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  18: std::rt::lang_start::<()>::{closure#0}
+  19: std::rt::lang_start_internal
+  20: _main
+   0.190656958s  INFO prepare_target{force=false package_id=const-random v0.1.18 target="const_random"}: cargo::core::compiler::fingerprint: fingerprint error for const-random v0.1.18/Check { test: false }/TargetInner { name_inferred: true, ..: lib_target("const_random", ["lib"], "/Users/linh.tran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/const-random-0.1.18/src/lib.rs", Edition2018) }
+   0.190660000s  INFO prepare_target{force=false package_id=const-random v0.1.18 target="const_random"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/target/debug/.fingerprint/const-random-d75c2628b024c7c3/lib-const_random`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <std::backtrace::Backtrace>::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: cargo::core::compiler::compile
+   7: cargo::core::compiler::compile
+   8: cargo::core::compiler::compile
+   9: cargo::core::compiler::compile
+  10: cargo::core::compiler::compile
+  11: <cargo::core::compiler::build_runner::BuildRunner>::compile
+  12: cargo::ops::cargo_compile::compile_ws
+  13: cargo::ops::cargo_compile::compile_with_exec
+  14: cargo::ops::cargo_compile::compile
+  15: cargo::commands::check::exec
+  16: <cargo::cli::Exec>::exec
+  17: cargo::main
+  18: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  19: std::rt::lang_start::<()>::{closure#0}
+  20: std::rt::lang_start_internal
+  21: _main
+   0.193749417s  INFO prepare_target{force=false package_id=yaml-rust2 v0.11.1 target="yaml_rust2"}: cargo::core::compiler::fingerprint: fingerprint error for yaml-rust2 v0.11.1/Check { test: false }/TargetInner { ..: lib_target("yaml_rust2", ["lib"], "/Users/linh.tran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/yaml-rust2-0.11.1/src/lib.rs", Edition2021) }
+   0.193759583s  INFO prepare_target{force=false package_id=yaml-rust2 v0.11.1 target="yaml_rust2"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/target/debug/.fingerprint/yaml-rust2-a15f0c5f15d13346/lib-yaml_rust2`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <std::backtrace::Backtrace>::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: cargo::core::compiler::compile
+   7: cargo::core::compiler::compile
+   8: <cargo::core::compiler::build_runner::BuildRunner>::compile
+   9: cargo::ops::cargo_compile::compile_ws
+  10: cargo::ops::cargo_compile::compile_with_exec
+  11: cargo::ops::cargo_compile::compile
+  12: cargo::commands::check::exec
+  13: <cargo::cli::Exec>::exec
+  14: cargo::main
+  15: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  16: std::rt::lang_start::<()>::{closure#0}
+  17: std::rt::lang_start_internal
+  18: _main
+   0.194021958s  INFO prepare_target{force=false package_id=encoding_rs v0.8.42 target="encoding_rs"}: cargo::core::compiler::fingerprint: fingerprint error for encoding_rs v0.8.42/Check { test: false }/TargetInner { ..: lib_target("encoding_rs", ["lib"], "/Users/linh.tran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/encoding_rs-0.8.42/src/lib.rs", Edition2024) }
+   0.194027500s  INFO prepare_target{force=false package_id=encoding_rs v0.8.42 target="encoding_rs"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/target/debug/.fingerprint/encoding_rs-2d878f6e3f1fbc0d/lib-encoding_rs`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <std::backtrace::Backtrace>::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: cargo::core::compiler::compile
+   7: cargo::core::compiler::compile
+   8: cargo::core::compiler::compile
+   9: <cargo::core::compiler::build_runner::BuildRunner>::compile
+  10: cargo::ops::cargo_compile::compile_ws
+  11: cargo::ops::cargo_compile::compile_with_exec
+  12: cargo::ops::cargo_compile::compile
+  13: cargo::commands::check::exec
+  14: <cargo::cli::Exec>::exec
+  15: cargo::main
+  16: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  17: std::rt::lang_start::<()>::{closure#0}
+  18: std::rt::lang_start_internal
+  19: _main
+   0.194246583s  INFO prepare_target{force=false package_id=encoding_rs v0.8.42 target="build-script-build"}: cargo::core::compiler::fingerprint: fingerprint error for encoding_rs v0.8.42/RunCustomBuild/TargetInner { ..: custom_build_target("build-script-build", "/Users/linh.tran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/encoding_rs-0.8.42/build.rs", Edition2024) }
+   0.194249875s  INFO prepare_target{force=false package_id=encoding_rs v0.8.42 target="build-script-build"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/target/debug/.fingerprint/encoding_rs-7804f57c5e7c5117/run-build-script-build-script-build`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <std::backtrace::Backtrace>::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::custom_build::build_work
+   6: cargo::core::compiler::compile
+   7: cargo::core::compiler::compile
+   8: cargo::core::compiler::compile
+   9: cargo::core::compiler::compile
+  10: cargo::core::compiler::compile
+  11: <cargo::core::compiler::build_runner::BuildRunner>::compile
+  12: cargo::ops::cargo_compile::compile_ws
+  13: cargo::ops::cargo_compile::compile_with_exec
+  14: cargo::ops::cargo_compile::compile
+  15: cargo::commands::check::exec
+  16: <cargo::cli::Exec>::exec
+  17: cargo::main
+  18: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  19: std::rt::lang_start::<()>::{closure#0}
+  20: std::rt::lang_start_internal
+  21: _main
+   0.194315542s  INFO prepare_target{force=false package_id=encoding_rs v0.8.42 target="build-script-build"}: cargo::core::compiler::fingerprint: fingerprint error for encoding_rs v0.8.42/Build/TargetInner { ..: custom_build_target("build-script-build", "/Users/linh.tran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/encoding_rs-0.8.42/build.rs", Edition2024) }
+   0.194317917s  INFO prepare_target{force=false package_id=encoding_rs v0.8.42 target="build-script-build"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/target/debug/.fingerprint/encoding_rs-e90a2084af39be40/build-script-build-script-build`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <std::backtrace::Backtrace>::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: cargo::core::compiler::compile
+   7: cargo::core::compiler::compile
+   8: cargo::core::compiler::compile
+   9: cargo::core::compiler::compile
+  10: cargo::core::compiler::compile
+  11: <cargo::core::compiler::build_runner::BuildRunner>::compile
+  12: cargo::ops::cargo_compile::compile_ws
+  13: cargo::ops::cargo_compile::compile_with_exec
+  14: cargo::ops::cargo_compile::compile
+  15: cargo::commands::check::exec
+  16: <cargo::cli::Exec>::exec
+  17: cargo::main
+  18: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  19: std::rt::lang_start::<()>::{closure#0}
+  20: std::rt::lang_start_internal
+  21: _main
+   0.195499208s  INFO prepare_target{force=false package_id=deadpool-postgres v0.14.2 target="deadpool_postgres"}: cargo::core::compiler::fingerprint: fingerprint error for deadpool-postgres v0.14.2/Check { test: false }/TargetInner { ..: lib_target("deadpool_postgres", ["lib"], "/Users/linh.tran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/deadpool-postgres-0.14.2/src/lib.rs", Edition2024) }
+   0.195502750s  INFO prepare_target{force=false package_id=deadpool-postgres v0.14.2 target="deadpool_postgres"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/target/debug/.fingerprint/deadpool-postgres-d718f42eacaebd84/lib-deadpool_postgres`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <std::backtrace::Backtrace>::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: cargo::core::compiler::compile
+   7: <cargo::core::compiler::build_runner::BuildRunner>::compile
+   8: cargo::ops::cargo_compile::compile_ws
+   9: cargo::ops::cargo_compile::compile_with_exec
+  10: cargo::ops::cargo_compile::compile
+  11: cargo::commands::check::exec
+  12: <cargo::cli::Exec>::exec
+  13: cargo::main
+  14: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  15: std::rt::lang_start::<()>::{closure#0}
+  16: std::rt::lang_start_internal
+  17: _main
+   0.195716333s  INFO prepare_target{force=false package_id=deadpool v0.13.1 target="deadpool"}: cargo::core::compiler::fingerprint: fingerprint error for deadpool v0.13.1/Check { test: false }/TargetInner { ..: lib_target("deadpool", ["lib"], "/Users/linh.tran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/deadpool-0.13.1/src/lib.rs", Edition2024) }
+   0.195719208s  INFO prepare_target{force=false package_id=deadpool v0.13.1 target="deadpool"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/target/debug/.fingerprint/deadpool-8775147d93f02324/lib-deadpool`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <std::backtrace::Backtrace>::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: cargo::core::compiler::compile
+   7: cargo::core::compiler::compile
+   8: <cargo::core::compiler::build_runner::BuildRunner>::compile
+   9: cargo::ops::cargo_compile::compile_ws
+  10: cargo::ops::cargo_compile::compile_with_exec
+  11: cargo::ops::cargo_compile::compile
+  12: cargo::commands::check::exec
+  13: <cargo::cli::Exec>::exec
+  14: cargo::main
+  15: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  16: std::rt::lang_start::<()>::{closure#0}
+  17: std::rt::lang_start_internal
+  18: _main
+   0.195848833s  INFO prepare_target{force=false package_id=deadpool-runtime v0.3.1 target="deadpool_runtime"}: cargo::core::compiler::fingerprint: fingerprint error for deadpool-runtime v0.3.1/Check { test: false }/TargetInner { ..: lib_target("deadpool_runtime", ["lib"], "/Users/linh.tran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/deadpool-runtime-0.3.1/src/lib.rs", Edition2024) }
+   0.195851917s  INFO prepare_target{force=false package_id=deadpool-runtime v0.3.1 target="deadpool_runtime"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/target/debug/.fingerprint/deadpool-runtime-b2f6643a21f33d95/lib-deadpool_runtime`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <std::backtrace::Backtrace>::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: cargo::core::compiler::compile
+   7: cargo::core::compiler::compile
+   8: cargo::core::compiler::compile
+   9: <cargo::core::compiler::build_runner::BuildRunner>::compile
+  10: cargo::ops::cargo_compile::compile_ws
+  11: cargo::ops::cargo_compile::compile_with_exec
+  12: cargo::ops::cargo_compile::compile
+  13: cargo::commands::check::exec
+  14: <cargo::cli::Exec>::exec
+  15: cargo::main
+  16: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  17: std::rt::lang_start::<()>::{closure#0}
+  18: std::rt::lang_start_internal
+  19: _main
+   0.195958458s  INFO prepare_target{force=false package_id=tokio-postgres v0.7.18 target="tokio_postgres"}: cargo::core::compiler::fingerprint: fingerprint error for tokio-postgres v0.7.18/Check { test: false }/TargetInner { tested: false, ..: lib_target("tokio_postgres", ["lib"], "/Users/linh.tran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-postgres-0.7.18/src/lib.rs", Edition2024) }
+   0.195961583s  INFO prepare_target{force=false package_id=tokio-postgres v0.7.18 target="tokio_postgres"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/target/debug/.fingerprint/tokio-postgres-637dbaa0cfef9122/lib-tokio_postgres`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <std::backtrace::Backtrace>::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: cargo::core::compiler::compile
+   7: cargo::core::compiler::compile
+   8: <cargo::core::compiler::build_runner::BuildRunner>::compile
+   9: cargo::ops::cargo_compile::compile_ws
+  10: cargo::ops::cargo_compile::compile_with_exec
+  11: cargo::ops::cargo_compile::compile
+  12: cargo::commands::check::exec
+  13: <cargo::cli::Exec>::exec
+  14: cargo::main
+  15: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  16: std::rt::lang_start::<()>::{closure#0}
+  17: std::rt::lang_start_internal
+  18: _main
+   0.200596958s  INFO prepare_target{force=false package_id=postgres-types v0.2.14 target="postgres_types"}: cargo::core::compiler::fingerprint: fingerprint error for postgres-types v0.2.14/Check { test: false }/TargetInner { ..: lib_target("postgres_types", ["lib"], "/Users/linh.tran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/postgres-types-0.2.14/src/lib.rs", Edition2024) }
+   0.200602167s  INFO prepare_target{force=false package_id=postgres-types v0.2.14 target="postgres_types"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/target/debug/.fingerprint/postgres-types-770822328e4ecced/lib-postgres_types`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <std::backtrace::Backtrace>::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: cargo::core::compiler::compile
+   7: cargo::core::compiler::compile
+   8: cargo::core::compiler::compile
+   9: <cargo::core::compiler::build_runner::BuildRunner>::compile
+  10: cargo::ops::cargo_compile::compile_ws
+  11: cargo::ops::cargo_compile::compile_with_exec
+  12: cargo::ops::cargo_compile::compile
+  13: cargo::commands::check::exec
+  14: <cargo::cli::Exec>::exec
+  15: cargo::main
+  16: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  17: std::rt::lang_start::<()>::{closure#0}
+  18: std::rt::lang_start_internal
+  19: _main
+   0.201054792s  INFO prepare_target{force=false package_id=tokio-util v0.7.19 target="tokio_util"}: cargo::core::compiler::fingerprint: fingerprint error for tokio-util v0.7.19/Check { test: false }/TargetInner { ..: lib_target("tokio_util", ["lib"], "/Users/linh.tran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-util-0.7.19/src/lib.rs", Edition2021) }
+   0.201060792s  INFO prepare_target{force=false package_id=tokio-util v0.7.19 target="tokio_util"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/target/debug/.fingerprint/tokio-util-e471f7ae69fef1b3/lib-tokio_util`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <std::backtrace::Backtrace>::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: cargo::core::compiler::compile
+   7: cargo::core::compiler::compile
+   8: cargo::core::compiler::compile
+   9: <cargo::core::compiler::build_runner::BuildRunner>::compile
+  10: cargo::ops::cargo_compile::compile_ws
+  11: cargo::ops::cargo_compile::compile_with_exec
+  12: cargo::ops::cargo_compile::compile
+  13: cargo::commands::check::exec
+  14: <cargo::cli::Exec>::exec
+  15: cargo::main
+  16: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  17: std::rt::lang_start::<()>::{closure#0}
+  18: std::rt::lang_start_internal
+  19: _main
+   0.201660458s  INFO prepare_target{force=false package_id=thiserror v2.0.21 target="thiserror"}: cargo::core::compiler::fingerprint: fingerprint error for thiserror v2.0.21/Check { test: false }/TargetInner { ..: lib_target("thiserror", ["lib"], "/Users/linh.tran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.21/src/lib.rs", Edition2021) }
+   0.201664333s  INFO prepare_target{force=false package_id=thiserror v2.0.21 target="thiserror"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/target/debug/.fingerprint/thiserror-6d372556f9b50fe5/lib-thiserror`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <std::backtrace::Backtrace>::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: cargo::core::compiler::compile
+   7: <cargo::core::compiler::build_runner::BuildRunner>::compile
+   8: cargo::ops::cargo_compile::compile_ws
+   9: cargo::ops::cargo_compile::compile_with_exec
+  10: cargo::ops::cargo_compile::compile
+  11: cargo::commands::check::exec
+  12: <cargo::cli::Exec>::exec
+  13: cargo::main
+  14: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  15: std::rt::lang_start::<()>::{closure#0}
+  16: std::rt::lang_start_internal
+  17: _main
+   0.202073833s  INFO prepare_target{force=false package_id=thiserror-impl v2.0.21 target="thiserror_impl"}: cargo::core::compiler::fingerprint: fingerprint error for thiserror-impl v2.0.21/Build/TargetInner { for_host: true, proc_macro: true, ..: lib_target("thiserror_impl", ["proc-macro"], "/Users/linh.tran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-impl-2.0.21/src/lib.rs", Edition2021) }
+   0.202079125s  INFO prepare_target{force=false package_id=thiserror-impl v2.0.21 target="thiserror_impl"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/target/debug/.fingerprint/thiserror-impl-7f1fa9c13c223959/lib-thiserror_impl`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <std::backtrace::Backtrace>::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: cargo::core::compiler::compile
+   7: cargo::core::compiler::compile
+   8: <cargo::core::compiler::build_runner::BuildRunner>::compile
+   9: cargo::ops::cargo_compile::compile_ws
+  10: cargo::ops::cargo_compile::compile_with_exec
+  11: cargo::ops::cargo_compile::compile
+  12: cargo::commands::check::exec
+  13: <cargo::cli::Exec>::exec
+  14: cargo::main
+  15: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  16: std::rt::lang_start::<()>::{closure#0}
+  17: std::rt::lang_start_internal
+  18: _main
+   0.202217625s  INFO prepare_target{force=false package_id=tower-http v0.6.11 target="tower_http"}: cargo::core::compiler::fingerprint: fingerprint error for tower-http v0.6.11/Check { test: false }/TargetInner { ..: lib_target("tower_http", ["lib"], "/Users/linh.tran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tower-http-0.6.11/src/lib.rs", Edition2018) }
+   0.202221125s  INFO prepare_target{force=false package_id=tower-http v0.6.11 target="tower_http"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/target/debug/.fingerprint/tower-http-0a86dcb5255f763f/lib-tower_http`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <std::backtrace::Backtrace>::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: cargo::core::compiler::compile
+   7: <cargo::core::compiler::build_runner::BuildRunner>::compile
+   8: cargo::ops::cargo_compile::compile_ws
+   9: cargo::ops::cargo_compile::compile_with_exec
+  10: cargo::ops::cargo_compile::compile
+  11: cargo::commands::check::exec
+  12: <cargo::cli::Exec>::exec
+  13: cargo::main
+  14: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  15: std::rt::lang_start::<()>::{closure#0}
+  16: std::rt::lang_start_internal
+  17: _main
+   0.202428792s  INFO prepare_target{force=false package_id=tracing-subscriber v0.3.23 target="tracing_subscriber"}: cargo::core::compiler::fingerprint: fingerprint error for tracing-subscriber v0.3.23/Check { test: false }/TargetInner { ..: lib_target("tracing_subscriber", ["lib"], "/Users/linh.tran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tracing-subscriber-0.3.23/src/lib.rs", Edition2018) }
+   0.202432417s  INFO prepare_target{force=false package_id=tracing-subscriber v0.3.23 target="tracing_subscriber"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/target/debug/.fingerprint/tracing-subscriber-312027f492ae36d1/lib-tracing_subscriber`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <std::backtrace::Backtrace>::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: cargo::core::compiler::compile
+   7: <cargo::core::compiler::build_runner::BuildRunner>::compile
+   8: cargo::ops::cargo_compile::compile_ws
+   9: cargo::ops::cargo_compile::compile_with_exec
+  10: cargo::ops::cargo_compile::compile
+  11: cargo::commands::check::exec
+  12: <cargo::cli::Exec>::exec
+  13: cargo::main
+  14: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  15: std::rt::lang_start::<()>::{closure#0}
+  16: std::rt::lang_start_internal
+  17: _main
+   0.203387583s  INFO prepare_target{force=false package_id=unitycatalog_queries v0.0.0 (/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/cornucopia) target="unitycatalog_queries"}: cargo::core::compiler::fingerprint: fingerprint error for unitycatalog_queries v0.0.0 (/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/cornucopia)/Check { test: false }/TargetInner { name_inferred: true, ..: lib_target("unitycatalog_queries", ["lib"], "/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/cornucopia/src/lib.rs", Edition2024) }
+   0.203391792s  INFO prepare_target{force=false package_id=unitycatalog_queries v0.0.0 (/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/cornucopia) target="unitycatalog_queries"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/target/debug/.fingerprint/unitycatalog_queries-41b23f1e08d91497/lib-unitycatalog_queries`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <std::backtrace::Backtrace>::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: cargo::core::compiler::compile
+   7: <cargo::core::compiler::build_runner::BuildRunner>::compile
+   8: cargo::ops::cargo_compile::compile_ws
+   9: cargo::ops::cargo_compile::compile_with_exec
+  10: cargo::ops::cargo_compile::compile
+  11: cargo::commands::check::exec
+  12: <cargo::cli::Exec>::exec
+  13: cargo::main
+  14: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  15: std::rt::lang_start::<()>::{closure#0}
+  16: std::rt::lang_start_internal
+  17: _main
+   0.203615000s  INFO prepare_target{force=false package_id=futures v0.3.34 target="futures"}: cargo::core::compiler::fingerprint: fingerprint error for futures v0.3.34/Check { test: false }/TargetInner { ..: lib_target("futures", ["lib"], "/Users/linh.tran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-0.3.34/src/lib.rs", Edition2018) }
+   0.203618042s  INFO prepare_target{force=false package_id=futures v0.3.34 target="futures"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/target/debug/.fingerprint/futures-7f864290ece29ffa/lib-futures`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <std::backtrace::Backtrace>::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: cargo::core::compiler::compile
+   7: cargo::core::compiler::compile
+   8: <cargo::core::compiler::build_runner::BuildRunner>::compile
+   9: cargo::ops::cargo_compile::compile_ws
+  10: cargo::ops::cargo_compile::compile_with_exec
+  11: cargo::ops::cargo_compile::compile
+  12: cargo::commands::check::exec
+  13: <cargo::cli::Exec>::exec
+  14: cargo::main
+  15: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  16: std::rt::lang_start::<()>::{closure#0}
+  17: std::rt::lang_start_internal
+  18: _main
+   0.203816875s  INFO prepare_target{force=false package_id=futures-executor v0.3.34 target="futures_executor"}: cargo::core::compiler::fingerprint: fingerprint error for futures-executor v0.3.34/Check { test: false }/TargetInner { ..: lib_target("futures_executor", ["lib"], "/Users/linh.tran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-executor-0.3.34/src/lib.rs", Edition2018) }
+   0.203820125s  INFO prepare_target{force=false package_id=futures-executor v0.3.34 target="futures_executor"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/target/debug/.fingerprint/futures-executor-d087c8a1a7a41ca5/lib-futures_executor`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <std::backtrace::Backtrace>::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: cargo::core::compiler::compile
+   7: cargo::core::compiler::compile
+   8: cargo::core::compiler::compile
+   9: <cargo::core::compiler::build_runner::BuildRunner>::compile
+  10: cargo::ops::cargo_compile::compile_ws
+  11: cargo::ops::cargo_compile::compile_with_exec
+  12: cargo::ops::cargo_compile::compile
+  13: cargo::commands::check::exec
+  14: <cargo::cli::Exec>::exec
+  15: cargo::main
+  16: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  17: std::rt::lang_start::<()>::{closure#0}
+  18: std::rt::lang_start_internal
+  19: _main
+   0.203955583s  INFO prepare_target{force=false package_id=postgres v0.19.14 target="postgres"}: cargo::core::compiler::fingerprint: fingerprint error for postgres v0.19.14/Check { test: false }/TargetInner { ..: lib_target("postgres", ["lib"], "/Users/linh.tran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/postgres-0.19.14/src/lib.rs", Edition2024) }
+   0.203958542s  INFO prepare_target{force=false package_id=postgres v0.19.14 target="postgres"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/target/debug/.fingerprint/postgres-094dfae634e6908f/lib-postgres`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <std::backtrace::Backtrace>::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: cargo::core::compiler::compile
+   7: cargo::core::compiler::compile
+   8: <cargo::core::compiler::build_runner::BuildRunner>::compile
+   9: cargo::ops::cargo_compile::compile_ws
+  10: cargo::ops::cargo_compile::compile_with_exec
+  11: cargo::ops::cargo_compile::compile
+  12: cargo::commands::check::exec
+  13: <cargo::cli::Exec>::exec
+  14: cargo::main
+  15: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  16: std::rt::lang_start::<()>::{closure#0}
+  17: std::rt::lang_start_internal
+  18: _main
+   0.204191708s  INFO prepare_target{force=false package_id=server v0.1.0 (/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server) target="server"}: cargo::core::compiler::fingerprint: fingerprint error for server v0.1.0 (/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server)/Check { test: true }/TargetInner { name: "server", doc: true, ..: with_path("/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/src/main.rs", Edition2024) }
+   0.204196542s  INFO prepare_target{force=false package_id=server v0.1.0 (/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server) target="server"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/target/debug/.fingerprint/server-4be0d25ab39c7e04/test-bin-server`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <std::backtrace::Backtrace>::create
+   1: cargo_util::paths::read_bytes
+   2: cargo_util::paths::read
+   3: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   4: cargo::core::compiler::fingerprint::prepare_target
+   5: cargo::core::compiler::compile
+   6: <cargo::core::compiler::build_runner::BuildRunner>::compile
+   7: cargo::ops::cargo_compile::compile_ws
+   8: cargo::ops::cargo_compile::compile_with_exec
+   9: cargo::ops::cargo_compile::compile
+  10: cargo::commands::check::exec
+  11: <cargo::cli::Exec>::exec
+  12: cargo::main
+  13: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  14: std::rt::lang_start::<()>::{closure#0}
+  15: std::rt::lang_start_internal
+  16: _main
+    Checking tokio v1.53.1
+    Checking futures-util v0.3.34
+    Checking tracing v0.1.44
+    Checking serde v1.0.229
+    Checking zerofrom v0.1.8
+    Checking const-random v0.1.18
+   Compiling encoding_rs v0.8.42
+    Checking postgres-types v0.2.14
+   Compiling proc-macro-error3 v3.1.1
+   Compiling darling v0.23.0
+   Compiling thiserror-impl v2.0.21
+    Checking axum-core v0.5.6
+    Checking tracing-subscriber v0.3.23
+    Checking tower-http v0.6.11
+    Checking yoke v0.8.3
+    Checking thiserror v2.0.21
+    Checking dlv-list v0.5.2
+    Checking ordered-multimap v0.7.3
+    Checking rust-ini v0.21.3
+    Checking futures-executor v0.3.34
+    Checking futures v0.3.34
+   Compiling validator_derive v0.20.1
+    Checking serde_urlencoded v0.7.1
+    Checking json5 v1.3.1
+    Checking ron v0.12.2
+    Checking tokio-util v0.7.19
+    Checking deadpool-runtime v0.3.1
+    Checking hyper v1.11.1
+    Checking tower v0.5.3
+    Checking deadpool v0.13.1
+    Checking tokio-postgres v0.7.18
+    Checking zerovec v0.11.8
+    Checking zerotrie v0.2.5
+    Checking hyper-util v0.1.21
+    Checking axum v0.8.9
+    Checking yaml-rust2 v0.11.1
+    Checking config v0.15.26
+    Checking tinystr v0.8.4
+    Checking potential_utf v0.1.6
+    Checking icu_collections v2.3.0
+    Checking icu_locale_core v2.3.0
+    Checking deadpool-postgres v0.14.2
+    Checking postgres v0.19.14
+    Checking icu_provider v2.3.1
+    Checking icu_normalizer v2.3.0
+    Checking icu_properties v2.3.0
+    Checking unitycatalog_queries v0.0.0 (/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server/cornucopia)
+    Checking idna_adapter v1.2.2
+    Checking idna v1.1.0
+    Checking url v2.5.8
+    Checking validator v0.20.0
+    Checking axum-valid v0.25.0
+    Checking server v0.1.0 (/Users/linh.tran/Projects/mizuumi-engine/packages/unitycatalog/server)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 5.78s
