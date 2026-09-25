@@ -2,6 +2,7 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+namespace=storage
 credentials_file="$repo_root/k8s/storage/credentials.env"
 vault_ca="$repo_root/k8s/vault/tls/ca.crt"
 keycloak_ca="$repo_root/k8s/auth/tls/ca.crt"
@@ -123,7 +124,7 @@ path "transit/keys/rustfs" { capabilities = ["read"] }'
 policy_payload="$(jq -cn --arg policy "$policy" '{policy:$policy}')"
 vault PUT /v1/sys/policies/acl/rustfs-transit "$policy_payload" >/dev/null
 
-existing_secret="$(kubectl -n rustfs get secret rustfs-credentials -o json 2>/dev/null || true)"
+existing_secret="$(kubectl -n "$namespace" get secret rustfs-credentials -o json 2>/dev/null || true)"
 if [[ -n "$existing_secret" ]]; then
   access_key="$(printf '%s' "$existing_secret" | jq -er '.data.RUSTFS_ACCESS_KEY | @base64d')"
   secret_key="$(printf '%s' "$existing_secret" | jq -er '.data.RUSTFS_SECRET_KEY | @base64d')"
@@ -146,12 +147,12 @@ printf 'RUSTFS_ACCESS_KEY=%s\nRUSTFS_SECRET_KEY=%s\nRUSTFS_IDENTITY_OPENID_CLIEN
   "$access_key" "$secret_key" "$client_secret" "$kms_token" > "$credentials_file"
 chmod 600 "$credentials_file"
 unset vault_token admin_token client_secret kms_token secret_key
-kubectl create namespace rustfs --dry-run=client -o yaml | kubectl apply -f -
-kubectl -n rustfs create secret generic rustfs-credentials --from-env-file="$credentials_file" --dry-run=client -o yaml | kubectl apply -f -
+kubectl create namespace "$namespace" --dry-run=client -o yaml | kubectl apply -f -
+kubectl -n "$namespace" create secret generic rustfs-credentials --from-env-file="$credentials_file" --dry-run=client -o yaml | kubectl apply -f -
 ca_bundle="$(mktemp)"
 trap 'rm -f "$ca_bundle"; cleanup' EXIT
 cat "$vault_ca" "$keycloak_ca" > "$ca_bundle"
-kubectl -n rustfs create secret generic rustfs-vault-ca --from-file=ca.crt="$ca_bundle" --dry-run=client -o yaml | kubectl apply -f -
+kubectl -n "$namespace" create secret generic rustfs-vault-ca --from-file=ca.crt="$ca_bundle" --dry-run=client -o yaml | kubectl apply -f -
 echo "RustFS bootstrap complete: sovico OIDC client, readonly group, Vault Transit key and restricted token."
 echo "Credentials are in $credentials_file (mode 600); back them up securely."
 echo "The Vault KMS token has a 720-hour TTL; renew or rotate it before expiry."

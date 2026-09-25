@@ -90,7 +90,7 @@ fi
 
 kubectl -n auth get service keycloak >/dev/null
 kubectl -n vault get pod vault-0 >/dev/null
-kubectl -n rustfs get service rustfs-svc >/dev/null
+kubectl -n storage get service rustfs-svc >/dev/null
 
 auth_pid=""
 vault_pid=""
@@ -137,7 +137,7 @@ start_forward() {
       vault_started=$SECONDS
       ;;
     storage)
-      kubectl -n rustfs port-forward --address 127.0.0.1 service/rustfs-svc 9000:9000 9001:9001 &
+      kubectl -n storage port-forward --address 127.0.0.1 service/rustfs-svc 9000:9000 9001:9001 &
       storage_pid=$!
       storage_started=$SECONDS
       ;;

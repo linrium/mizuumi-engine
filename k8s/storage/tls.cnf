@@ -4,7 +4,7 @@ x509_extensions = ext
 prompt = no
 
 [dn]
-CN = rustfs-svc.rustfs.svc.cluster.local
+CN = rustfs-svc.storage.svc.cluster.local
 
 [ext]
 basicConstraints = critical,CA:FALSE
@@ -13,8 +13,8 @@ extendedKeyUsage = serverAuth
 subjectAltName = @san
 
 [san]
-DNS.1 = rustfs-svc.rustfs.svc.cluster.local
-DNS.2 = rustfs-svc.rustfs.svc
+DNS.1 = rustfs-svc.storage.svc.cluster.local
+DNS.2 = rustfs-svc.storage.svc
 DNS.3 = rustfs-svc
 DNS.4 = localhost
 DNS.5 = storage.localhost

@@ -1,6 +1,6 @@
 # RustFS on local Kubernetes
 
-This installs the [official RustFS Helm chart](https://docs.rustfs.com/en/installation/cloud-native) (`rustfs/rustfs` 1.0.0, RustFS 1.0.0) as one standalone instance with 8 Gi data and 1 Gi log PVCs. It exposes no Ingress. Caddy serves the Console at `https://storage.localhost` and the S3 API at `https://api.storage.localhost` over private local port-forwards.
+This installs the [official RustFS Helm chart](https://docs.rustfs.com/en/installation/cloud-native) (`rustfs/rustfs` 1.0.0, RustFS 1.0.0) in the `storage` namespace as one standalone instance with 8 Gi data and 1 Gi log PVCs. It exposes no Ingress. Caddy serves the Console at `https://storage.localhost` and the S3 API at `https://api.storage.localhost` over private local port-forwards.
 
 For the full local setup from the repository root, run `./scripts/bootstrap.sh`. It runs the steps below and then keeps the local port-forwards open. Use `./scripts/bootstrap.sh --no-forward` for a non-blocking setup.
 

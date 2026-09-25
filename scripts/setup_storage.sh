@@ -2,7 +2,7 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-namespace=rustfs
+namespace=storage
 release=rustfs
 chart_version=1.0.0
 
