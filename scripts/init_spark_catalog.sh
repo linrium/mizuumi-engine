@@ -69,4 +69,9 @@ for schema in bronze silver gold; do
     --name "$catalog.$schema" --privilege 'CREATE TABLE' --principal "$principal"
 done
 
+for privilege in 'READ FILES' 'WRITE FILES' 'CREATE EXTERNAL TABLE'; do
+  run_uc_admin permission create --securable_type external_location \
+    --name rustfs_unitycatalog --privilege "$privilege" --principal "$principal"
+done
+
 echo "Unity Catalog schemas are ready: $catalog.{bronze,silver,gold}"

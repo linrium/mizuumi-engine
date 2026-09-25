@@ -5,8 +5,8 @@ examples. Maven dependencies are declared by the `SparkApplication`, allowing
 the Spark Operator to resolve Delta Lake, Unity Catalog, and Hadoop S3A at
 submission time.
 
-`examples/minimal` validates the `unity.bronze`, `unity.silver`, and
-`unity.gold` schemas and writes Delta datasets to matching RustFS paths.
-`scripts/init_spark_catalog.sh` provisions those schemas before the job runs.
-The example uses S3A with the dedicated IAM credentials because RustFS STS
-tokens are not currently accepted by the Unity Catalog OSS AWS client.
+`examples/minimal` validates `unity.bronze`, `unity.silver`, and `unity.gold`
+through the Unity Catalog connector and writes Delta datasets to matching
+RustFS paths. Spark authenticates to Unity Catalog with a user token and
+receives one-hour RustFS STS credentials from the setup script; no long-lived
+RustFS keys are mounted into Spark pods.

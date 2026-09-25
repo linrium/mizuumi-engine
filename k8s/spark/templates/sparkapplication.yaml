@@ -24,6 +24,8 @@ spec:
     spark.sql.catalog.{{ .Values.spark.catalog.name }}: io.unitycatalog.spark.UCSingleCatalog
     spark.sql.catalog.{{ .Values.spark.catalog.name }}.uri: {{ .Values.spark.catalog.uri | quote }}
     spark.sql.catalog.{{ .Values.spark.catalog.name }}.warehouse: {{ .Values.spark.catalog.name | quote }}
+    spark.sql.catalog.{{ .Values.spark.catalog.name }}.renewCredential.enabled: "true"
+    spark.sql.catalog.{{ .Values.spark.catalog.name }}.credScopedFs.enabled: "true"
     spark.sql.defaultCatalog: {{ .Values.spark.catalog.name | quote }}
     spark.hadoop.fs.s3.impl: org.apache.hadoop.fs.s3a.S3AFileSystem
     spark.hadoop.fs.s3a.impl: org.apache.hadoop.fs.s3a.S3AFileSystem
@@ -70,6 +72,11 @@ spec:
           secretKeyRef:
             name: {{ .Values.credentialsSecretName }}
             key: AWS_SECRET_ACCESS_KEY
+      - name: AWS_SESSION_TOKEN
+        valueFrom:
+          secretKeyRef:
+            name: {{ .Values.credentialsSecretName }}
+            key: AWS_SESSION_TOKEN
       - name: AWS_REGION
         valueFrom:
           secretKeyRef:
@@ -98,6 +105,11 @@ spec:
           secretKeyRef:
             name: {{ .Values.credentialsSecretName }}
             key: AWS_SECRET_ACCESS_KEY
+      - name: AWS_SESSION_TOKEN
+        valueFrom:
+          secretKeyRef:
+            name: {{ .Values.credentialsSecretName }}
+            key: AWS_SESSION_TOKEN
       - name: AWS_REGION
         valueFrom:
           secretKeyRef:

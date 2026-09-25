@@ -11,8 +11,8 @@ spark:
   version: "4.0.1"
   scalaVersion: "2.13"
   packages:
-    - io.delta:delta-spark_2.13:4.0.0
-    - io.unitycatalog:unitycatalog-spark_2.13:0.3.0
+    - io.delta:delta-spark_4.0_2.13:4.3.1
+    - io.unitycatalog:unitycatalog-spark_4.0_2.13:0.5.0
     - org.apache.hadoop:hadoop-aws:3.4.1
   catalog:
     name: unity

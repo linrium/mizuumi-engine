@@ -34,7 +34,6 @@ run_step bootstrap_storage.sh
 run_step setup_storage.sh
 run_step bootstrap_unitycatalog.sh
 run_step setup_unitycatalog.sh
-run_step setup_spark.sh
 
 if [[ "$forward" == true ]]; then
   echo "==> forward.sh (verify the local gateway)"
