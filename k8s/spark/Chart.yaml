@@ -1,0 +1,10 @@
+apiVersion: v2
+name: spark
+description: Mizuumi Spark applications managed by the Kubeflow Spark Operator
+type: application
+version: 0.1.0
+appVersion: "4.0.1"
+home: https://spark.kubeflow.org/
+sources:
+  - https://github.com/kubeflow/spark-operator
+  - https://github.com/unitycatalog/unitycatalog

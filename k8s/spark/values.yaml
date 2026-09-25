@@ -1,0 +1,41 @@
+image:
+  repository: mizuumi/spark
+  tag: "4.0.1"
+  pullPolicy: IfNotPresent
+
+serviceAccountName: spark-operator-spark
+credentialsSecretName: spark-runtime-credentials
+trustSecretName: spark-rustfs-trust
+
+spark:
+  version: "4.0.1"
+  scalaVersion: "2.13"
+  packages:
+    - io.delta:delta-spark_2.13:4.0.0
+    - io.unitycatalog:unitycatalog-spark_2.13:0.3.0
+    - org.apache.hadoop:hadoop-aws:3.4.1
+  catalog:
+    name: unity
+    uri: http://unitycatalog-server.tower.svc.cluster.local:8080
+    storageRoot: s3://unitycatalog
+  s3:
+    endpoint: https://rustfs-svc.storage.svc.cluster.local:9000
+    region: us-east-1
+
+application:
+  enabled: true
+  name: medallion-minimal
+  mainApplicationFile: local:///opt/spark/work-dir/examples/minimal/main.py
+  restartPolicy:
+    type: Never
+  driver:
+    cores: 1
+    coreLimit: 1200m
+    memory: 1g
+  executor:
+    instances: 1
+    cores: 1
+    coreLimit: 1200m
+    memory: 1g
+
+resources: {}

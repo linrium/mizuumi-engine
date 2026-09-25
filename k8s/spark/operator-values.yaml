@@ -1,0 +1,28 @@
+spark:
+  jobNamespaces:
+    - spark
+  serviceAccount:
+    create: true
+    name: spark-operator-spark
+  rbac:
+    create: true
+
+controller:
+  replicas: 1
+  leaderElection:
+    enable: true
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+
+webhook:
+  enable: true
+
+prometheus:
+  metrics:
+    enable: true
+  podMonitor:
+    create: false
