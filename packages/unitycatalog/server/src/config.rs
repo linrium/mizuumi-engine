@@ -9,6 +9,8 @@ pub struct Settings {
     pub server: ServerSettings,
     #[serde(default)]
     pub postgres: PostgresSettings,
+    #[serde(default)]
+    pub vending: VendingSettings,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -33,6 +35,22 @@ pub struct PostgresSettings {
     pub database: String,
     #[serde(default = "default_pool_size")]
     pub pool_size: usize,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct VendingSettings {
+    #[serde(default = "default_rustfs_endpoint")]
+    pub endpoint_url: String,
+    #[serde(default = "default_rustfs_region")]
+    pub region: String,
+    #[serde(default = "default_rustfs_access_key")]
+    pub access_key: String,
+    #[serde(default = "default_rustfs_secret_key")]
+    pub secret_key: String,
+    #[serde(default = "default_sts_duration_seconds")]
+    pub duration_seconds: u32,
+    #[serde(default = "default_force_path_style")]
+    pub force_path_style: bool,
 }
 
 impl Settings {
@@ -71,6 +89,19 @@ impl Default for PostgresSettings {
     }
 }
 
+impl Default for VendingSettings {
+    fn default() -> Self {
+        Self {
+            endpoint_url: default_rustfs_endpoint(),
+            region: default_rustfs_region(),
+            access_key: default_rustfs_access_key(),
+            secret_key: default_rustfs_secret_key(),
+            duration_seconds: default_sts_duration_seconds(),
+            force_path_style: default_force_path_style(),
+        }
+    }
+}
+
 fn default_host() -> IpAddr {
     [0, 0, 0, 0].into()
 }
@@ -101,4 +132,28 @@ fn default_pg_database() -> String {
 
 fn default_pool_size() -> usize {
     16
+}
+
+fn default_rustfs_endpoint() -> String {
+    "http://127.0.0.1:9000".to_owned()
+}
+
+fn default_rustfs_region() -> String {
+    "us-east-1".to_owned()
+}
+
+fn default_rustfs_access_key() -> String {
+    "rustfsadmin".to_owned()
+}
+
+fn default_rustfs_secret_key() -> String {
+    "rustfsadmin".to_owned()
+}
+
+fn default_sts_duration_seconds() -> u32 {
+    3600
+}
+
+fn default_force_path_style() -> bool {
+    true
 }

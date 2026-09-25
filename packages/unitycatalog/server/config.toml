@@ -9,3 +9,11 @@ user = "postgres"
 password = "postgres"
 database = "postgres"
 pool_size = 16
+
+[vending]
+endpoint_url = "http://127.0.0.1:9000"
+region = "us-east-1"
+access_key = "rustfsadmin"
+secret_key = "rustfsadmin"
+duration_seconds = 3600
+force_path_style = true

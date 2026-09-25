@@ -18,6 +18,7 @@ use crate::{
     features::{
         health::{DefaultHealthService, health_router},
         hello::{DefaultHelloService, hello_router},
+        vending::{DefaultVendingService, vending_router},
     },
     infrastructure::postgres::create_pool,
 };
@@ -32,11 +33,13 @@ async fn main() -> anyhow::Result<()> {
     let state = AppState {
         health: Arc::new(DefaultHealthService::new(pool.clone())),
         hello: Arc::new(DefaultHelloService::new(pool)),
+        vending: Arc::new(DefaultVendingService::new(settings.vending.clone())),
     };
 
     let app = Router::new()
         .merge(health_router())
         .merge(hello_router())
+        .merge(vending_router())
         .layer(TraceLayer::new_for_http())
         .with_state(state);
 

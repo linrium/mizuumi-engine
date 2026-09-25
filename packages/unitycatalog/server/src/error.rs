@@ -8,6 +8,14 @@ pub enum AppError {
     Postgres(#[from] tokio_postgres::Error),
     #[error("postgres pool failed")]
     Pool(#[from] deadpool_postgres::PoolError),
+    #[error("rustfs sts request failed")]
+    StsRequest(#[from] reqwest::Error),
+    #[error("rustfs sts request signing failed")]
+    StsSigning,
+    #[error("rustfs sts returned an invalid response")]
+    StsResponse,
+    #[error("s3 request failed")]
+    S3,
 }
 
 #[derive(Serialize)]
@@ -20,7 +28,12 @@ impl IntoResponse for AppError {
         tracing::error!(error = %self, "request failed");
 
         let status = match self {
-            AppError::Postgres(_) | AppError::Pool(_) => StatusCode::SERVICE_UNAVAILABLE,
+            AppError::Postgres(_)
+            | AppError::Pool(_)
+            | AppError::StsRequest(_)
+            | AppError::StsSigning
+            | AppError::StsResponse
+            | AppError::S3 => StatusCode::SERVICE_UNAVAILABLE,
         };
 
         (

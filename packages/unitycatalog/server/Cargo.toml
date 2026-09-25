@@ -6,10 +6,18 @@ edition = "2024"
 [dependencies]
 anyhow = "1.0"
 async-trait = "0.1"
+aws-config = "1.8"
+aws-credential-types = "1.2"
+aws-sdk-s3 = "1.149"
+aws-sigv4 = "1.6"
+aws-smithy-runtime-api = "1.9"
 axum = "0.8"
 axum-valid = "0.25"
 config = "0.15"
 deadpool-postgres = "0.14"
+http = "1.3"
+quick-xml = { version = "0.38", features = ["serialize"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
 serde = { version = "1.0", features = ["derive"] }
 thiserror = "2.0"
 tokio = { version = "1.0", features = ["macros", "rt-multi-thread", "net", "signal"] }
@@ -18,4 +26,5 @@ tower-http = { version = "0.6", features = ["trace"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 unitycatalog_queries = { path = "cornucopia" }
+url = "2.5"
 validator = { version = "0.20", features = ["derive"] }
