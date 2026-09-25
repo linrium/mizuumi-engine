@@ -1,0 +1,45 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "unitycatalog.serverName" . }}-config
+  labels:
+    {{- include "unitycatalog.labels" . | nindent 4 }}
+data:
+  server.properties: |-
+    server.env=prod
+    server.authorization={{ ternary "enable" "disable" .Values.server.auth.enabled }}
+    server.authorization-url={{ .Values.server.auth.authorizationUrl }}
+    server.token-url={{ .Values.server.auth.tokenUrl }}
+    server.redirect-port=
+    server.allowed-issuers={{ .Values.server.auth.allowedIssuers }}
+    server.audiences={{ .Values.server.auth.audiences }}
+    server.cookie-timeout={{ .Values.server.auth.cookieTimeout }}
+    server.access-token-timeout={{ .Values.server.auth.accessTokenTimeout }}
+    storage-root.models={{ .Values.server.modelStorageRoot }}
+    aws.masterRoleArn={{ .Values.server.rustfs.roleArn }}
+    aws.region={{ .Values.server.rustfs.region }}
+    s3.bucketPath.0=s3://{{ .Values.server.rustfs.bucket }}
+    s3.region.0={{ .Values.server.rustfs.region }}
+    s3.awsRoleArn.0={{ .Values.server.rustfs.roleArn }}
+    {{- range $key, $value := .Values.server.extraProperties }}
+    {{ $key }}={{ $value }}
+    {{- end }}
+  hibernate.properties: |-
+    hibernate.connection.driver_class=org.h2.Driver
+    hibernate.connection.url=jdbc:h2:file:./etc/db/h2db;DB_CLOSE_DELAY=-1
+    hibernate.hbm2ddl.auto=update
+    hibernate.show_sql=false
+    hibernate.archive.autodetection=class
+    hibernate.use_sql_comments=true
+    org.hibernate.SQL=INFO
+    org.hibernate.type.descriptor.sql.BasicBinder=TRACE
+  server.log4j2.properties: |-
+    status=warn
+    appenders=console
+    appender.console.type=Console
+    appender.console.name=Console
+    appender.console.layout.type=PatternLayout
+    appender.console.layout.pattern=%d{HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n
+    rootLogger.level=info
+    rootLogger.appenderRefs=console
+    rootLogger.appenderRef.console.ref=Console

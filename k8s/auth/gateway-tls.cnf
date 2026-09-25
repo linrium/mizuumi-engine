@@ -17,5 +17,6 @@ DNS.1 = auth.mizuumi.test
 DNS.2 = vault.mizuumi.test
 DNS.3 = storage.mizuumi.test
 DNS.4 = api.storage.mizuumi.test
-DNS.5 = localhost
+DNS.5 = uc.mizuumi.test
+DNS.6 = localhost
 IP.1 = 127.0.0.1

@@ -32,6 +32,8 @@ fi
 run_step bootstrap_sovico.sh
 run_step bootstrap_storage.sh
 run_step setup_storage.sh
+run_step bootstrap_unitycatalog.sh
+run_step setup_unitycatalog.sh
 
 if [[ "$forward" == true ]]; then
   echo "==> forward.sh (verify the local gateway)"

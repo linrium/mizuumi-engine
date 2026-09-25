@@ -96,4 +96,15 @@ data:
         }
       }
     }
+
+    https://uc.mizuumi.test:8443 {
+      tls /etc/caddy/gateway-tls/tls.crt /etc/caddy/gateway-tls/tls.key
+      reverse_proxy http://unitycatalog-server.tower.svc.cluster.local:8080 {
+        header_up -Forwarded
+        header_up X-Forwarded-For {http.request.remote.host}
+        header_up X-Forwarded-Host {host}
+        header_up X-Forwarded-Port 443
+        header_up X-Forwarded-Proto https
+      }
+    }
 {{- end }}

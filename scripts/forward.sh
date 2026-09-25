@@ -47,7 +47,7 @@ for command in kubectl curl; do
   command -v "$command" >/dev/null || { echo "Missing required command: $command" >&2; exit 1; }
 done
 
-public_hosts=(auth.mizuumi.test vault.mizuumi.test storage.mizuumi.test api.storage.mizuumi.test)
+public_hosts=(auth.mizuumi.test vault.mizuumi.test storage.mizuumi.test api.storage.mizuumi.test uc.mizuumi.test)
 for hostname in "${public_hosts[@]}"; do
   if ! awk -v hostname="$hostname" '$1 == "127.0.0.1" { for (i = 2; i <= NF; i++) if ($i == hostname) found = 1 } END { exit !found }' /etc/hosts; then
     echo "$hostname is not mapped to 127.0.0.1." >&2
@@ -103,6 +103,7 @@ echo "Vault API:       https://vault.mizuumi.test/v1"
 echo "Vault UI:        https://vault.mizuumi.test/ui/"
 echo "RustFS S3/API:   https://api.storage.mizuumi.test"
 echo "RustFS Console:  https://storage.mizuumi.test/rustfs/console/"
+echo "Unity Catalog API: https://uc.mizuumi.test"
 
 if (( open_browser )); then
   if [[ "$(uname -s)" != Darwin ]]; then

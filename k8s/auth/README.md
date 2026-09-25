@@ -20,7 +20,7 @@ sudo ./scripts/configure_workstation_dns.sh # once per workstation
 ./scripts/forward.sh
 ```
 
-Visit `https://auth.mizuumi.test` and sign in to the Administration Console with username `admin` and the `ADMIN_PASSWORD` Secret value. The auth chart runs the shared Caddy gateway in Kubernetes. `setup_auth.sh` maps the `auth`, `vault`, `storage`, and `api.storage` names under `mizuumi.test` to the gateway's ClusterIP in CoreDNS, while `configure_workstation_dns.sh` maps them to `127.0.0.1` on the workstation. The gateway's LoadBalancer Service exposes every endpoint on port 443 without host-side proxies or persistent port-forwards. One gateway certificate covers all four browser names, and Caddy verifies each HTTPS backend with the combined local CA bundle. On macOS, run `./scripts/forward.sh --trust --open` once to trust the gateway CA and open the browser UIs; later runs only need `--open`.
+Visit `https://auth.mizuumi.test` and sign in to the Administration Console with username `admin` and the `ADMIN_PASSWORD` Secret value. The auth chart runs the shared Caddy gateway in Kubernetes. `setup_auth.sh` maps the `auth`, `vault`, `storage`, `api.storage`, and `uc` names under `mizuumi.test` to the gateway's ClusterIP in CoreDNS, while `configure_workstation_dns.sh` maps them to `127.0.0.1` on the workstation. The gateway's LoadBalancer Service exposes every endpoint on port 443 without host-side proxies or persistent port-forwards. One gateway certificate covers all five browser names, and Caddy verifies each HTTPS backend with the combined local CA bundle. On macOS, run `./scripts/forward.sh --trust --open` once to trust the gateway CA and open the browser UIs; later runs only need `--open`.
 
 ## Vault login through Keycloak
 

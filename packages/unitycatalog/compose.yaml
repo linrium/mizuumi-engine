@@ -1,0 +1,17 @@
+name: mizuumi-unitycatalog
+
+services:
+  server:
+    build:
+      context: .
+      args:
+        UNITYCATALOG_VERSION: ${UNITYCATALOG_VERSION:-v0.6.0}
+    image: ${UNITYCATALOG_SERVER_IMAGE:-mizuumi/unitycatalog:v0.6.0}
+    restart: unless-stopped
+    ports:
+      - "${UNITYCATALOG_API_PORT:-8080}:8080"
+    volumes:
+      - unitycatalog-data:/home/unitycatalog/etc/db
+
+volumes:
+  unitycatalog-data:
