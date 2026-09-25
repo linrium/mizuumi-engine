@@ -101,8 +101,8 @@ if [[ -z "$group_id" ]]; then
   kc POST /admin/realms/sovico/groups '{"name":"readonly"}' >/dev/null
   group_id="$(kc GET '/admin/realms/sovico/groups?search=readonly' | jq -er '[.[] | select(.name == "readonly")][0].id')"
 fi
-users="$(kc GET '/admin/realms/sovico/users?username=vault-user&exact=true')"
-user_id="$(printf '%s' "$users" | jq -er '[.[] | select(.username == "vault-user")][0].id')"
+users="$(kc GET '/admin/realms/sovico/users?username=khaopad&exact=true')"
+user_id="$(printf '%s' "$users" | jq -er '[.[] | select(.username == "khaopad")][0].id')"
 kc PUT "/admin/realms/sovico/users/$user_id/groups/$group_id" >/dev/null
 
 mounts="$(vault GET /v1/sys/mounts)"

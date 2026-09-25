@@ -15,6 +15,6 @@ From the repository root, run `./scripts/bootstrap.sh` for the full Keycloak →
 
 The old dev-mode StatefulSet has no PVC, and Kubernetes cannot add one in place. If `setup_vault.sh` detects it, it stops before changing anything. After exporting any dev data you need, run `helm -n vault uninstall vault`, then rerun the setup, init, and bootstrap commands. The old in-memory Vault state is destroyed by that uninstall. Keycloak data remains in its PostgreSQL PVC.
 
-`bootstrap_sovico.sh` creates/updates the `sovico` Keycloak realm, `vault` confidential OIDC client, and `vault-user`. It grants only Vault's `default` policy. The local browser callback uses HTTPS on port 8200. Keep the Vault root token for administration only; day-to-day login should use Keycloak.
+`bootstrap_sovico.sh` creates/updates the `sovico` Keycloak realm, `vault` confidential OIDC client, and `khaopad`. It grants only Vault's `default` policy. The local browser callback uses HTTPS on port 8200. Keep the Vault root token for administration only; day-to-day login should use Keycloak.
 
 Vault Transit is bootstrapped by `scripts/bootstrap_storage.sh` for RustFS. Back up the Vault PVC as well as the unseal material: losing either can make SSE-KMS objects permanently unreadable. For a real production cluster, replace local storage, self-signed TLS, manual procedures, and single-node Vault with managed durable storage, trusted TLS, audited access, and an HA/auto-unseal design.

@@ -23,7 +23,7 @@ Visit `https://localhost:8080` and sign in to the Administration Console with us
 
 ## Vault login through Keycloak
 
-After installing Keycloak and initializing/unsealing Vault, run `./scripts/bootstrap_sovico.sh`. It creates the `sovico` realm, a confidential `vault` OIDC client, and an initial `vault-user` account. The script prompts for the account password when run interactively. In noninteractive runs it generates a password in the ignored, mode-600 file `k8s/auth/sovico-user-password`; you can instead set `SOVICO_USER_PASSWORD` in its environment. Existing user passwords are left unchanged. It then configures Vault's `oidc` auth method and `sovico` role. Run `./scripts/forward.sh` while signing in to Vault at `https://localhost:8200/ui` (trust the local Vault CA first).
+After installing Keycloak and initializing/unsealing Vault, run `./scripts/bootstrap_sovico.sh`. It creates the `sovico` realm, a confidential `vault` OIDC client, and an initial `khaopad` account. The script prompts for the account password when run interactively. In noninteractive runs it generates a password in the ignored, mode-600 file `k8s/auth/sovico-user-password`; you can instead set `SOVICO_USER_PASSWORD` in its environment. Existing user passwords are left unchanged. It then configures Vault's `oidc` auth method and `sovico` role. Run `./scripts/forward.sh` while signing in to Vault at `https://localhost:8200/ui` (trust the local Vault CA first).
 
 ## Public HTTPS ingress
 

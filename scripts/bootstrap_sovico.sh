@@ -159,13 +159,13 @@ if [[ -z "$client_secret" ]]; then
   client_secret="$(keycloak_request POST "/admin/realms/sovico/clients/$client_uuid/client-secret" '{}' | jq -er '.value')"
 fi
 
-users="$(keycloak_request GET '/admin/realms/sovico/users?username=vault-user&exact=true')"
-if printf '%s' "$users" | jq -e 'any(.[]; .username == "vault-user")' >/dev/null; then
-  echo 'Keycloak user vault-user already exists; password unchanged.'
+users="$(keycloak_request GET '/admin/realms/sovico/users?username=khaopad&exact=true')"
+if printf '%s' "$users" | jq -e 'any(.[]; .username == "khaopad")' >/dev/null; then
+  echo 'Keycloak user khaopad already exists; password unchanged.'
 else
   if [[ -z "${SOVICO_USER_PASSWORD:-}" ]]; then
     if [[ -t 0 ]]; then
-      read -r -s -p 'Password for new sovico/vault-user: ' SOVICO_USER_PASSWORD
+      read -r -s -p 'Password for new sovico/khaopad: ' SOVICO_USER_PASSWORD
       echo
     elif [[ -f "$password_file" ]]; then
       SOVICO_USER_PASSWORD="$(<"$password_file")"
@@ -185,10 +185,10 @@ else
     exit 1
   fi
   user_payload="$(printf '%s' "$SOVICO_USER_PASSWORD" | jq -Rs \
-    '{username:"vault-user",enabled:true,credentials:[{type:"password",value:.,temporary:false}]}')"
+    '{username:"khaopad",enabled:true,credentials:[{type:"password",value:.,temporary:false}]}')"
   keycloak_request POST /admin/realms/sovico/users "$user_payload" >/dev/null
   unset SOVICO_USER_PASSWORD user_payload
-  echo 'Created Keycloak user vault-user.'
+  echo 'Created Keycloak user khaopad.'
 fi
 
 auth_mounts="$(vault_request GET /v1/sys/auth)"
@@ -216,4 +216,4 @@ fi
 
 echo 'Vault OIDC is configured for Keycloak realm sovico.'
 echo 'Run ./scripts/forward.sh, then open https://localhost:8200/ui and choose OIDC login.'
-echo 'Sign in as vault-user with the password set during bootstrap.'
+echo 'Sign in as khaopad with the password set during bootstrap.'
