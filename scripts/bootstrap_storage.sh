@@ -152,6 +152,9 @@ mounts="$(vault GET /v1/sys/mounts)"
 if ! printf '%s' "$mounts" | jq -e 'has("transit/")' >/dev/null; then
   vault POST /v1/sys/mounts/transit '{"type":"transit"}' >/dev/null
 fi
+if ! printf '%s' "$mounts" | jq -e 'has("secret/")' >/dev/null; then
+  vault POST /v1/sys/mounts/secret '{"type":"kv","options":{"version":"2"}}' >/dev/null
+fi
 key_status="$(curl -sS --cacert "$vault_ca" -o /dev/null -w '%{http_code}' -H "X-Vault-Token: $vault_token" "$vault_url/v1/transit/keys/rustfs")"
 if [[ "$key_status" == 404 ]]; then
   vault POST /v1/transit/keys/rustfs '{"type":"aes256-gcm96","exportable":false,"deletion_allowed":false}' >/dev/null
@@ -161,7 +164,10 @@ fi
 policy='path "transit/encrypt/rustfs" { capabilities = ["update"] }
 path "transit/decrypt/rustfs" { capabilities = ["update"] }
 path "transit/keys" { capabilities = ["list"] }
-path "transit/keys/rustfs" { capabilities = ["read"] }'
+path "transit/keys/*" { capabilities = ["read"] }
+path "secret/data/rustfs/kms/transit-metadata/*" { capabilities = ["create", "read", "update"] }
+path "secret/metadata/rustfs/kms/transit-metadata/*" { capabilities = ["list", "read", "delete"] }
+path "secret/metadata/rustfs/kms/transit-metadata" { capabilities = ["list"] }'
 policy_payload="$(jq -cn --arg policy "$policy" '{policy:$policy}')"
 vault PUT /v1/sys/policies/acl/rustfs-transit "$policy_payload" >/dev/null
 
@@ -184,7 +190,7 @@ if [[ -z "$kms_token" ]]; then
 fi
 umask 077
 mkdir -p "$repo_root/k8s/storage"
-printf 'RUSTFS_ACCESS_KEY=%s\nRUSTFS_SECRET_KEY=%s\nRUSTFS_IDENTITY_OPENID_CLIENT_SECRET=%s\nRUSTFS_KMS_ENABLE=true\nRUSTFS_KMS_BACKEND=vault-transit\nRUSTFS_KMS_VAULT_ADDRESS=https://vault.vault.svc.cluster.local:8200\nRUSTFS_KMS_VAULT_TOKEN=%s\nRUSTFS_KMS_VAULT_MOUNT_PATH=transit\nRUSTFS_KMS_DEFAULT_KEY_ID=rustfs\n' \
+printf 'RUSTFS_ACCESS_KEY=%s\nRUSTFS_SECRET_KEY=%s\nRUSTFS_IDENTITY_OPENID_CLIENT_SECRET=%s\nRUSTFS_KMS_ENABLE=true\nRUSTFS_KMS_BACKEND=vault-transit\nRUSTFS_KMS_VAULT_ADDRESS=https://vault.vault.svc.cluster.local:8200\nRUSTFS_KMS_VAULT_TOKEN=%s\nRUSTFS_KMS_VAULT_MOUNT_PATH=transit\nRUSTFS_KMS_VAULT_TRANSIT_METADATA_KV_MOUNT=secret\nRUSTFS_KMS_VAULT_TRANSIT_METADATA_PREFIX=rustfs/kms/transit-metadata\nRUSTFS_KMS_DEFAULT_KEY_ID=rustfs\n' \
   "$access_key" "$secret_key" "$client_secret" "$kms_token" > "$credentials_file"
 chmod 600 "$credentials_file"
 unset vault_token admin_token client_secret kms_token secret_key
