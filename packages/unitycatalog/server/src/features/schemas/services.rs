@@ -4,7 +4,9 @@ use async_trait::async_trait;
 use deadpool_postgres::Pool;
 use serde_json::Value;
 use tokio_postgres::error::SqlState;
-use unitycatalog_queries::queries::{catalogs as catalog_queries, schemas as schema_queries};
+use unitycatalog_queries::queries::{
+    catalogs as catalog_queries, schemas as schema_queries, tables as table_queries,
+};
 
 use crate::error::AppError;
 
@@ -169,8 +171,24 @@ impl SchemaService for DefaultSchemaService {
         request: DeleteSchemaRequest,
     ) -> Result<(), AppError> {
         let names = split_schema_full_name(&full_name)?;
-        let _force = request.force.unwrap_or(false);
+        let force = request.force.unwrap_or(false);
         let client = self.pool.get().await?;
+        let child_tables = table_queries::list_tables()
+            .bind(
+                &client,
+                &names.catalog_name,
+                &names.schema_name,
+                &String::new(),
+                &1,
+            )
+            .all()
+            .await?;
+        if !child_tables.is_empty() && !force {
+            return Err(AppError::FailedPrecondition(
+                "cannot delete schema with tables".to_string(),
+            ));
+        }
+
         schema_queries::delete_schema()
             .bind(&client, &names.catalog_name, &names.schema_name)
             .opt()

@@ -29,3 +29,23 @@ CREATE TABLE IF NOT EXISTS uc_schemas (
     storage_location TEXT,
     UNIQUE (catalog_id, name)
 );
+
+CREATE TABLE IF NOT EXISTS uc_tables (
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    schema_id TEXT NOT NULL REFERENCES uc_schemas(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    table_type TEXT NOT NULL,
+    data_source_format TEXT,
+    columns JSONB NOT NULL DEFAULT '[]'::jsonb,
+    storage_location TEXT,
+    comment TEXT,
+    properties JSONB NOT NULL DEFAULT '{}'::jsonb,
+    owner TEXT,
+    created_at BIGINT NOT NULL,
+    created_by TEXT,
+    updated_at BIGINT,
+    updated_by TEXT,
+    view_definition TEXT,
+    view_dependencies JSONB,
+    UNIQUE (schema_id, name)
+);

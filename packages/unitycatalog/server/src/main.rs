@@ -20,6 +20,7 @@ use crate::{
         health::{DefaultHealthService, health_router},
         hello::{DefaultHelloService, hello_router},
         schemas::{DefaultSchemaService, schema_router},
+        tables::{DefaultTableService, table_router},
         vending::{DefaultVendingService, vending_router},
     },
     infrastructure::postgres::{create_pool, run_migrations},
@@ -40,6 +41,7 @@ async fn main() -> anyhow::Result<()> {
         health: Arc::new(DefaultHealthService::new(pool.clone())),
         hello: Arc::new(DefaultHelloService::new(pool.clone())),
         schemas: Arc::new(DefaultSchemaService::new(pool.clone())),
+        tables: Arc::new(DefaultTableService::new(pool.clone())),
         vending: Arc::new(
             DefaultVendingService::new(settings.vending.clone())
                 .context("failed to create vending service")?,
@@ -52,6 +54,7 @@ async fn main() -> anyhow::Result<()> {
         .merge(vending_router())
         .merge(catalog_router())
         .merge(schema_router())
+        .merge(table_router())
         .layer(TraceLayer::new_for_http())
         .with_state(state);
 
