@@ -1,6 +1,9 @@
 {
 	admin off
 	auto_https disable_redirects
+	log default {
+		level ERROR
+	}
 }
 
 auth.localhost {

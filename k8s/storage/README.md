@@ -22,6 +22,11 @@ generated service CAs and Caddy's local CA in your keychain, then opens
 their browser UIs without certificate warnings. Trust persists, so later runs
 only need `./scripts/forward.sh --open`.
 
+If a previous forwarding process still owns ports 443, 8080, 8200, 9000, or
+9001, use `./scripts/forward.sh --force`. It stops those listeners before
+starting the new forwarding stack; use it carefully if unrelated local services
+share those ports.
+
 The storage bootstrap creates the `rustfs-console` confidential Keycloak client in the `sovico` realm, a `groups` claim mapper and a `readonly` group for the initial `khaopad`. It also enables Vault Transit, creates a non-exportable `rustfs` key and a restricted token, and creates the `rustfs-credentials` and `rustfs-vault-ca` Kubernetes Secrets. The Vault policy permits encrypt/decrypt for the `rustfs` key and listing Transit key names for RustFS's startup health check. The CA Secret contains a bundle for Vault and Keycloak. The generated root access/secret keys and client/KMS secrets are held in ignored, mode-600 `k8s/storage/credentials.env`, never in Helm values. Back up this file securely. The Vault token has a 720-hour TTL; renew or rotate it before expiration.
 
 `setup_storage.sh` generates a local CA and a CA-signed server certificate in ignored `k8s/storage/tls/`, then creates the `rustfs-tls` Secret. RustFS uses TLS on both listeners. The pinned chart renders HTTP health probes and does not expose sidecars, so the setup script patches the probes to HTTPS and adds a pod-local Keycloak tunnel after each Helm upgrade, then waits for the rollout. The tunnel lets RustFS use Keycloak's exact `https://auth.localhost` issuer from inside its pod.

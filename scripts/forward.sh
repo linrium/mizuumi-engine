@@ -4,13 +4,16 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 trust_local_cas=0
 open_browser=0
+force_stop=0
 
 usage() {
   cat <<'EOF'
-Usage: ./scripts/forward.sh [--trust] [--open]
+Usage: ./scripts/forward.sh [--trust] [--open] [--force]
 
   --trust  Trust the generated local CAs and Caddy's local CA on macOS.
   --open   Open the Keycloak, Vault, and RustFS browser UIs.
+  --force, --force-stop
+           Stop processes using the required local ports before starting.
   -h, --help
            Show this help.
 
@@ -23,6 +26,7 @@ while (( $# > 0 )); do
   case "$1" in
     --trust) trust_local_cas=1 ;;
     --open) open_browser=1 ;;
+    --force|--force-stop) force_stop=1 ;;
     -h|--help)
       usage
       exit 0
@@ -86,6 +90,64 @@ fi
 if (( open_browser )) && [[ "$(uname -s)" != "Darwin" ]]; then
   echo "--open currently supports macOS only." >&2
   exit 1
+fi
+
+required_ports=(443 8080 8200 9000 9001)
+
+list_listener_pids() {
+  local port
+  for port in "${required_ports[@]}"; do
+    lsof -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null || true
+  done | sort -u
+}
+
+if (( force_stop )); then
+  if ! command -v lsof >/dev/null 2>&1; then
+    echo "--force requires lsof." >&2
+    exit 1
+  fi
+
+  listener_pids="$(list_listener_pids)"
+  if [[ -n "$listener_pids" ]]; then
+    echo "Stopping processes that own the required local ports:"
+    while IFS= read -r pid; do
+      [[ "$pid" =~ ^[0-9]+$ ]] || continue
+      ps -p "$pid" -o pid=,command= 2>/dev/null || true
+      kill -TERM "$pid" 2>/dev/null || true
+    done <<< "$listener_pids"
+
+    for _ in {1..50}; do
+      [[ -z "$(list_listener_pids)" ]] && break
+      sleep 0.1
+    done
+
+    listener_pids="$(list_listener_pids)"
+    if [[ -n "$listener_pids" ]]; then
+      echo "Some listeners did not stop after 5 seconds; forcing them to exit." >&2
+      while IFS= read -r pid; do
+        [[ "$pid" =~ ^[0-9]+$ ]] || continue
+        kill -KILL "$pid" 2>/dev/null || true
+      done <<< "$listener_pids"
+      sleep 1
+    fi
+  fi
+fi
+
+if command -v lsof >/dev/null 2>&1; then
+  busy_ports=()
+  for port in "${required_ports[@]}"; do
+    if lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1; then
+      busy_ports+=("$port")
+    fi
+  done
+  if (( ${#busy_ports[@]} > 0 )); then
+    echo "Cannot start: local port(s) ${busy_ports[*]} already in use." >&2
+    echo "Stop the existing ./scripts/forward.sh with Ctrl-C, or stop the processes below:" >&2
+    for port in "${busy_ports[@]}"; do
+      lsof -nP -iTCP:"$port" -sTCP:LISTEN 2>/dev/null >&2 || true
+    done
+    exit 1
+  fi
 fi
 
 kubectl -n auth get service keycloak >/dev/null
