@@ -181,7 +181,7 @@ start_forward vault
 start_forward storage
 
 MIZUUMI_REPO_ROOT="$repo_root" \
-  caddy run --config "$repo_root/Caddyfile.local" --adapter caddyfile &
+  caddy run --config "$repo_root/Caddyfile" --adapter caddyfile &
 caddy_pid=$!
 sleep 1
 if ! kill -0 "$caddy_pid" 2>/dev/null; then
