@@ -49,3 +49,17 @@ CREATE TABLE IF NOT EXISTS uc_tables (
     view_dependencies JSONB,
     UNIQUE (schema_id, name)
 );
+
+CREATE TABLE IF NOT EXISTS uc_credentials (
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    name TEXT NOT NULL UNIQUE,
+    credential_type TEXT NOT NULL,
+    credential JSONB NOT NULL,
+    purpose TEXT NOT NULL,
+    comment TEXT,
+    owner TEXT,
+    created_at BIGINT NOT NULL,
+    created_by TEXT,
+    updated_at BIGINT,
+    updated_by TEXT
+);

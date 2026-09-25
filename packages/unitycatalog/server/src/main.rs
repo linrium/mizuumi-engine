@@ -17,6 +17,7 @@ use crate::{
     config::Settings,
     features::{
         catalogs::{DefaultCatalogService, catalog_router},
+        credentials::{DefaultCredentialService, credential_router},
         health::{DefaultHealthService, health_router},
         hello::{DefaultHelloService, hello_router},
         schemas::{DefaultSchemaService, schema_router},
@@ -38,6 +39,7 @@ async fn main() -> anyhow::Result<()> {
 
     let state = AppState {
         catalogs: Arc::new(DefaultCatalogService::new(pool.clone())),
+        credentials: Arc::new(DefaultCredentialService::new(pool.clone())),
         health: Arc::new(DefaultHealthService::new(pool.clone())),
         hello: Arc::new(DefaultHelloService::new(pool.clone())),
         schemas: Arc::new(DefaultSchemaService::new(pool.clone())),
@@ -53,6 +55,7 @@ async fn main() -> anyhow::Result<()> {
         .merge(hello_router())
         .merge(vending_router())
         .merge(catalog_router())
+        .merge(credential_router())
         .merge(schema_router())
         .merge(table_router())
         .layer(TraceLayer::new_for_http())
