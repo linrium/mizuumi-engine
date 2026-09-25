@@ -4,6 +4,8 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 namespace=storage
 credentials_file="$repo_root/k8s/storage/credentials.env"
+admin_password_file="$repo_root/k8s/storage/rustfs-admin-password"
+admin_username="${RUSTFS_ADMIN_USERNAME:-rustfs-admin}"
 vault_ca="$repo_root/k8s/vault/tls/ca.crt"
 keycloak_ca="$repo_root/k8s/auth/tls/ca.crt"
 for command in kubectl curl jq openssl; do
@@ -107,6 +109,45 @@ users="$(kc GET '/admin/realms/sovico/users?username=khaopad&exact=true')"
 user_id="$(printf '%s' "$users" | jq -er '[.[] | select(.username == "khaopad")][0].id')"
 kc PUT "/admin/realms/sovico/users/$user_id/groups/$group_id" >/dev/null
 
+groups="$(kc GET '/admin/realms/sovico/groups?search=consoleAdmin')"
+admin_group_id="$(printf '%s' "$groups" | jq -r '[.[] | select(.name == "consoleAdmin")][0].id // empty')"
+if [[ -z "$admin_group_id" ]]; then
+  kc POST /admin/realms/sovico/groups '{"name":"consoleAdmin"}' >/dev/null
+  admin_group_id="$(kc GET '/admin/realms/sovico/groups?search=consoleAdmin' | jq -er '[.[] | select(.name == "consoleAdmin")][0].id')"
+fi
+user_groups="$(kc GET "/admin/realms/sovico/users/$user_id/groups")"
+if printf '%s' "$user_groups" | jq -e --arg id "$admin_group_id" 'any(.[]; .id == $id)' >/dev/null; then
+  kc DELETE "/admin/realms/sovico/users/$user_id/groups/$admin_group_id" >/dev/null
+fi
+
+admin_users="$(kc GET "/admin/realms/sovico/users?username=$admin_username&exact=true")"
+admin_user_id="$(printf '%s' "$admin_users" | jq -r --arg username "$admin_username" '[.[] | select(.username == $username)][0].id // empty')"
+if [[ -z "$admin_user_id" ]]; then
+  if [[ -z "${RUSTFS_ADMIN_PASSWORD:-}" ]]; then
+    if [[ -t 0 ]]; then
+      read -r -s -p "Password for new sovico/$admin_username: " RUSTFS_ADMIN_PASSWORD
+      echo
+    elif [[ -f "$admin_password_file" ]]; then
+      RUSTFS_ADMIN_PASSWORD="$(<"$admin_password_file")"
+    else
+      RUSTFS_ADMIN_PASSWORD="$(openssl rand -base64 24)"
+      umask 077
+      printf '%s\n' "$RUSTFS_ADMIN_PASSWORD" > "$admin_password_file"
+      echo "Generated RustFS admin password in $admin_password_file (mode 600)."
+    fi
+  fi
+  [[ -n "$RUSTFS_ADMIN_PASSWORD" ]] || { echo "RustFS admin password cannot be empty." >&2; exit 1; }
+  admin_user_payload="$(jq -cn --arg username "$admin_username" --arg password "$RUSTFS_ADMIN_PASSWORD" \
+    '{username:$username,enabled:true,credentials:[{type:"password",value:$password,temporary:false}]}')"
+  kc POST /admin/realms/sovico/users "$admin_user_payload" >/dev/null
+  unset RUSTFS_ADMIN_PASSWORD admin_user_payload
+  admin_user_id="$(kc GET "/admin/realms/sovico/users?username=$admin_username&exact=true" | jq -er --arg username "$admin_username" '[.[] | select(.username == $username)][0].id')"
+  echo "Created Keycloak user $admin_username."
+else
+  echo "Keycloak user $admin_username already exists; password unchanged."
+fi
+kc PUT "/admin/realms/sovico/users/$admin_user_id/groups/$admin_group_id" >/dev/null
+
 mounts="$(vault GET /v1/sys/mounts)"
 if ! printf '%s' "$mounts" | jq -e 'has("transit/")' >/dev/null; then
   vault POST /v1/sys/mounts/transit '{"type":"transit"}' >/dev/null
@@ -153,7 +194,7 @@ ca_bundle="$(mktemp)"
 trap 'rm -f "$ca_bundle"; cleanup' EXIT
 cat "$vault_ca" "$keycloak_ca" > "$ca_bundle"
 kubectl -n "$namespace" create secret generic rustfs-vault-ca --from-file=ca.crt="$ca_bundle" --dry-run=client -o yaml | kubectl apply -f -
-echo "RustFS bootstrap complete: sovico OIDC client, readonly group, Vault Transit key and restricted token."
+echo "RustFS bootstrap complete: sovico OIDC client, read-only khaopad account, $admin_username console administrator, Vault Transit key and restricted token."
 echo "Credentials are in $credentials_file (mode 600); back them up securely."
 echo "The Vault KMS token has a 720-hour TTL; renew or rotate it before expiry."
 echo "Run ./scripts/setup_storage.sh."
