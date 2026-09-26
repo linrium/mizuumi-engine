@@ -20,6 +20,7 @@ RUN useradd --system --uid 10001 --create-home --home-dir /home/unitycatalog uni
 WORKDIR /home/unitycatalog
 
 COPY --from=builder /app/target/release/server /usr/local/bin/unitycatalog-server
+COPY --from=builder /app/target/release/uc /home/unitycatalog/bin/uc
 COPY --from=builder /app/config.toml /etc/unitycatalog/config.toml
 
 USER unitycatalog

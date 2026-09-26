@@ -18,6 +18,8 @@ use crate::{
     features::{
         catalogs::{DefaultCatalogService, catalog_router},
         credentials::{DefaultCredentialService, credential_router},
+        external_locations::{DefaultExternalLocationService, external_location_router},
+        grants::{DefaultGrantService, grant_router},
         health::{DefaultHealthService, health_router},
         hello::{DefaultHelloService, hello_router},
         schemas::{DefaultSchemaService, schema_router},
@@ -43,6 +45,8 @@ async fn main() -> anyhow::Result<()> {
             pool.clone(),
             settings.vending.clone(),
         )),
+        external_locations: Arc::new(DefaultExternalLocationService::new(pool.clone())),
+        grants: Arc::new(DefaultGrantService::new(pool.clone())),
         health: Arc::new(DefaultHealthService::new(pool.clone())),
         hello: Arc::new(DefaultHelloService::new(pool.clone())),
         schemas: Arc::new(DefaultSchemaService::new(pool.clone())),
@@ -59,6 +63,8 @@ async fn main() -> anyhow::Result<()> {
         .merge(vending_router())
         .merge(catalog_router())
         .merge(credential_router())
+        .merge(external_location_router())
+        .merge(grant_router())
         .merge(schema_router())
         .merge(table_router())
         .layer(TraceLayer::new_for_http())

@@ -1,5 +1,13 @@
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
+CREATE TABLE IF NOT EXISTS uc_metastore (
+    singleton BOOLEAN PRIMARY KEY DEFAULT TRUE CHECK (singleton),
+    id TEXT NOT NULL UNIQUE DEFAULT gen_random_uuid()::text
+);
+
+INSERT INTO uc_metastore (singleton) VALUES (TRUE)
+ON CONFLICT DO NOTHING;
+
 CREATE TABLE IF NOT EXISTS uc_catalogs (
     id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     name TEXT NOT NULL UNIQUE,
@@ -63,6 +71,22 @@ CREATE TABLE IF NOT EXISTS uc_credentials (
     updated_at BIGINT,
     updated_by TEXT
 );
+
+CREATE TABLE IF NOT EXISTS uc_external_locations (
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    name TEXT NOT NULL UNIQUE,
+    url TEXT NOT NULL UNIQUE,
+    credential_id TEXT NOT NULL,
+    comment TEXT,
+    owner TEXT,
+    created_at BIGINT NOT NULL,
+    created_by TEXT,
+    updated_at BIGINT,
+    updated_by TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_external_locations_credential_id
+    ON uc_external_locations (credential_id);
 
 CREATE TABLE IF NOT EXISTS uc_permissions (
     principal TEXT NOT NULL,

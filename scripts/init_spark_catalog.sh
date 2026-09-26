@@ -49,7 +49,7 @@ kubectl -n "$namespace" rollout status deployment/"$deployment" --timeout=5m >/d
 run_uc_admin() {
   local output
   if output="$(kubectl -n "$namespace" exec deployment/"$deployment" -c server -- \
-    /bin/bash -ec 'token="$(< /home/unitycatalog/etc/conf/token.txt)"; exec bin/uc --auth_token "$token" "$@"' -- "$@" 2>&1)"; then
+    bin/uc --server http://127.0.0.1:8080 "$@" 2>&1)"; then
     return 0
   fi
   if [[ "$output" == *ALREADY_EXISTS* || "$output" == *"already exists"* ]]; then

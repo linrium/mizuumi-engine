@@ -2,6 +2,7 @@
 name = "server"
 version = "0.1.0"
 edition = "2024"
+default-run = "server"
 
 [dependencies]
 anyhow = "1.0"
@@ -12,9 +13,11 @@ aws-sdk-s3 = "1.149"
 aws-sdk-sts = "1.117"
 axum = "0.8"
 axum-valid = "0.25"
+clap = { version = "4.5", features = ["derive", "env"] }
 config = "0.15"
 deadpool-postgres = "0.14"
 regex = "1.11"
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 thiserror = "2.0"
@@ -24,5 +27,6 @@ tower-http = { version = "0.6", features = ["trace"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 unitycatalog_queries = { path = "cornucopia" }
+url = "2.5"
 uuid = { version = "1.18", features = ["v4"] }
 validator = { version = "0.20", features = ["derive"] }

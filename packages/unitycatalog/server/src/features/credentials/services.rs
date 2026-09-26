@@ -6,7 +6,9 @@ use deadpool_postgres::Pool;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tokio_postgres::error::SqlState;
-use unitycatalog_queries::queries::credentials as queries;
+use unitycatalog_queries::queries::{
+    credentials as queries, external_locations as location_queries,
+};
 
 use crate::{config::VendingSettings, error::AppError};
 
@@ -183,8 +185,18 @@ impl CredentialService for DefaultCredentialService {
         name: String,
         request: DeleteCredentialRequest,
     ) -> Result<(), AppError> {
-        let _force = request.force.unwrap_or(false);
         let client = self.pool.get().await?;
+        if !request.force.unwrap_or(false)
+            && let Some(location_name) = location_queries::find_external_location_using_credential()
+                .bind(&client, &name)
+                .opt()
+                .await?
+        {
+            return Err(AppError::InvalidParameter(format!(
+                "credential still used by external location '{location_name}'"
+            )));
+        }
+
         queries::delete_credential()
             .bind(&client, &name)
             .opt()

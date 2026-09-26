@@ -1,5 +1,7 @@
 pub mod catalogs;
 pub mod credentials;
+pub mod external_locations;
+pub mod grants;
 pub mod health;
 pub mod hello;
 pub mod schemas;
