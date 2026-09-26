@@ -6,4 +6,5 @@ pub mod health;
 pub mod hello;
 pub mod schemas;
 pub mod tables;
+pub mod temporary_credentials;
 pub mod vending;

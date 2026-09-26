@@ -3,7 +3,8 @@ use std::sync::Arc;
 use crate::features::{
     catalogs::CatalogService, credentials::CredentialService,
     external_locations::ExternalLocationService, grants::GrantService, health::HealthService,
-    hello::HelloService, schemas::SchemaService, tables::TableService, vending::VendingService,
+    hello::HelloService, schemas::SchemaService, tables::TableService,
+    temporary_credentials::TemporaryCredentialsService, vending::VendingService,
 };
 
 #[derive(Clone)]
@@ -16,5 +17,6 @@ pub struct AppState {
     pub hello: Arc<dyn HelloService>,
     pub schemas: Arc<dyn SchemaService>,
     pub tables: Arc<dyn TableService>,
+    pub temporary_credentials: Arc<dyn TemporaryCredentialsService>,
     pub vending: Arc<dyn VendingService>,
 }

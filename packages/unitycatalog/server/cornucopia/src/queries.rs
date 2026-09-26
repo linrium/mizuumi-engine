@@ -7,3 +7,4 @@ pub mod grants;
 pub mod hello;
 pub mod schemas;
 pub mod tables;
+pub mod temporary_credentials;

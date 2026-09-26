@@ -1,36 +1,12 @@
-use axum::{
-    Json, Router,
-    extract::{Query, State},
-    routing::{get, post},
-};
+use axum::{Json, Router, extract::Query, extract::State, routing::get};
 use axum_valid::Valid;
 
 use crate::{app_state::AppState, error::AppError};
 
-use super::dtos::{
-    GenerateTemporaryPathCredentialRequest, ListBucketsRequest, ListBucketsResponse,
-    TemporaryCredentialsResponse,
-};
+use super::dtos::{ListBucketsRequest, ListBucketsResponse};
 
 pub fn vending_router() -> Router<AppState> {
-    Router::new()
-        .route("/api/vending/buckets", get(list_buckets))
-        .route(
-            "/api/2.1/unity-catalog/temporary-path-credentials",
-            post(generate_temporary_path_credentials),
-        )
-}
-
-async fn generate_temporary_path_credentials(
-    State(state): State<AppState>,
-    Valid(Json(request)): Valid<Json<GenerateTemporaryPathCredentialRequest>>,
-) -> Result<Json<TemporaryCredentialsResponse>, AppError> {
-    Ok(Json(
-        state
-            .vending
-            .generate_temporary_path_credentials(request)
-            .await?,
-    ))
+    Router::new().route("/api/vending/buckets", get(list_buckets))
 }
 
 async fn list_buckets(

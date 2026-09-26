@@ -58,6 +58,56 @@ CREATE TABLE IF NOT EXISTS uc_tables (
     UNIQUE (schema_id, name)
 );
 
+CREATE TABLE IF NOT EXISTS uc_volumes (
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    schema_id TEXT NOT NULL REFERENCES uc_schemas(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    comment TEXT,
+    storage_location TEXT NOT NULL,
+    owner TEXT,
+    created_at BIGINT NOT NULL,
+    created_by TEXT,
+    updated_at BIGINT,
+    updated_by TEXT,
+    volume_type TEXT NOT NULL,
+    UNIQUE (schema_id, name)
+);
+
+CREATE TABLE IF NOT EXISTS uc_registered_models (
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    schema_id TEXT NOT NULL REFERENCES uc_schemas(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    owner TEXT,
+    created_at BIGINT NOT NULL,
+    created_by TEXT,
+    updated_at BIGINT,
+    updated_by TEXT,
+    comment TEXT,
+    url TEXT,
+    max_version_number BIGINT,
+    UNIQUE (schema_id, name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_registered_models_name
+ON uc_registered_models (name);
+
+CREATE TABLE IF NOT EXISTS uc_model_versions (
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    registered_model_id TEXT NOT NULL REFERENCES uc_registered_models(id) ON DELETE CASCADE,
+    version BIGINT NOT NULL,
+    source TEXT,
+    run_id TEXT,
+    status TEXT NOT NULL,
+    owner TEXT,
+    created_at BIGINT NOT NULL,
+    created_by TEXT,
+    updated_at BIGINT,
+    updated_by TEXT,
+    comment TEXT,
+    url TEXT,
+    UNIQUE (registered_model_id, version)
+);
+
 CREATE TABLE IF NOT EXISTS uc_credentials (
     id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     name TEXT NOT NULL UNIQUE,
