@@ -39,7 +39,10 @@ async fn main() -> anyhow::Result<()> {
 
     let state = AppState {
         catalogs: Arc::new(DefaultCatalogService::new(pool.clone())),
-        credentials: Arc::new(DefaultCredentialService::new(pool.clone())),
+        credentials: Arc::new(DefaultCredentialService::new(
+            pool.clone(),
+            settings.vending.clone(),
+        )),
         health: Arc::new(DefaultHealthService::new(pool.clone())),
         hello: Arc::new(DefaultHelloService::new(pool.clone())),
         schemas: Arc::new(DefaultSchemaService::new(pool.clone())),

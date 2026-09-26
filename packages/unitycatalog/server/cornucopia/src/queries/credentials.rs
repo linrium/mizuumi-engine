@@ -4,13 +4,15 @@
 pub struct CreateCredentialParams<
     T1: crate::StringSql,
     T2: crate::StringSql,
-    T3: crate::StringSql,
+    T3: crate::JsonSql,
     T4: crate::StringSql,
+    T5: crate::StringSql,
 > {
     pub name: T1,
-    pub role_arn: T2,
-    pub purpose: T3,
-    pub comment: T4,
+    pub credential_type: T2,
+    pub credential: T3,
+    pub purpose: T4,
+    pub comment: T5,
 }
 #[derive(Debug)]
 pub struct ListCredentialsParams<T1: crate::StringSql, T2: crate::StringSql> {
@@ -22,17 +24,20 @@ pub struct ListCredentialsParams<T1: crate::StringSql, T2: crate::StringSql> {
 pub struct UpdateCredentialParams<
     T1: crate::StringSql,
     T2: crate::StringSql,
-    T3: crate::StringSql,
+    T3: crate::JsonSql,
     T4: crate::StringSql,
+    T5: crate::StringSql,
 > {
     pub new_name: T1,
-    pub role_arn: T2,
-    pub comment: T3,
-    pub name: T4,
+    pub credential_type: T2,
+    pub credential: T3,
+    pub comment: T4,
+    pub name: T5,
 }
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct CreateCredential {
     pub name: String,
+    pub credential_type: String,
     pub credential: serde_json::Value,
     pub comment: String,
     pub owner: String,
@@ -46,6 +51,7 @@ pub struct CreateCredential {
 }
 pub struct CreateCredentialBorrowed<'a> {
     pub name: &'a str,
+    pub credential_type: &'a str,
     pub credential: postgres_types::Json<&'a serde_json::value::RawValue>,
     pub comment: &'a str,
     pub owner: &'a str,
@@ -61,6 +67,7 @@ impl<'a> From<CreateCredentialBorrowed<'a>> for CreateCredential {
     fn from(
         CreateCredentialBorrowed {
             name,
+            credential_type,
             credential,
             comment,
             owner,
@@ -75,6 +82,7 @@ impl<'a> From<CreateCredentialBorrowed<'a>> for CreateCredential {
     ) -> Self {
         Self {
             name: name.into(),
+            credential_type: credential_type.into(),
             credential: serde_json::from_str(credential.0.get()).unwrap(),
             comment: comment.into(),
             owner: owner.into(),
@@ -91,6 +99,7 @@ impl<'a> From<CreateCredentialBorrowed<'a>> for CreateCredential {
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct ListCredentials {
     pub name: String,
+    pub credential_type: String,
     pub credential: serde_json::Value,
     pub comment: String,
     pub owner: String,
@@ -104,6 +113,7 @@ pub struct ListCredentials {
 }
 pub struct ListCredentialsBorrowed<'a> {
     pub name: &'a str,
+    pub credential_type: &'a str,
     pub credential: postgres_types::Json<&'a serde_json::value::RawValue>,
     pub comment: &'a str,
     pub owner: &'a str,
@@ -119,6 +129,7 @@ impl<'a> From<ListCredentialsBorrowed<'a>> for ListCredentials {
     fn from(
         ListCredentialsBorrowed {
             name,
+            credential_type,
             credential,
             comment,
             owner,
@@ -133,6 +144,7 @@ impl<'a> From<ListCredentialsBorrowed<'a>> for ListCredentials {
     ) -> Self {
         Self {
             name: name.into(),
+            credential_type: credential_type.into(),
             credential: serde_json::from_str(credential.0.get()).unwrap(),
             comment: comment.into(),
             owner: owner.into(),
@@ -149,6 +161,7 @@ impl<'a> From<ListCredentialsBorrowed<'a>> for ListCredentials {
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct GetCredential {
     pub name: String,
+    pub credential_type: String,
     pub credential: serde_json::Value,
     pub comment: String,
     pub owner: String,
@@ -162,6 +175,7 @@ pub struct GetCredential {
 }
 pub struct GetCredentialBorrowed<'a> {
     pub name: &'a str,
+    pub credential_type: &'a str,
     pub credential: postgres_types::Json<&'a serde_json::value::RawValue>,
     pub comment: &'a str,
     pub owner: &'a str,
@@ -177,6 +191,7 @@ impl<'a> From<GetCredentialBorrowed<'a>> for GetCredential {
     fn from(
         GetCredentialBorrowed {
             name,
+            credential_type,
             credential,
             comment,
             owner,
@@ -191,6 +206,7 @@ impl<'a> From<GetCredentialBorrowed<'a>> for GetCredential {
     ) -> Self {
         Self {
             name: name.into(),
+            credential_type: credential_type.into(),
             credential: serde_json::from_str(credential.0.get()).unwrap(),
             comment: comment.into(),
             owner: owner.into(),
@@ -207,6 +223,7 @@ impl<'a> From<GetCredentialBorrowed<'a>> for GetCredential {
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct UpdateCredential {
     pub name: String,
+    pub credential_type: String,
     pub credential: serde_json::Value,
     pub comment: String,
     pub owner: String,
@@ -220,6 +237,7 @@ pub struct UpdateCredential {
 }
 pub struct UpdateCredentialBorrowed<'a> {
     pub name: &'a str,
+    pub credential_type: &'a str,
     pub credential: postgres_types::Json<&'a serde_json::value::RawValue>,
     pub comment: &'a str,
     pub owner: &'a str,
@@ -235,6 +253,7 @@ impl<'a> From<UpdateCredentialBorrowed<'a>> for UpdateCredential {
     fn from(
         UpdateCredentialBorrowed {
             name,
+            credential_type,
             credential,
             comment,
             owner,
@@ -249,6 +268,7 @@ impl<'a> From<UpdateCredentialBorrowed<'a>> for UpdateCredential {
     ) -> Self {
         Self {
             name: name.into(),
+            credential_type: credential_type.into(),
             credential: serde_json::from_str(credential.0.get()).unwrap(),
             comment: comment.into(),
             owner: owner.into(),
@@ -599,7 +619,7 @@ where
 pub struct CreateCredentialStmt(&'static str, Option<tokio_postgres::Statement>);
 pub fn create_credential() -> CreateCredentialStmt {
     CreateCredentialStmt(
-        "WITH next_credential AS ( SELECT gen_random_uuid()::text AS id, gen_random_uuid()::text AS external_id, (EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::bigint AS now_ms ), inserted AS ( INSERT INTO uc_credentials ( id, name, credential_type, credential, purpose, comment, owner, created_at, created_by, updated_at, updated_by ) SELECT next_credential.id, $1::text, 'AWS_IAM_ROLE', jsonb_build_object('role_arn', $2::text, 'external_id', next_credential.external_id), $3::text, $4::text, 'system', next_credential.now_ms, 'system', next_credential.now_ms, 'system' FROM next_credential RETURNING * ) SELECT name, credential, COALESCE(comment, '') AS comment, COALESCE(owner, '') AS owner, name AS full_name, id, created_at, COALESCE(created_by, '') AS created_by, updated_at, COALESCE(updated_by, '') AS updated_by, purpose FROM inserted",
+        "WITH next_credential AS ( SELECT gen_random_uuid()::text AS id, (EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::bigint AS now_ms ), inserted AS ( INSERT INTO uc_credentials ( id, name, credential_type, credential, purpose, comment, owner, created_at, created_by, updated_at, updated_by ) SELECT next_credential.id, $1::text, $2::text, $3, $4::text, $5::text, 'system', next_credential.now_ms, 'system', next_credential.now_ms, 'system' FROM next_credential RETURNING * ) SELECT name, credential_type, credential, COALESCE(comment, '') AS comment, COALESCE(owner, '') AS owner, name AS full_name, id, created_at, COALESCE(created_by, '') AS created_by, updated_at, COALESCE(updated_by, '') AS updated_by, purpose FROM inserted",
         None,
     )
 }
@@ -618,19 +638,21 @@ impl CreateCredentialStmt {
         C: GenericClient,
         T1: crate::StringSql,
         T2: crate::StringSql,
-        T3: crate::StringSql,
+        T3: crate::JsonSql,
         T4: crate::StringSql,
+        T5: crate::StringSql,
     >(
         &'s self,
         client: &'c C,
         name: &'a T1,
-        role_arn: &'a T2,
-        purpose: &'a T3,
-        comment: &'a T4,
-    ) -> CreateCredentialQuery<'c, 'a, 's, C, CreateCredential, 4> {
+        credential_type: &'a T2,
+        credential: &'a T3,
+        purpose: &'a T4,
+        comment: &'a T5,
+    ) -> CreateCredentialQuery<'c, 'a, 's, C, CreateCredential, 5> {
         CreateCredentialQuery {
             client,
-            params: [name, role_arn, purpose, comment],
+            params: [name, credential_type, credential, purpose, comment],
             query: self.0,
             cached: self.1.as_ref(),
             extractor: |
@@ -638,16 +660,17 @@ impl CreateCredentialStmt {
             | -> Result<CreateCredentialBorrowed, tokio_postgres::Error> {
                 Ok(CreateCredentialBorrowed {
                     name: row.try_get(0)?,
-                    credential: row.try_get(1)?,
-                    comment: row.try_get(2)?,
-                    owner: row.try_get(3)?,
-                    full_name: row.try_get(4)?,
-                    id: row.try_get(5)?,
-                    created_at: row.try_get(6)?,
-                    created_by: row.try_get(7)?,
-                    updated_at: row.try_get(8)?,
-                    updated_by: row.try_get(9)?,
-                    purpose: row.try_get(10)?,
+                    credential_type: row.try_get(1)?,
+                    credential: row.try_get(2)?,
+                    comment: row.try_get(3)?,
+                    owner: row.try_get(4)?,
+                    full_name: row.try_get(5)?,
+                    id: row.try_get(6)?,
+                    created_at: row.try_get(7)?,
+                    created_by: row.try_get(8)?,
+                    updated_at: row.try_get(9)?,
+                    updated_by: row.try_get(10)?,
+                    purpose: row.try_get(11)?,
                 })
             },
             mapper: |it| CreateCredential::from(it),
@@ -661,27 +684,29 @@ impl<
     C: GenericClient,
     T1: crate::StringSql,
     T2: crate::StringSql,
-    T3: crate::StringSql,
+    T3: crate::JsonSql,
     T4: crate::StringSql,
+    T5: crate::StringSql,
 >
     crate::client::async_::Params<
         'c,
         'a,
         's,
-        CreateCredentialParams<T1, T2, T3, T4>,
-        CreateCredentialQuery<'c, 'a, 's, C, CreateCredential, 4>,
+        CreateCredentialParams<T1, T2, T3, T4, T5>,
+        CreateCredentialQuery<'c, 'a, 's, C, CreateCredential, 5>,
         C,
     > for CreateCredentialStmt
 {
     fn params(
         &'s self,
         client: &'c C,
-        params: &'a CreateCredentialParams<T1, T2, T3, T4>,
-    ) -> CreateCredentialQuery<'c, 'a, 's, C, CreateCredential, 4> {
+        params: &'a CreateCredentialParams<T1, T2, T3, T4, T5>,
+    ) -> CreateCredentialQuery<'c, 'a, 's, C, CreateCredential, 5> {
         self.bind(
             client,
             &params.name,
-            &params.role_arn,
+            &params.credential_type,
+            &params.credential,
             &params.purpose,
             &params.comment,
         )
@@ -690,7 +715,7 @@ impl<
 pub struct ListCredentialsStmt(&'static str, Option<tokio_postgres::Statement>);
 pub fn list_credentials() -> ListCredentialsStmt {
     ListCredentialsStmt(
-        "SELECT name, credential, COALESCE(comment, '') AS comment, COALESCE(owner, '') AS owner, name AS full_name, id, created_at, COALESCE(created_by, '') AS created_by, updated_at, COALESCE(updated_by, '') AS updated_by, purpose FROM uc_credentials WHERE ($1::text = '' OR name > $1::text) AND ($2::text = '' OR purpose = $2::text) ORDER BY name LIMIT $3",
+        "SELECT name, credential_type, credential, COALESCE(comment, '') AS comment, COALESCE(owner, '') AS owner, name AS full_name, id, created_at, COALESCE(created_by, '') AS created_by, updated_at, COALESCE(updated_by, '') AS updated_by, purpose FROM uc_credentials WHERE ($1::text = '' OR name > $1::text) AND ($2::text = '' OR purpose = $2::text) ORDER BY name LIMIT $3",
         None,
     )
 }
@@ -719,16 +744,17 @@ impl ListCredentialsStmt {
             | -> Result<ListCredentialsBorrowed, tokio_postgres::Error> {
                 Ok(ListCredentialsBorrowed {
                     name: row.try_get(0)?,
-                    credential: row.try_get(1)?,
-                    comment: row.try_get(2)?,
-                    owner: row.try_get(3)?,
-                    full_name: row.try_get(4)?,
-                    id: row.try_get(5)?,
-                    created_at: row.try_get(6)?,
-                    created_by: row.try_get(7)?,
-                    updated_at: row.try_get(8)?,
-                    updated_by: row.try_get(9)?,
-                    purpose: row.try_get(10)?,
+                    credential_type: row.try_get(1)?,
+                    credential: row.try_get(2)?,
+                    comment: row.try_get(3)?,
+                    owner: row.try_get(4)?,
+                    full_name: row.try_get(5)?,
+                    id: row.try_get(6)?,
+                    created_at: row.try_get(7)?,
+                    created_by: row.try_get(8)?,
+                    updated_at: row.try_get(9)?,
+                    updated_by: row.try_get(10)?,
+                    purpose: row.try_get(11)?,
                 })
             },
             mapper: |it| ListCredentials::from(it),
@@ -761,7 +787,7 @@ impl<'c, 'a, 's, C: GenericClient, T1: crate::StringSql, T2: crate::StringSql>
 pub struct GetCredentialStmt(&'static str, Option<tokio_postgres::Statement>);
 pub fn get_credential() -> GetCredentialStmt {
     GetCredentialStmt(
-        "SELECT name, credential, COALESCE(comment, '') AS comment, COALESCE(owner, '') AS owner, name AS full_name, id, created_at, COALESCE(created_by, '') AS created_by, updated_at, COALESCE(updated_by, '') AS updated_by, purpose FROM uc_credentials WHERE name = $1::text",
+        "SELECT name, credential_type, credential, COALESCE(comment, '') AS comment, COALESCE(owner, '') AS owner, name AS full_name, id, created_at, COALESCE(created_by, '') AS created_by, updated_at, COALESCE(updated_by, '') AS updated_by, purpose FROM uc_credentials WHERE name = $1::text",
         None,
     )
 }
@@ -787,16 +813,17 @@ impl GetCredentialStmt {
                 |row: &tokio_postgres::Row| -> Result<GetCredentialBorrowed, tokio_postgres::Error> {
                     Ok(GetCredentialBorrowed {
                         name: row.try_get(0)?,
-                        credential: row.try_get(1)?,
-                        comment: row.try_get(2)?,
-                        owner: row.try_get(3)?,
-                        full_name: row.try_get(4)?,
-                        id: row.try_get(5)?,
-                        created_at: row.try_get(6)?,
-                        created_by: row.try_get(7)?,
-                        updated_at: row.try_get(8)?,
-                        updated_by: row.try_get(9)?,
-                        purpose: row.try_get(10)?,
+                        credential_type: row.try_get(1)?,
+                        credential: row.try_get(2)?,
+                        comment: row.try_get(3)?,
+                        owner: row.try_get(4)?,
+                        full_name: row.try_get(5)?,
+                        id: row.try_get(6)?,
+                        created_at: row.try_get(7)?,
+                        created_by: row.try_get(8)?,
+                        updated_at: row.try_get(9)?,
+                        updated_by: row.try_get(10)?,
+                        purpose: row.try_get(11)?,
                     })
                 },
             mapper: |it| GetCredential::from(it),
@@ -806,7 +833,7 @@ impl GetCredentialStmt {
 pub struct UpdateCredentialStmt(&'static str, Option<tokio_postgres::Statement>);
 pub fn update_credential() -> UpdateCredentialStmt {
     UpdateCredentialStmt(
-        "UPDATE uc_credentials SET name = COALESCE($1::text, name), credential = CASE WHEN $2::text = '' THEN credential ELSE jsonb_build_object('role_arn', $2::text, 'external_id', gen_random_uuid()::text) END, comment = COALESCE($3::text, comment), updated_at = (EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::bigint, updated_by = 'system' WHERE name = $4::text RETURNING name, credential, COALESCE(comment, '') AS comment, COALESCE(owner, '') AS owner, name AS full_name, id, created_at, COALESCE(created_by, '') AS created_by, updated_at, COALESCE(updated_by, '') AS updated_by, purpose",
+        "UPDATE uc_credentials SET name = COALESCE($1::text, name), credential_type = CASE WHEN $2::text = '' THEN credential_type ELSE $2::text END, credential = CASE WHEN $2::text = '' THEN credential ELSE $3 END, comment = COALESCE($4::text, comment), updated_at = (EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::bigint, updated_by = 'system' WHERE name = $5::text RETURNING name, credential_type, credential, COALESCE(comment, '') AS comment, COALESCE(owner, '') AS owner, name AS full_name, id, created_at, COALESCE(created_by, '') AS created_by, updated_at, COALESCE(updated_by, '') AS updated_by, purpose",
         None,
     )
 }
@@ -825,19 +852,21 @@ impl UpdateCredentialStmt {
         C: GenericClient,
         T1: crate::StringSql,
         T2: crate::StringSql,
-        T3: crate::StringSql,
+        T3: crate::JsonSql,
         T4: crate::StringSql,
+        T5: crate::StringSql,
     >(
         &'s self,
         client: &'c C,
         new_name: &'a T1,
-        role_arn: &'a T2,
-        comment: &'a T3,
-        name: &'a T4,
-    ) -> UpdateCredentialQuery<'c, 'a, 's, C, UpdateCredential, 4> {
+        credential_type: &'a T2,
+        credential: &'a T3,
+        comment: &'a T4,
+        name: &'a T5,
+    ) -> UpdateCredentialQuery<'c, 'a, 's, C, UpdateCredential, 5> {
         UpdateCredentialQuery {
             client,
-            params: [new_name, role_arn, comment, name],
+            params: [new_name, credential_type, credential, comment, name],
             query: self.0,
             cached: self.1.as_ref(),
             extractor: |
@@ -845,16 +874,17 @@ impl UpdateCredentialStmt {
             | -> Result<UpdateCredentialBorrowed, tokio_postgres::Error> {
                 Ok(UpdateCredentialBorrowed {
                     name: row.try_get(0)?,
-                    credential: row.try_get(1)?,
-                    comment: row.try_get(2)?,
-                    owner: row.try_get(3)?,
-                    full_name: row.try_get(4)?,
-                    id: row.try_get(5)?,
-                    created_at: row.try_get(6)?,
-                    created_by: row.try_get(7)?,
-                    updated_at: row.try_get(8)?,
-                    updated_by: row.try_get(9)?,
-                    purpose: row.try_get(10)?,
+                    credential_type: row.try_get(1)?,
+                    credential: row.try_get(2)?,
+                    comment: row.try_get(3)?,
+                    owner: row.try_get(4)?,
+                    full_name: row.try_get(5)?,
+                    id: row.try_get(6)?,
+                    created_at: row.try_get(7)?,
+                    created_by: row.try_get(8)?,
+                    updated_at: row.try_get(9)?,
+                    updated_by: row.try_get(10)?,
+                    purpose: row.try_get(11)?,
                 })
             },
             mapper: |it| UpdateCredential::from(it),
@@ -868,27 +898,29 @@ impl<
     C: GenericClient,
     T1: crate::StringSql,
     T2: crate::StringSql,
-    T3: crate::StringSql,
+    T3: crate::JsonSql,
     T4: crate::StringSql,
+    T5: crate::StringSql,
 >
     crate::client::async_::Params<
         'c,
         'a,
         's,
-        UpdateCredentialParams<T1, T2, T3, T4>,
-        UpdateCredentialQuery<'c, 'a, 's, C, UpdateCredential, 4>,
+        UpdateCredentialParams<T1, T2, T3, T4, T5>,
+        UpdateCredentialQuery<'c, 'a, 's, C, UpdateCredential, 5>,
         C,
     > for UpdateCredentialStmt
 {
     fn params(
         &'s self,
         client: &'c C,
-        params: &'a UpdateCredentialParams<T1, T2, T3, T4>,
-    ) -> UpdateCredentialQuery<'c, 'a, 's, C, UpdateCredential, 4> {
+        params: &'a UpdateCredentialParams<T1, T2, T3, T4, T5>,
+    ) -> UpdateCredentialQuery<'c, 'a, 's, C, UpdateCredential, 5> {
         self.bind(
             client,
             &params.new_name,
-            &params.role_arn,
+            &params.credential_type,
+            &params.credential,
             &params.comment,
             &params.name,
         )

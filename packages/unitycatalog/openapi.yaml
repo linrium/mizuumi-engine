@@ -2804,6 +2804,8 @@ components:
           type: string
         aws_iam_role:
           $ref: '#/components/schemas/AwsIamRoleResponse'
+        rustfs_service_account:
+          $ref: '#/components/schemas/RustfsServiceAccountResponse'
         comment:
           description: Comment associated with the credential.
           type: string
@@ -2845,6 +2847,8 @@ components:
           type: string
         aws_iam_role:
           $ref: '#/components/schemas/AwsIamRoleRequest'
+        rustfs_service_account:
+          $ref: '#/components/schemas/RustfsServiceAccountRequest'
         purpose:
           $ref: "#/components/schemas/CredentialPurpose"
     UpdateCredentialRequest:
@@ -2858,6 +2862,8 @@ components:
           type: string
         aws_iam_role:
           $ref: '#/components/schemas/AwsIamRoleRequest'
+        rustfs_service_account:
+          $ref: '#/components/schemas/RustfsServiceAccountRequest'
         new_name:
           description: New name for the credential.
           type: string
@@ -2884,6 +2890,50 @@ components:
         external_id:
           description: The external ID used in role assumption to prevent confused deputy problem.
           type: string
+    RustfsServiceAccountRequest:
+      type: object
+      required:
+        - access_key
+        - secret_key
+      properties:
+        endpoint_url:
+          description: RustFS S3/STS endpoint URL. Defaults to the server vending endpoint when omitted.
+          type: string
+        region:
+          description: S3 signing region. Defaults to the server vending region when omitted.
+          type: string
+        access_key:
+          description: RustFS service account access key.
+          type: string
+        secret_key:
+          description: RustFS service account secret key. Stored by the server and never returned in responses.
+          type: string
+        role_arn:
+          description: RustFS STS role ARN used for AssumeRole.
+          type: string
+        force_path_style:
+          description: Whether S3 clients should use path-style addressing.
+          type: boolean
+        duration_seconds:
+          description: Default STS session duration for this credential.
+          type: integer
+          format: int32
+    RustfsServiceAccountResponse:
+      type: object
+      properties:
+        endpoint_url:
+          type: string
+        region:
+          type: string
+        access_key:
+          type: string
+        role_arn:
+          type: string
+        force_path_style:
+          type: boolean
+        duration_seconds:
+          type: integer
+          format: int32
     ListCredentialsResponse:
       type: object
       properties:

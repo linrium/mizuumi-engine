@@ -3,7 +3,7 @@ use std::sync::LazyLock;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
-use super::models::Credential;
+use super::models::{Credential, CredentialKind};
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct AwsIamRoleRequest {
@@ -18,12 +18,34 @@ pub struct AwsIamRoleResponse {
     pub external_id: String,
 }
 
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct RustfsServiceAccountRequest {
+    pub endpoint_url: Option<String>,
+    pub region: Option<String>,
+    pub access_key: String,
+    pub secret_key: String,
+    pub role_arn: Option<String>,
+    pub force_path_style: Option<bool>,
+    pub duration_seconds: Option<u32>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct RustfsServiceAccountResponse {
+    pub endpoint_url: String,
+    pub region: String,
+    pub access_key: String,
+    pub role_arn: String,
+    pub force_path_style: bool,
+    pub duration_seconds: u32,
+}
+
 #[derive(Debug, Deserialize, Validate)]
 pub struct CreateCredentialRequest {
     #[validate(length(min = 1, max = 255), regex(path = *CREDENTIAL_NAME_REGEX))]
     pub name: String,
     pub comment: Option<String>,
     pub aws_iam_role: Option<AwsIamRoleRequest>,
+    pub rustfs_service_account: Option<RustfsServiceAccountRequest>,
     pub purpose: Option<String>,
 }
 
@@ -40,6 +62,7 @@ pub struct UpdateCredentialRequest {
     pub comment: Option<String>,
     pub owner: Option<String>,
     pub aws_iam_role: Option<AwsIamRoleRequest>,
+    pub rustfs_service_account: Option<RustfsServiceAccountRequest>,
     #[validate(length(min = 1, max = 255), regex(path = *CREDENTIAL_NAME_REGEX))]
     pub new_name: Option<String>,
 }
@@ -52,7 +75,10 @@ pub struct DeleteCredentialRequest {
 #[derive(Debug, Serialize)]
 pub struct CredentialInfo {
     pub name: String,
-    pub aws_iam_role: AwsIamRoleResponse,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub aws_iam_role: Option<AwsIamRoleResponse>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rustfs_service_account: Option<RustfsServiceAccountResponse>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub comment: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -78,13 +104,32 @@ pub struct ListCredentialsResponse {
 
 impl From<Credential> for CredentialInfo {
     fn from(credential: Credential) -> Self {
+        let (aws_iam_role, rustfs_service_account) = match credential.kind {
+            CredentialKind::AwsIamRole(role) => (
+                Some(AwsIamRoleResponse {
+                    role_arn: role.role_arn,
+                    unity_catalog_iam_arn: None,
+                    external_id: role.external_id,
+                }),
+                None,
+            ),
+            CredentialKind::RustfsServiceAccount(account) => (
+                None,
+                Some(RustfsServiceAccountResponse {
+                    endpoint_url: account.endpoint_url,
+                    region: account.region,
+                    access_key: account.access_key,
+                    role_arn: account.role_arn,
+                    force_path_style: account.force_path_style,
+                    duration_seconds: account.duration_seconds,
+                }),
+            ),
+        };
+
         Self {
             name: credential.name,
-            aws_iam_role: AwsIamRoleResponse {
-                role_arn: credential.aws_iam_role.role_arn,
-                unity_catalog_iam_arn: None,
-                external_id: credential.aws_iam_role.external_id,
-            },
+            aws_iam_role,
+            rustfs_service_account,
             comment: non_empty(credential.comment),
             owner: non_empty(credential.owner),
             full_name: credential.full_name,

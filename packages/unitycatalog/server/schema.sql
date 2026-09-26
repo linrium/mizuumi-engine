@@ -63,3 +63,12 @@ CREATE TABLE IF NOT EXISTS uc_credentials (
     updated_at BIGINT,
     updated_by TEXT
 );
+
+CREATE TABLE IF NOT EXISTS uc_permissions (
+    principal TEXT NOT NULL,
+    resource_id TEXT NOT NULL,
+    securable_type TEXT NOT NULL,
+    privilege TEXT NOT NULL,
+    created_at BIGINT NOT NULL DEFAULT ((EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::bigint),
+    PRIMARY KEY (principal, resource_id, privilege)
+);

@@ -2,7 +2,6 @@
 WITH next_credential AS (
     SELECT
         gen_random_uuid()::text AS id,
-        gen_random_uuid()::text AS external_id,
         (EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::bigint AS now_ms
 ),
 inserted AS (
@@ -22,8 +21,8 @@ inserted AS (
     SELECT
         next_credential.id,
         :name::text,
-        'AWS_IAM_ROLE',
-        jsonb_build_object('role_arn', :role_arn::text, 'external_id', next_credential.external_id),
+        :credential_type::text,
+        :credential,
         :purpose::text,
         :comment::text,
         'system',
@@ -36,6 +35,7 @@ inserted AS (
 )
 SELECT
     name,
+    credential_type,
     credential,
     COALESCE(comment, '') AS comment,
     COALESCE(owner, '') AS owner,
@@ -51,6 +51,7 @@ FROM inserted;
 --! list_credentials
 SELECT
     name,
+    credential_type,
     credential,
     COALESCE(comment, '') AS comment,
     COALESCE(owner, '') AS owner,
@@ -70,6 +71,7 @@ LIMIT :limit_value;
 --! get_credential
 SELECT
     name,
+    credential_type,
     credential,
     COALESCE(comment, '') AS comment,
     COALESCE(owner, '') AS owner,
@@ -87,9 +89,13 @@ WHERE name = :name::text;
 UPDATE uc_credentials
 SET
     name = COALESCE(:new_name::text, name),
+    credential_type = CASE
+        WHEN :credential_type::text = '' THEN credential_type
+        ELSE :credential_type::text
+    END,
     credential = CASE
-        WHEN :role_arn::text = '' THEN credential
-        ELSE jsonb_build_object('role_arn', :role_arn::text, 'external_id', gen_random_uuid()::text)
+        WHEN :credential_type::text = '' THEN credential
+        ELSE :credential
     END,
     comment = COALESCE(:comment::text, comment),
     updated_at = (EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::bigint,
@@ -97,6 +103,7 @@ SET
 WHERE name = :name::text
 RETURNING
     name,
+    credential_type,
     credential,
     COALESCE(comment, '') AS comment,
     COALESCE(owner, '') AS owner,
