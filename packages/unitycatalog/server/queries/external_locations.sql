@@ -152,3 +152,14 @@ FROM uc_external_locations locations
 JOIN uc_credentials credentials ON credentials.id = locations.credential_id
 WHERE credentials.name = :credential_name::text
 LIMIT 1;
+
+--! find_external_location_for_path
+SELECT url
+FROM uc_external_locations
+WHERE url = :url::text
+   OR starts_with(
+       :url::text,
+       url || CASE WHEN right(url, 1) = '/' THEN '' ELSE '/' END
+   )
+ORDER BY length(url) DESC
+LIMIT 1;

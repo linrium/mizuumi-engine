@@ -226,7 +226,7 @@ async fn ensure_url_available(
     Ok(())
 }
 
-fn normalize_external_location_url(input: &str) -> Result<String, AppError> {
+pub(crate) fn normalize_external_location_url(input: &str) -> Result<String, AppError> {
     if input.trim().is_empty() {
         return Err(AppError::InvalidParameter(
             "path cannot be empty".to_string(),

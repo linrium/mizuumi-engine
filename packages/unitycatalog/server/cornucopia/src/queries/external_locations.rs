@@ -1042,3 +1042,33 @@ impl FindExternalLocationUsingCredentialStmt {
         }
     }
 }
+pub struct FindExternalLocationForPathStmt(&'static str, Option<tokio_postgres::Statement>);
+pub fn find_external_location_for_path() -> FindExternalLocationForPathStmt {
+    FindExternalLocationForPathStmt(
+        "SELECT url FROM uc_external_locations WHERE url = $1::text OR starts_with( $1::text, url || CASE WHEN right(url, 1) = '/' THEN '' ELSE '/' END ) ORDER BY length(url) DESC LIMIT 1",
+        None,
+    )
+}
+impl FindExternalLocationForPathStmt {
+    pub async fn prepare<'a, C: GenericClient>(
+        mut self,
+        client: &'a C,
+    ) -> Result<Self, tokio_postgres::Error> {
+        self.1 = Some(client.prepare(self.0).await?);
+        Ok(self)
+    }
+    pub fn bind<'c, 'a, 's, C: GenericClient, T1: crate::StringSql>(
+        &'s self,
+        client: &'c C,
+        url: &'a T1,
+    ) -> StringQuery<'c, 'a, 's, C, String, 1> {
+        StringQuery {
+            client,
+            params: [url],
+            query: self.0,
+            cached: self.1.as_ref(),
+            extractor: |row| Ok(row.try_get(0)?),
+            mapper: |it| it.into(),
+        }
+    }
+}

@@ -52,7 +52,7 @@ async fn main() -> anyhow::Result<()> {
         schemas: Arc::new(DefaultSchemaService::new(pool.clone())),
         tables: Arc::new(DefaultTableService::new(pool.clone())),
         vending: Arc::new(
-            DefaultVendingService::new(settings.vending.clone())
+            DefaultVendingService::new(pool.clone(), settings.vending.clone())
                 .context("failed to create vending service")?,
         ),
     };
