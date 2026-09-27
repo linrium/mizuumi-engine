@@ -144,6 +144,16 @@ else
   echo "Updated Keycloak client $realm/$client_id."
 fi
 
+# Unity Catalog validates the audience on incoming user access tokens. Add its
+# audience to tokens issued for Studio so the user's token can be forwarded to
+# the API without substituting a service token.
+audience_payload='{"name":"unitycatalog-audience","protocol":"openid-connect","protocolMapper":"oidc-audience-mapper","consentRequired":false,"config":{"included.client.audience":"unitycatalog","access.token.claim":"true","id.token.claim":"false"}}'
+audience_mappers="$(kc GET "/admin/realms/$realm/clients/$client_uuid/protocol-mappers/models")"
+if ! printf '%s' "$audience_mappers" | jq -e 'any(.[]; .name == "unitycatalog-audience")' >/dev/null; then
+  kc POST "/admin/realms/$realm/clients/$client_uuid/protocol-mappers/models" "$audience_payload" >/dev/null
+  echo "Added the Unity Catalog audience to Studio access tokens."
+fi
+
 if (( rotate_secret )); then
   client_secret="$(kc POST "/admin/realms/$realm/clients/$client_uuid/client-secret" '{}' | jq -er '.value')"
   echo "Rotated the Studio client secret."
