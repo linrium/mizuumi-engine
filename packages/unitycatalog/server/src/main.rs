@@ -7,9 +7,10 @@ mod infrastructure;
 use std::{net::SocketAddr, sync::Arc};
 
 use anyhow::Context;
-use axum::Router;
+use axum::{Router, body::Body, http::Request};
 use tokio::net::TcpListener;
-use tower_http::trace::TraceLayer;
+use tower_http::trace::{DefaultOnFailure, DefaultOnRequest, DefaultOnResponse, TraceLayer};
+use tracing::Level;
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::{
@@ -34,11 +35,25 @@ use crate::{
 async fn main() -> anyhow::Result<()> {
     init_tracing();
 
+    tracing::trace!("loading server configuration");
     let settings = Settings::load().context("failed to load configuration")?;
+    tracing::debug!(
+        server.host = %settings.server.host,
+        server.port = settings.server.port,
+        postgres.host = %settings.postgres.host,
+        postgres.port = settings.postgres.port,
+        postgres.database = %settings.postgres.database,
+        postgres.pool_size = settings.postgres.pool_size,
+        vending.endpoint_url = %settings.vending.endpoint_url,
+        "configuration loaded"
+    );
+
+    tracing::trace!("creating postgres connection pool");
     let pool = create_pool(&settings.postgres).context("failed to create postgres pool")?;
     run_migrations(&pool)
         .await
         .context("failed to run postgres migrations")?;
+    tracing::debug!("postgres migrations complete");
 
     let state = AppState {
         catalogs: Arc::new(DefaultCatalogService::new(pool.clone())),
@@ -61,9 +76,9 @@ async fn main() -> anyhow::Result<()> {
                 .context("failed to create vending service")?,
         ),
     };
+    tracing::trace!("application services initialized");
 
-    let app = Router::new()
-        .merge(health_router())
+    let api = Router::new()
         .merge(hello_router())
         .merge(vending_router())
         .merge(catalog_router())
@@ -73,8 +88,26 @@ async fn main() -> anyhow::Result<()> {
         .merge(schema_router())
         .merge(table_router())
         .merge(temporary_credentials_router())
-        .layer(TraceLayer::new_for_http())
+        .layer(
+            TraceLayer::new_for_http()
+                .make_span_with(|request: &Request<Body>| {
+                    tracing::info_span!(
+                        "api_call",
+                        method = %request.method(),
+                        path = request.uri().path(),
+                        version = ?request.version(),
+                    )
+                })
+                .on_request(DefaultOnRequest::new().level(Level::INFO))
+                .on_response(DefaultOnResponse::new().level(Level::INFO))
+                .on_failure(DefaultOnFailure::new().level(Level::ERROR)),
+        );
+
+    let app = Router::new()
+        .merge(health_router())
+        .merge(api)
         .with_state(state);
+    tracing::debug!("HTTP routes configured");
 
     let addr = SocketAddr::new(settings.server.host, settings.server.port);
     let listener = TcpListener::bind(addr)
@@ -86,13 +119,14 @@ async fn main() -> anyhow::Result<()> {
         .with_graceful_shutdown(shutdown_signal())
         .await
         .context("server failed")?;
+    tracing::info!("server stopped");
 
     Ok(())
 }
 
 fn init_tracing() {
     tracing_subscriber::registry()
-        .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")))
+        .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("debug")))
         .with(tracing_subscriber::fmt::layer())
         .init();
 }
@@ -119,4 +153,6 @@ async fn shutdown_signal() {
         _ = ctrl_c => {},
         _ = terminate => {},
     }
+
+    tracing::debug!("shutdown signal received");
 }
