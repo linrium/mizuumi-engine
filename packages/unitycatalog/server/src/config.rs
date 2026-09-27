@@ -11,6 +11,8 @@ pub struct Settings {
     pub postgres: PostgresSettings,
     #[serde(default)]
     pub vending: VendingSettings,
+    #[serde(default)]
+    pub auth: AuthSettings,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -51,6 +53,31 @@ pub struct VendingSettings {
     pub duration_seconds: u32,
     #[serde(default = "default_force_path_style")]
     pub force_path_style: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct AuthSettings {
+    #[serde(default = "default_auth_enabled")]
+    pub enabled: bool,
+    #[serde(default = "default_auth_issuer")]
+    pub issuer: String,
+    #[serde(default = "default_auth_audience")]
+    pub audience: String,
+    pub jwks_url: Option<String>,
+    pub ca_certificate: Option<PathBuf>,
+    #[serde(default = "default_clock_skew_seconds")]
+    pub clock_skew_seconds: u64,
+    pub bootstrap_token: Option<String>,
+    #[serde(default = "default_bootstrap_enabled")]
+    pub bootstrap_enabled: bool,
+    #[serde(default = "default_bootstrap_token_file")]
+    pub bootstrap_token_file: Option<PathBuf>,
+    #[serde(default = "default_reader_role")]
+    pub reader_role: String,
+    #[serde(default = "default_writer_role")]
+    pub writer_role: String,
+    #[serde(default = "default_admin_role")]
+    pub admin_role: String,
 }
 
 impl Settings {
@@ -98,6 +125,25 @@ impl Default for VendingSettings {
             secret_key: default_rustfs_secret_key(),
             duration_seconds: default_sts_duration_seconds(),
             force_path_style: default_force_path_style(),
+        }
+    }
+}
+
+impl Default for AuthSettings {
+    fn default() -> Self {
+        Self {
+            enabled: default_auth_enabled(),
+            issuer: default_auth_issuer(),
+            audience: default_auth_audience(),
+            jwks_url: None,
+            ca_certificate: None,
+            clock_skew_seconds: default_clock_skew_seconds(),
+            bootstrap_token: None,
+            bootstrap_enabled: default_bootstrap_enabled(),
+            bootstrap_token_file: default_bootstrap_token_file(),
+            reader_role: default_reader_role(),
+            writer_role: default_writer_role(),
+            admin_role: default_admin_role(),
         }
     }
 }
@@ -156,4 +202,40 @@ fn default_sts_duration_seconds() -> u32 {
 
 fn default_force_path_style() -> bool {
     true
+}
+
+fn default_auth_enabled() -> bool {
+    true
+}
+
+fn default_auth_issuer() -> String {
+    "https://auth.mizuumi.test/realms/sovico".to_owned()
+}
+
+fn default_auth_audience() -> String {
+    "unitycatalog".to_owned()
+}
+
+fn default_clock_skew_seconds() -> u64 {
+    30
+}
+
+fn default_bootstrap_token_file() -> Option<PathBuf> {
+    Some(PathBuf::from("bootstrap-token"))
+}
+
+fn default_bootstrap_enabled() -> bool {
+    true
+}
+
+fn default_reader_role() -> String {
+    "unitycatalog-reader".to_owned()
+}
+
+fn default_writer_role() -> String {
+    "unitycatalog-writer".to_owned()
+}
+
+fn default_admin_role() -> String {
+    "unitycatalog-admin".to_owned()
 }

@@ -316,6 +316,7 @@ List the registered tables through the Unity Catalog API:
 for schema in bronze silver gold; do
   curl --fail --silent --show-error \
     --cacert k8s/auth/tls/ca.crt \
+    -H "Authorization: Bearer $UNITYCATALOG_USER_TOKEN" \
     "https://unitycatalog.mizuumi.test/api/2.1/unity-catalog/tables?catalog_name=unity&schema_name=$schema"
 done
 ```
@@ -382,7 +383,8 @@ Check that the external table path is below `s3://unitycatalog/spark`, the
 its RustFS service account:
 
 ```bash
-./scripts/validate_unitycatalog_vending.sh
+UNITYCATALOG_AUTH_TOKEN="$UNITYCATALOG_USER_TOKEN" \
+  ./scripts/validate_unitycatalog_vending.sh
 kubectl -n tower logs deployment/unitycatalog-server --tail=200
 ```
 

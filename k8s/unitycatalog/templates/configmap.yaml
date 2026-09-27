@@ -26,3 +26,14 @@ data:
     secret_key = ""
     duration_seconds = {{ .Values.vending.durationSeconds }}
     force_path_style = {{ .Values.vending.forcePathStyle }}
+
+    [auth]
+    enabled = {{ .Values.auth.enabled }}
+    issuer = {{ .Values.auth.issuer | quote }}
+    audience = {{ .Values.auth.audience | quote }}
+    ca_certificate = {{ .Values.auth.caCertificatePath | quote }}
+    bootstrap_enabled = {{ .Values.auth.bootstrapEnabled }}
+    bootstrap_token_file = {{ .Values.auth.bootstrapTokenFile | quote }}
+    reader_role = {{ .Values.auth.readerRole | quote }}
+    writer_role = {{ .Values.auth.writerRole | quote }}
+    admin_role = {{ .Values.auth.adminRole | quote }}

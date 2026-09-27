@@ -7,7 +7,7 @@ mod infrastructure;
 use std::{net::SocketAddr, sync::Arc};
 
 use anyhow::Context;
-use axum::{Router, body::Body, http::Request};
+use axum::{Router, body::Body, http::Request, middleware};
 use tokio::net::TcpListener;
 use tower_http::trace::{DefaultOnFailure, DefaultOnRequest, DefaultOnResponse, TraceLayer};
 use tracing::Level;
@@ -17,6 +17,7 @@ use crate::{
     app_state::AppState,
     config::Settings,
     features::{
+        auth::{AuthService, auth_router, authorize},
         catalogs::{DefaultCatalogService, catalog_router},
         credentials::{DefaultCredentialService, credential_router},
         external_locations::{DefaultExternalLocationService, external_location_router},
@@ -45,8 +46,13 @@ async fn main() -> anyhow::Result<()> {
         postgres.database = %settings.postgres.database,
         postgres.pool_size = settings.postgres.pool_size,
         vending.endpoint_url = %settings.vending.endpoint_url,
+        auth.enabled = settings.auth.enabled,
+        auth.issuer = %settings.auth.issuer,
+        auth.audience = %settings.auth.audience,
         "configuration loaded"
     );
+
+    let auth = AuthService::new(&settings.auth).context("failed to initialize authentication")?;
 
     tracing::trace!("creating postgres connection pool");
     let pool = create_pool(&settings.postgres).context("failed to create postgres pool")?;
@@ -79,6 +85,7 @@ async fn main() -> anyhow::Result<()> {
     tracing::trace!("application services initialized");
 
     let api = Router::new()
+        .merge(auth_router())
         .merge(hello_router())
         .merge(vending_router())
         .merge(catalog_router())
@@ -88,6 +95,7 @@ async fn main() -> anyhow::Result<()> {
         .merge(schema_router())
         .merge(table_router())
         .merge(temporary_credentials_router())
+        .layer(middleware::from_fn_with_state(auth, authorize))
         .layer(
             TraceLayer::new_for_http()
                 .make_span_with(|request: &Request<Body>| {
@@ -96,6 +104,7 @@ async fn main() -> anyhow::Result<()> {
                         method = %request.method(),
                         path = request.uri().path(),
                         version = ?request.version(),
+                        principal = tracing::field::Empty,
                     )
                 })
                 .on_request(DefaultOnRequest::new().level(Level::INFO))

@@ -6,6 +6,7 @@ base_url="${UNITYCATALOG_URL:-https://unitycatalog.mizuumi.test}"
 ca="${UNITYCATALOG_CA:-$repo_root/k8s/auth/tls/ca.crt}"
 expected_bucket="${UNITYCATALOG_BUCKET:-unitycatalog}"
 duration_seconds="${UNITYCATALOG_STS_DURATION_SECONDS:-900}"
+auth_token="${UNITYCATALOG_AUTH_TOKEN:-}"
 
 usage() {
   cat <<'EOF'
@@ -20,6 +21,7 @@ Environment overrides:
   UNITYCATALOG_CA                  CA bundle path (default: k8s/auth/tls/ca.crt)
   UNITYCATALOG_BUCKET              Expected bucket (default: unitycatalog)
   UNITYCATALOG_STS_DURATION_SECONDS  STS duration query value (default: 900)
+  UNITYCATALOG_AUTH_TOKEN          Keycloak or bootstrap bearer token (required)
 EOF
 }
 
@@ -40,8 +42,10 @@ for command in curl jq; do
   command -v "$command" >/dev/null || { echo "Missing required command: $command" >&2; exit 1; }
 done
 [[ -f "$ca" ]] || { echo "Missing CA bundle: $ca" >&2; exit 1; }
+[[ -n "$auth_token" ]] || { echo "Set UNITYCATALOG_AUTH_TOKEN." >&2; exit 1; }
 
 response="$(curl --fail --silent --show-error --cacert "$ca" \
+  -H "Authorization: Bearer $auth_token" \
   "$base_url/api/vending/buckets?duration_seconds=$duration_seconds")"
 
 if ! jq -e --arg bucket "$expected_bucket" '.buckets | any(.name == $bucket)' <<<"$response" >/dev/null; then

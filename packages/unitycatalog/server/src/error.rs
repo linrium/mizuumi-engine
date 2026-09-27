@@ -1,9 +1,19 @@
-use axum::{Json, http::StatusCode, response::IntoResponse};
+use axum::{
+    Json,
+    http::{HeaderValue, StatusCode, header},
+    response::IntoResponse,
+};
 use serde::Serialize;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum AppError {
+    #[error("unauthorized: {0}")]
+    Unauthorized(String),
+    #[error("forbidden: {0}")]
+    Forbidden(String),
+    #[error("authentication provider is unavailable")]
+    AuthProviderUnavailable,
     #[error("not found: {0}")]
     NotFound(String),
     #[error("already exists: {0}")]
@@ -33,9 +43,17 @@ struct ErrorBody {
 
 impl IntoResponse for AppError {
     fn into_response(self) -> axum::response::Response {
-        tracing::error!(error = %self, "request failed");
+        match &self {
+            AppError::Unauthorized(_) | AppError::Forbidden(_) => {
+                tracing::warn!(error = %self, "request rejected")
+            }
+            _ => tracing::error!(error = %self, "request failed"),
+        }
 
-        let status = match self {
+        let status = match &self {
+            AppError::Unauthorized(_) => StatusCode::UNAUTHORIZED,
+            AppError::Forbidden(_) => StatusCode::FORBIDDEN,
+            AppError::AuthProviderUnavailable => StatusCode::SERVICE_UNAVAILABLE,
             AppError::NotFound(_) => StatusCode::NOT_FOUND,
             AppError::Conflict(_) => StatusCode::CONFLICT,
             AppError::InvalidParameter(_) => StatusCode::BAD_REQUEST,
@@ -48,12 +66,19 @@ impl IntoResponse for AppError {
             | AppError::S3 => StatusCode::SERVICE_UNAVAILABLE,
         };
 
-        (
+        let mut response = (
             status,
             Json(ErrorBody {
                 error: self.to_string(),
             }),
         )
-            .into_response()
+            .into_response();
+        if status == StatusCode::UNAUTHORIZED {
+            response.headers_mut().insert(
+                header::WWW_AUTHENTICATE,
+                HeaderValue::from_static("Bearer realm=\"unitycatalog\""),
+            );
+        }
+        response
     }
 }

@@ -17,3 +17,14 @@ access_key = "rustfsadmin"
 secret_key = "rustfsadmin"
 duration_seconds = 3600
 force_path_style = true
+
+[auth]
+enabled = true
+issuer = "https://auth.mizuumi.test/realms/sovico"
+audience = "unitycatalog"
+clock_skew_seconds = 30
+bootstrap_enabled = true
+bootstrap_token_file = "bootstrap-token"
+reader_role = "unitycatalog-reader"
+writer_role = "unitycatalog-writer"
+admin_role = "unitycatalog-admin"

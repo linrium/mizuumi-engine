@@ -13,6 +13,7 @@ credentials_secret="${UNITYCATALOG_CREDENTIALS_SECRET:-unitycatalog-credentials}
 unitycatalog_url="${UNITYCATALOG_URL:-https://unitycatalog.mizuumi.test}"
 unitycatalog_ca="${UNITYCATALOG_CA:-$repo_root/k8s/auth/tls/ca.crt}"
 work_dir=""
+auth_token=""
 
 cleanup() {
   [[ -z "$work_dir" ]] || rm -rf "$work_dir"
@@ -70,11 +71,14 @@ curl -fsS --cacert "$unitycatalog_ca" "$unitycatalog_url/health/readyz" >/dev/nu
   echo "Unity Catalog is unavailable at $unitycatalog_url." >&2
   exit 1
 }
+auth_token="$(kubectl -n "$namespace" exec deployment/"$deployment" -c server -- \
+  sh -c 'cat /var/run/unitycatalog/bootstrap-token')"
+[[ -n "$auth_token" ]] || { echo "Unity Catalog bootstrap token is empty." >&2; exit 1; }
 
 ensure_resource() {
   local label="$1" get_path="$2" post_path="$3" payload="$4" status
   status="$(curl -sS --cacert "$unitycatalog_ca" -o "$work_dir/response.json" \
-    -w '%{http_code}' "$base_url$get_path")"
+    -w '%{http_code}' -H "Authorization: Bearer $auth_token" "$base_url$get_path")"
   case "$status" in
     200) return 0 ;;
     404) ;;
@@ -83,6 +87,7 @@ ensure_resource() {
 
   status="$(printf '%s' "$payload" | curl -sS --cacert "$unitycatalog_ca" \
     -o "$work_dir/response.json" -w '%{http_code}' -X POST \
+    -H "Authorization: Bearer $auth_token" \
     -H 'Content-Type: application/json' --data-binary @- "$base_url$post_path")"
   case "$status" in
     200|201) ;;
@@ -121,7 +126,7 @@ done
 run_uc_admin() {
   local output
   if output="$(kubectl -n "$namespace" exec deployment/"$deployment" -c server -- \
-    bin/uc --server http://127.0.0.1:8080 "$@" 2>&1)"; then
+    bin/uc --server http://127.0.0.1:8080 --auth-token "$auth_token" "$@" 2>&1)"; then
     return 0
   fi
   if [[ "$output" == *ALREADY_EXISTS* || "$output" == *"already exists"* ]]; then

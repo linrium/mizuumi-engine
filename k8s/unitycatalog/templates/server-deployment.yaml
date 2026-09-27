@@ -75,6 +75,8 @@ spec:
             - name: trust
               mountPath: /etc/unitycatalog/trust
               readOnly: true
+            - name: runtime
+              mountPath: /var/run/unitycatalog
           readinessProbe:
             httpGet:
               path: /health/readyz
@@ -95,3 +97,5 @@ spec:
         - name: trust
           secret:
             secretName: {{ .Values.server.trustSecretName | quote }}
+        - name: runtime
+          emptyDir: {}

@@ -104,6 +104,26 @@ server_payload='{"clientId":"unitycatalog","enabled":true,"protocol":"openid-con
 server_uuid="$(upsert_client unitycatalog "$server_payload")"
 oauth_client_secret="$(kc GET "/admin/realms/sovico/clients/$server_uuid/client-secret" | jq -er '.value')"
 
+for role in unitycatalog-reader unitycatalog-writer unitycatalog-admin; do
+  role_status="$(curl -sS --cacert "$keycloak_ca" -o "$response_dir/keycloak-role.json" -w '%{http_code}' \
+    -H "Authorization: Bearer $admin_token" \
+    "$keycloak_url/admin/realms/sovico/clients/$server_uuid/roles/$role")"
+  case "$role_status" in
+    200) ;;
+    404)
+      role_payload="$(jq -cn --arg name "$role" '{name:$name}')"
+      kc POST "/admin/realms/sovico/clients/$server_uuid/roles" "$role_payload" >/dev/null
+      ;;
+    *) echo "Could not inspect Keycloak client role $role (HTTP $role_status)." >&2; exit 1 ;;
+  esac
+done
+
+audience_mappers="$(kc GET "/admin/realms/sovico/clients/$server_uuid/protocol-mappers/models")"
+if ! printf '%s' "$audience_mappers" | jq -e 'any(.[]; .name == "unitycatalog-audience")' >/dev/null; then
+  audience_payload='{"name":"unitycatalog-audience","protocol":"openid-connect","protocolMapper":"oidc-audience-mapper","consentRequired":false,"config":{"included.client.audience":"unitycatalog","access.token.claim":"true","id.token.claim":"false"}}'
+  kc POST "/admin/realms/sovico/clients/$server_uuid/protocol-mappers/models" "$audience_payload" >/dev/null
+fi
+
 # Remove the obsolete browser client from earlier UI-enabled installations.
 old_ui_clients="$(kc GET '/admin/realms/sovico/clients?clientId=unitycatalog-ui')"
 while IFS= read -r old_ui_uuid; do
@@ -115,6 +135,8 @@ user_id="$(printf '%s' "$users" | jq -er '[.[] | select(.username == "khaopad")]
 current_user="$(kc GET "/admin/realms/sovico/users/$user_id")"
 updated_user="$(printf '%s' "$current_user" | jq -c --arg email "$uc_email" '.email=$email | .emailVerified=true')"
 kc PUT "/admin/realms/sovico/users/$user_id" "$updated_user" >/dev/null
+admin_role="$(kc GET "/admin/realms/sovico/clients/$server_uuid/roles/unitycatalog-admin")"
+kc POST "/admin/realms/sovico/users/$user_id/role-mappings/clients/$server_uuid" "[$admin_role]" >/dev/null
 
 vault() {
   local method="$1" path="$2"

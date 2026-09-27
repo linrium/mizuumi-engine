@@ -1,3 +1,4 @@
+pub mod auth;
 pub mod catalogs;
 pub mod credentials;
 pub mod external_locations;

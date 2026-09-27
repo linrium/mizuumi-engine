@@ -15,6 +15,17 @@ server:
     limits:
       memory: 512Mi
 
+auth:
+  enabled: true
+  issuer: https://auth.mizuumi.test/realms/sovico
+  audience: unitycatalog
+  caCertificatePath: /etc/unitycatalog/trust/keycloak-ca.crt
+  bootstrapEnabled: true
+  bootstrapTokenFile: /var/run/unitycatalog/bootstrap-token
+  readerRole: unitycatalog-reader
+  writerRole: unitycatalog-writer
+  adminRole: unitycatalog-admin
+
 service:
   type: ClusterIP
   port: 8080

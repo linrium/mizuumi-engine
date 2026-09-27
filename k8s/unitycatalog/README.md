@@ -53,3 +53,32 @@ RustFS S3/API:    https://api.storage.mizuumi.test
 ```
 
 The checked-in `packages/unitycatalog/server/config.toml` uses the public RustFS URL for local runs. The chart overrides runtime config through `UNITYCATALOG__...` environment variables and the generated ConfigMap.
+
+## Keycloak authentication and authorization
+
+All routes except `/health/livez` and `/health/readyz` require a bearer token. The server accepts RS256 access tokens issued by the `sovico` realm for the `unitycatalog` audience and refreshes Keycloak's JWKS when it sees an unknown signing key. The Keycloak bootstrap creates these client roles:
+
+| Role | Access |
+| --- | --- |
+| `unitycatalog-reader` | `GET`, `HEAD`, and `OPTIONS` API requests |
+| `unitycatalog-writer` | Read access and API mutations except permission management |
+| `unitycatalog-admin` | Full access, including `/permissions/...` |
+
+Roles may be present as realm roles or as client roles under `resource_access.unitycatalog`. Human principals use their verified token email (then username, then subject) as their ID. Keycloak service-account tokens use the service client ID. Inspect the current mapping with `GET /api/auth/me`.
+
+At first startup the server generates a 256-bit bootstrap token in `/var/run/unitycatalog/bootstrap-token` with mode `0600`. It has admin access and is intended only for initial provisioning. Retrieve it locally when needed:
+
+```sh
+kubectl -n tower exec deployment/unitycatalog-server -c server -- \
+  cat /var/run/unitycatalog/bootstrap-token
+```
+
+The token changes when the pod is replaced because the runtime volume is ephemeral. For a controlled external secret, set `UNITYCATALOG__AUTH__BOOTSTRAP_TOKEN`. After provisioning Keycloak administrators, disable bootstrap access with `UNITYCATALOG__AUTH__BOOTSTRAP_ENABLED=false`.
+
+Run the end-to-end authentication check after bootstrapping and deploying:
+
+```sh
+./scripts/test_unitycatalog_auth.sh
+```
+
+The test creates temporary human-reader and service-writer principals in Keycloak, verifies authentication, authorization, and bootstrap access, then deletes them.
