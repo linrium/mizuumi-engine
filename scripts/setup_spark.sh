@@ -137,6 +137,8 @@ java_home="$(java -XshowSettings:properties -version 2>&1 |
 cp "$java_home/lib/security/cacerts" "$work_dir/cacerts"
 keytool -importcert -noprompt -storepass changeit -keystore "$work_dir/cacerts" \
   -alias mizuumi-rustfs -file "$repo_root/k8s/storage/tls/ca.crt" >/dev/null
+keytool -importcert -noprompt -storepass changeit -keystore "$work_dir/cacerts" \
+  -alias mizuumi-keycloak -file "$repo_root/k8s/auth/tls/ca.crt" >/dev/null
 
 credentials_file="$work_dir/credentials.env"
 umask 077

@@ -22,6 +22,14 @@ image already available to the cluster:
 SPARK_BUILD_IMAGE=false ./scripts/setup_spark_managed.sh
 ```
 
+The managed deployment uses Unity Catalog Spark connector `0.6.0` because its
+OAuth provider supports the Keycloak `openid` scope. The Spark catalog uses the
+connector's OAuth client-credentials provider with
+the `unitycatalog-spark` Keycloak service principal. The provider renews the
+Unity Catalog access token before it expires, so catalog requests and storage
+credential renewal can continue during long-running jobs. The example's direct
+table-metadata check requests its own fresh token when it runs.
+
 Watch the job and inspect its output with:
 
 ```bash

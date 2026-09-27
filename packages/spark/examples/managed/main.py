@@ -21,10 +21,15 @@ def required_env(name: str) -> str:
     return value
 
 
-def service_principal_token() -> str:
+def keycloak_token_url() -> str:
     token_url = required_env("KEYCLOAK_TOKEN_URL")
     if not token_url.startswith("https://"):
         raise RuntimeError("KEYCLOAK_TOKEN_URL must use https://")
+    return token_url
+
+
+def service_principal_token() -> str:
+    token_url = keycloak_token_url()
 
     ca_certificate = required_env("KEYCLOAK_CA_CERT")
     if not os.path.isfile(ca_certificate):
@@ -64,13 +69,14 @@ def service_principal_token() -> str:
     return token
 
 
-def verify_managed_table(catalog_uri: str, table_name: str, token: str) -> str:
+def verify_managed_table(catalog_uri: str, table_name: str) -> str:
     table_url = (
         f"{catalog_uri.rstrip('/')}/api/2.1/unity-catalog/tables/"
         f"{parse.quote(table_name, safe='')}"
     )
     table_request = request.Request(
-        table_url, headers={"Authorization": f"Bearer {token}"}
+        table_url,
+        headers={"Authorization": f"Bearer {service_principal_token()}"},
     )
     try:
         with request.urlopen(table_request, timeout=15) as response:
@@ -89,12 +95,19 @@ def main() -> None:
     catalog = required_env("UNITY_CATALOG_NAME")
     if not IDENTIFIER.fullmatch(catalog):
         raise RuntimeError(f"Invalid catalog name: {catalog!r}")
-    token = service_principal_token()
+    token_url = keycloak_token_url()
+    client_id = required_env("KEYCLOAK_CLIENT_ID")
+    client_secret = required_env("KEYCLOAK_CLIENT_SECRET")
 
     spark = SparkSession.builder.appName("unity-catalog-managed-example").getOrCreate()
     try:
         spark.sparkContext.setLogLevel("WARN")
-        spark.conf.set(f"spark.sql.catalog.{catalog}.token", token)
+        catalog_conf = f"spark.sql.catalog.{catalog}.auth"
+        spark.conf.set(f"{catalog_conf}.type", "oauth")
+        spark.conf.set(f"{catalog_conf}.oauth.uri", token_url)
+        spark.conf.set(f"{catalog_conf}.oauth.clientId", client_id)
+        spark.conf.set(f"{catalog_conf}.oauth.clientSecret", client_secret)
+        spark.conf.set(f"{catalog_conf}.oauth.scope", "openid")
 
         table_name = f"{catalog}.demo.orders"
         # Omitting LOCATION asks Unity Catalog to allocate managed storage.
@@ -103,7 +116,7 @@ def main() -> None:
             "order_id BIGINT, product STRING, quantity INT) USING DELTA"
         )
         location = verify_managed_table(
-            spark.conf.get(f"spark.sql.catalog.{catalog}.uri"), table_name, token
+            spark.conf.get(f"spark.sql.catalog.{catalog}.uri"), table_name
         )
 
         spark.sql(

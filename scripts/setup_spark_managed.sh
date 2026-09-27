@@ -27,4 +27,5 @@ export SPARK_APPLICATION_SCRIPT_MOUNT_PATH=/opt/spark/work-dir/examples/managed
 exec "$repo_root/scripts/setup_spark.sh" \
   --set-string application.name=unity-catalog-managed \
   --set-string application.mainApplicationFile=local:///opt/spark/work-dir/examples/managed/main.py \
+  --values "$repo_root/k8s/spark/managed-values.yaml" \
   "$@"

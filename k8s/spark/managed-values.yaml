@@ -1,0 +1,5 @@
+spark:
+  packages:
+    - io.delta:delta-spark_4.0_2.13:4.3.1
+    - io.unitycatalog:unitycatalog-spark_4.0_2.13:0.6.0
+    - org.apache.hadoop:hadoop-aws:3.4.1
