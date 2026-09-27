@@ -37,7 +37,8 @@ Client                                      Rust UC / PostgreSQL          Object
   |    and finalize stage in one DB transaction    | (uc_tables)               |
   |<-- TableInfo -----------------------------------|                           |
   |                                                |                           |
-  |-- write later staged Delta commit file ----------------------------->|
+  |   Optional later catalog-managed Delta write: |                           |
+  |-- write staged Delta commit file ----------------------------------->|
   |-- POST /delta/preview/commits ---------------->| (uc_delta_commits)        |
   |-- publish/backfill that file --------------------------------------->|
   |-- POST /delta/preview/commits ---------------->| mark version backfilled   |
@@ -91,30 +92,54 @@ export UC_TABLE='managed_orders'
        -H 'Content-Type: application/json' --data-binary @- "$UC_API/tables" | jq .
    ```
 
-   The response's `table_id` should equal `TABLE_ID`. When `data_source_format` is omitted for a managed table, the Rust server defaults it to `DELTA`.
+   The response's `table_id` should equal `TABLE_ID`. When `data_source_format` is omitted for a managed table, the Rust server defaults it to `DELTA`. This API example registers a UC-managed table; it does not by itself create a Delta `catalogManaged`-enabled log or prove compatibility with a coordinator-aware engine.
 
 4. Read the registered metadata with `GET /tables/<catalog>.<schema>.<table>`. A non-admin caller needs the parent catalog/schema grants and a table grant such as `SELECT`; creating the table does not currently grant those automatically.
 
 ## What are Delta commits, and do I need them?
 
-A Delta table is more than a set of data files. Its `_delta_log` records each change as a numbered **version**: which data files were added or removed, plus any schema or table-property changes. A reader uses that log to determine the table's current contents. A *Delta commit* is one such version of the log, not a new Unity Catalog table.
+A Delta table is more than a set of Parquet data files. Its `_delta_log` records each change as a numbered **version**: which data files were added or removed, plus any schema or table-property changes. A reader uses that log to determine the table's contents. A *Delta commit* is one such version of the log, not a new Unity Catalog table.
 
-The managed-table creation calls above register the table's identity and location. They do not commit each later change to its data. The experimental `/delta/preview/commits` API is for a client that uses Unity Catalog as its **Delta commit coordinator**: it tells the server about a new log version so the server can enforce sequential version numbers and reject a conflicting version. The server keeps the commit's file name and metadata in PostgreSQL so clients can discover commits that have not yet been published to the regular Delta log.
+There are two different meanings of *managed* here:
 
-For example:
+- Unity Catalog `table_type: "MANAGED"` means UC allocates the table's storage location. That is what the staging and table-creation calls above establish.
+- Delta's `catalogManaged` table feature means a compatible writer and reader use a catalog to coordinate and discover commits. Setting the UC table type alone does **not** enable that Delta feature or cause an engine to call `/delta/preview/commits`.
+
+The experimental `/delta/preview/commits` API is for clients using UC as a **commit coordinator**. That means a writer stages a new Delta log file, asks UC to accept it as the next table-wide version, and later publishes it into the ordinary numbered `_delta_log`. UC stores the accepted file name and version in PostgreSQL; a coordinator-aware reader can query UC for commits not yet published to the ordinary log. Clients that use the regular filesystem-based Delta protocol instead commit directly to `_delta_log` and do not use this endpoint. See [Delta's catalog-managed table overview](https://docs.delta.io/delta-catalog-managed-tables/) for the protocol distinction.
+
+### Concrete example: two writers and one insert
+
+Suppose `orders` has version 0 at `s3://warehouse/tables/orders-123`. Writer A inserts order 101:
 
 ```text
-Version 0: client creates the initial Delta log at the staged table location
-           and finalizes the MANAGED table through POST /tables.
-Version 1: client writes a new, uniquely named commit file to object storage;
-           POST /delta/preview/commits records its name and version in UC.
-Backfill:  client publishes that commit into the regular numbered Delta log;
-           POST /delta/preview/commits marks version 1 as backfilled.
+1. A writes a Parquet data file, e.g. part-A.parquet.
+2. A writes a uniquely named staged Delta commit file for version 1. Its
+   contents include an "add part-A.parquet" action.
+3. A calls POST /delta/preview/commits with version 1 and that file name.
+   UC accepts version 1; the ordinary _delta_log/00000000000000000001.json
+   may not exist yet.
+4. A publishes the staged commit as that ordinary numbered log file.
+5. Only after publication succeeds, A reports latest_backfilled_version: 1
+   to UC. The Parquet data file is not copied during this step.
 ```
 
-Here, **backfill** means copying or publishing a coordinator-tracked commit into the ordinary Delta log, then telling UC it no longer needs to list that commit as pending. `GET /delta/preview/commits` returns those pending (unbackfilled) commits. Neither POST nor GET uploads or publishes files: the client does the object-storage work. This Rust server also does not verify that the referenced file exists.
+Version numbers belong to the **table**, not to each writer. If writer B also started from version 0 and submits a *different* version 1 after A's commit was accepted, UC rejects B's attempt. B must read A's commit, check for conflicts, and retry its own change as version 2. UC permits an idempotent retry of A's already-accepted version and file name.
 
-You do **not** need this endpoint merely to create a managed table, and it does not apply to `EXTERNAL`, `VIEW`, or other non-managed/non-Delta table types. Use it only if your Delta writer is integrated with this coordinator protocol; a client that manages its own Delta log writes does not gain anything by posting commit metadata here. Do not treat a successful POST as proof that data files or a readable Delta log were created.
+**Backfill** here means publishing an accepted staged *log file* into the ordinary numbered `_delta_log`, then telling UC it is published. It is not a bulk reload or copy of the Parquet data. Until then, coordinator-aware readers can discover the pending commit through `GET /delta/preview/commits`, while readers using only the ordinary log might not see it. Publishing also clears UC's pending list; this Rust server limits a table to 10 unbackfilled commits. Never mark a version backfilled before confirming publication.
+
+The Rust server records and orders commits; it does **not** upload, publish, or verify the staged log or data files. A successful API response alone does not prove that a readable Delta table exists. You do **not** need this endpoint merely to create a UC-managed table. Its current implementation accepts only a `MANAGED` Delta table, not `EXTERNAL`, `VIEW`, or other table types.
+
+### Which engines use this flow?
+
+An engine is a *writer* when it writes Delta data, but that does not mean it uses UC-coordinated commits:
+
+| Engine | In this project or current documentation |
+| --- | --- |
+| Spark | The repo's [minimal example](../packages/spark/examples/minimal/main.py) uses `USING DELTA LOCATION` and `INSERT OVERWRITE`: it writes external Delta tables and does not call our staging or commit endpoints. Delta Lake supports catalog-managed commits when a compatible catalog, engine, and table feature are configured ([Delta docs](https://docs.delta.io/delta-catalog-managed-tables/)). |
+| Daft | `write_deltalake` can target a Unity Catalog table, but its published API does not establish that it uses this UC commit coordinator; do not assume it calls our endpoint ([Daft API](https://docs.daft.ai/en/stable/api/dataframe/)). |
+| DuckDB | Its Unity Catalog extension supports `INSERT` and says it uses catalog-managed commits when a table requires them, but does not currently support `CREATE TABLE` there ([DuckDB docs](https://duckdb.org/docs/current/core_extensions/unity_catalog)). Compatibility with this Rust server has not been tested. |
+
+If you need coordinated commits across engines, verify that the created Delta log enables `catalogManaged`, that each engine supports it, and that each engine works with this server's experimental endpoint. A UC `MANAGED` registration by itself is insufficient.
 
 ## Subsequent Delta commits
 
