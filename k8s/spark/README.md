@@ -9,23 +9,27 @@ the Secret-backed environment into driver and executor pods.
 
 The setup runs `scripts/init_spark_catalog.sh` to create the Bronze, Silver,
 and Gold schemas through the Unity Catalog CLI and grant access to the RustFS
-external location. Spark receives a short-lived RustFS STS session from the
-setup script instead of mounting the underlying long-lived S3 identity.
+external location. The driver authenticates as the dedicated
+`unitycatalog-spark` Keycloak service principal and receives short-lived
+Keycloak and RustFS credentials instead of a human token or long-lived S3
+identity.
 
 Unity Catalog-to-RustFS automatic credential vending is not enabled here:
 RustFS `1.0.0` currently rejects the request emitted by the Unity Catalog
 `0.6.0` Java STS client, although its STS endpoint works with standard CLI
 clients. Re-run setup to rotate the Spark session before its one-hour expiry.
 
-Install Unity Catalog first, then run:
+Bootstrap and install Unity Catalog first, then run:
 
 ```sh
-export UNITYCATALOG_USER_TOKEN='<access_token from bin/uc auth login>'
+./scripts/bootstrap_unitycatalog.sh
+./scripts/setup_unitycatalog.sh
 ./scripts/setup_spark.sh
 ```
 
-Spark setup is intentionally separate from `scripts/bootstrap.sh` because the
-user-token login requires an interactive browser.
+Spark setup reads the generated service-principal client ID and secret from
+`tower/unitycatalog-credentials`. Only the driver receives the secret and
+exchanges it at the canonical Keycloak token endpoint.
 
 The script builds `packages/spark/Dockerfile`, imports the image into common
 local Kubernetes runtimes, installs the operator, synchronizes runtime
@@ -39,18 +43,6 @@ SPARK_IMAGE_TAG=4.0.1 ./scripts/setup_spark.sh
 
 Set `SPARK_BUILD_IMAGE=false` when that image is already available. Additional
 arguments are passed to this chart's `helm upgrade --install` command.
-
-Generate the user token with the Unity Catalog CLI:
-
-```sh
-export UNITYCATALOG_USER_TOKEN="$(
-  bin/uc auth login --output jsonPretty | jq -r .access_token
-)"
-```
-
-You can alternatively put the raw token in a protected file and set
-`UNITYCATALOG_USER_TOKEN_FILE`. Tokens expire; rerun login and setup before
-submitting a job with an expired token.
 
 Inspect a run with:
 

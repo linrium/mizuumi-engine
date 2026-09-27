@@ -14,6 +14,7 @@ build_image="${SPARK_BUILD_IMAGE:-true}"
 uc_namespace="${UNITYCATALOG_NAMESPACE:-tower}"
 uc_release="${UNITYCATALOG_RELEASE:-unitycatalog}"
 credentials_secret="${SPARK_CREDENTIALS_SECRET:-spark-runtime-credentials}"
+uc_credentials_secret="${UNITYCATALOG_CREDENTIALS_SECRET:-unitycatalog-credentials}"
 trust_secret="${SPARK_TRUST_SECRET:-spark-rustfs-trust}"
 catalog="${SPARK_UNITY_CATALOG:-unity}"
 storage_root="${SPARK_UNITY_STORAGE_ROOT:-s3://unitycatalog/spark}"
@@ -39,9 +40,8 @@ Environment overrides:
   SPARK_BUILD_IMAGE         Build/import the image (default: true)
   SPARK_NAMESPACE           Spark job namespace (default: spark)
   SPARK_OPERATOR_NAMESPACE  Operator namespace (default: spark-operator)
-  UNITYCATALOG_USER_TOKEN   Token returned by `bin/uc auth login`
-  UNITYCATALOG_USER_TOKEN_FILE  File containing that user token
-  If neither is set, an existing Spark runtime Secret is reused.
+  UNITYCATALOG_CREDENTIALS_SECRET  Source Secret containing the Keycloak
+                              service principal (default: unitycatalog-credentials)
 EOF
 }
 
@@ -73,30 +73,25 @@ if [[ -z "$uc_deployment" ]]; then
   echo "Unity Catalog is not installed. Run ./scripts/setup_unitycatalog.sh first." >&2
   exit 1
 fi
-"$repo_root/scripts/init_spark_catalog.sh"
-if [[ -n "${UNITYCATALOG_USER_TOKEN:-}" ]]; then
-  uc_token="$UNITYCATALOG_USER_TOKEN"
-elif [[ -n "${UNITYCATALOG_USER_TOKEN_FILE:-}" ]]; then
-  [[ -f "$UNITYCATALOG_USER_TOKEN_FILE" ]] || {
-    echo "Unity Catalog token file does not exist: $UNITYCATALOG_USER_TOKEN_FILE" >&2
-    exit 1
-  }
-  uc_token="$(<"$UNITYCATALOG_USER_TOKEN_FILE")"
-elif kubectl -n "$job_namespace" get secret "$credentials_secret" >/dev/null 2>&1; then
-  uc_token="$(kubectl -n "$job_namespace" get secret "$credentials_secret" \
-    -o jsonpath='{.data.UNITY_CATALOG_TOKEN}' | base64 --decode)"
-else
-  echo "Set UNITYCATALOG_USER_TOKEN or UNITYCATALOG_USER_TOKEN_FILE." >&2
-  echo "Obtain a user token with: bin/uc auth login --output jsonPretty" >&2
-  exit 1
-fi
-[[ -n "$uc_token" ]] || { echo "Unity Catalog user token is empty." >&2; exit 1; }
-[[ "$uc_token" != *$'\n'* && "$uc_token" != *$'\r'* ]] || {
-  echo "Unity Catalog user token must be a single line." >&2
+kubectl -n "$uc_namespace" get secret "$uc_credentials_secret" >/dev/null 2>&1 || {
+  echo "Missing $uc_namespace/$uc_credentials_secret; rerun Unity Catalog bootstrap and setup." >&2
   exit 1
 }
+keycloak_client_id="$(kubectl -n "$uc_namespace" get secret "$uc_credentials_secret" \
+  -o jsonpath='{.data.KEYCLOAK_CLIENT_ID}' | base64 --decode)"
+keycloak_client_secret="$(kubectl -n "$uc_namespace" get secret "$uc_credentials_secret" \
+  -o jsonpath='{.data.KEYCLOAK_CLIENT_SECRET}' | base64 --decode)"
+[[ -n "$keycloak_client_id" && -n "$keycloak_client_secret" ]] || {
+  echo "Keycloak Spark service-principal credentials are missing; rerun ./scripts/bootstrap_unitycatalog.sh and ./scripts/setup_unitycatalog.sh." >&2
+  exit 1
+}
+UNITYCATALOG_PRINCIPAL="$keycloak_client_id" "$repo_root/scripts/init_spark_catalog.sh"
 [[ -f "$repo_root/k8s/storage/tls/ca.crt" ]] || {
   echo "Missing RustFS CA. Run ./scripts/setup_storage.sh first." >&2
+  exit 1
+}
+[[ -f "$repo_root/k8s/auth/tls/ca.crt" ]] || {
+  echo "Missing Keycloak CA. Run ./scripts/setup_auth.sh first." >&2
   exit 1
 }
 
@@ -131,15 +126,17 @@ keytool -importcert -noprompt -storepass changeit -keystore "$work_dir/cacerts" 
 
 credentials_file="$work_dir/credentials.env"
 umask 077
-printf 'UNITY_CATALOG_TOKEN=%s\n' "$uc_token" > "$credentials_file"
+printf 'KEYCLOAK_CLIENT_ID=%s\n' "$keycloak_client_id" > "$credentials_file"
+printf 'KEYCLOAK_CLIENT_SECRET=%s\n' "$keycloak_client_secret" >> "$credentials_file"
 printf 'UNITY_CATALOG_NAME=%s\n' "$catalog" >> "$credentials_file"
-unset uc_token
+unset keycloak_client_secret
 kubectl -n "$job_namespace" create secret generic "$credentials_secret" \
   --from-env-file="$credentials_file" \
   --dry-run=client -o yaml | kubectl apply -f - >/dev/null
 
 kubectl -n "$job_namespace" create secret generic "$trust_secret" \
   --from-file=cacerts="$work_dir/cacerts" \
+  --from-file=keycloak-ca.crt="$repo_root/k8s/auth/tls/ca.crt" \
   --dry-run=client -o yaml | kubectl apply -f - >/dev/null
 
 helm repo add spark-operator https://kubeflow.github.io/spark-operator --force-update

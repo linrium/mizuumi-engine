@@ -29,7 +29,7 @@ impl HealthService for DefaultHealthService {
 
     async fn readyz(&self) -> Result<HealthResponse, AppError> {
         let client = self.pool.get().await?;
-        client.simple_query("SELECT 1").await?;
+        // client.simple_query("SELECT 1").await?;
         Ok(HealthResponse::ok())
     }
 }

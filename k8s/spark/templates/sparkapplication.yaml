@@ -51,11 +51,20 @@ spec:
       -Djavax.net.ssl.trustStore=/opt/spark/trust/cacerts
       -Djavax.net.ssl.trustStorePassword=changeit
     env:
-      - name: UNITY_CATALOG_TOKEN
+      - name: KEYCLOAK_CLIENT_ID
         valueFrom:
           secretKeyRef:
             name: {{ .Values.credentialsSecretName }}
-            key: UNITY_CATALOG_TOKEN
+            key: KEYCLOAK_CLIENT_ID
+      - name: KEYCLOAK_CLIENT_SECRET
+        valueFrom:
+          secretKeyRef:
+            name: {{ .Values.credentialsSecretName }}
+            key: KEYCLOAK_CLIENT_SECRET
+      - name: KEYCLOAK_TOKEN_URL
+        value: {{ .Values.keycloak.tokenUrl | quote }}
+      - name: KEYCLOAK_CA_CERT
+        value: {{ .Values.keycloak.caCertificatePath | quote }}
       - name: UNITY_CATALOG_NAME
         valueFrom:
           secretKeyRef:

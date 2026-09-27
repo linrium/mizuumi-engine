@@ -7,6 +7,10 @@ serviceAccountName: spark-operator-spark
 credentialsSecretName: spark-runtime-credentials
 trustSecretName: spark-rustfs-trust
 
+keycloak:
+  tokenUrl: https://auth.mizuumi.test/realms/sovico/protocol/openid-connect/token
+  caCertificatePath: /opt/spark/trust/keycloak-ca.crt
+
 spark:
   version: "4.0.1"
   scalaVersion: "2.13"

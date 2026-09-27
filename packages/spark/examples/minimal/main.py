@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
+import ssl
+from urllib import error, parse, request
 
 from pyspark.sql import DataFrame, SparkSession, functions as F
 
@@ -22,6 +25,54 @@ def checked_identifier(value: str, label: str) -> str:
     if not IDENTIFIER.fullmatch(value):
         raise RuntimeError(f"{label} is not a valid Spark identifier: {value!r}")
     return value
+
+
+def service_principal_token() -> str:
+    """Exchange the Spark service principal for a short-lived Keycloak token."""
+    token_url = required_env("KEYCLOAK_TOKEN_URL")
+    if not token_url.startswith("https://"):
+        raise RuntimeError("KEYCLOAK_TOKEN_URL must use https://")
+
+    client_id = required_env("KEYCLOAK_CLIENT_ID")
+    client_secret = required_env("KEYCLOAK_CLIENT_SECRET")
+    ca_certificate = required_env("KEYCLOAK_CA_CERT")
+    if not os.path.isfile(ca_certificate):
+        raise RuntimeError(f"KEYCLOAK_CA_CERT does not exist: {ca_certificate}")
+
+    payload = parse.urlencode(
+        {
+            "grant_type": "client_credentials",
+            "client_id": client_id,
+            "client_secret": client_secret,
+        }
+    ).encode("ascii")
+    token_request = request.Request(
+        token_url,
+        data=payload,
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        method="POST",
+    )
+    try:
+        with request.urlopen(
+            token_request,
+            context=ssl.create_default_context(cafile=ca_certificate),
+            timeout=15,
+        ) as response:
+            token_response = json.load(response)
+    except error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(
+            f"Keycloak token request failed with HTTP {exc.code}: {detail}"
+        ) from exc
+    except (error.URLError, OSError, ValueError) as exc:
+        raise RuntimeError(f"Keycloak token request failed: {exc}") from exc
+
+    if not isinstance(token_response, dict):
+        raise RuntimeError("Keycloak token response was not a JSON object")
+    token = token_response.get("access_token")
+    if not isinstance(token, str) or not token:
+        raise RuntimeError("Keycloak token response did not contain an access_token")
+    return token
 
 
 def write_external_delta(
@@ -49,7 +100,7 @@ def write_external_delta(
 
 def main() -> None:
     catalog = checked_identifier(required_env("UNITY_CATALOG_NAME"), "catalog")
-    token = required_env("UNITY_CATALOG_TOKEN")
+    token = service_principal_token()
     storage_root = required_env("UNITY_STORAGE_ROOT").rstrip("/")
     if not storage_root.startswith("s3://"):
         raise RuntimeError("UNITY_STORAGE_ROOT must be an s3:// URI")
@@ -57,8 +108,8 @@ def main() -> None:
     spark = SparkSession.builder.appName("unity-catalog-rustfs-example").getOrCreate()
     spark.sparkContext.setLogLevel("WARN")
 
-    # The catalog is initialized lazily, so the token can come from a Kubernetes
-    # Secret without embedding it in the SparkApplication or Spark event logs.
+    # The catalog is initialized lazily. Exchange the client secret only in the
+    # driver and pass the resulting short-lived access token to the connector.
     spark.conf.set(f"spark.sql.catalog.{catalog}.token", token)
 
     orders = spark.createDataFrame(

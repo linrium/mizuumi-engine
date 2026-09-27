@@ -5,7 +5,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 namespace="${UNITYCATALOG_NAMESPACE:-tower}"
 release="${UNITYCATALOG_RELEASE:-unitycatalog}"
 catalog="${SPARK_UNITY_CATALOG:-unity}"
-principal="${UNITYCATALOG_USER_EMAIL:-khaopad@mizuumi.test}"
+principal="${UNITYCATALOG_PRINCIPAL:-unitycatalog-spark}"
 storage_root="${SPARK_UNITY_STORAGE_ROOT:-s3://unitycatalog/spark}"
 credential="${SPARK_UNITY_CREDENTIAL:-rustfs_unitycatalog}"
 location="${SPARK_UNITY_EXTERNAL_LOCATION:-rustfs_spark}"
@@ -30,7 +30,7 @@ location, bronze/silver/gold schemas, and grants used by the Spark example.
 Environment overrides:
   UNITYCATALOG_NAMESPACE          Unity Catalog namespace (default: tower)
   UNITYCATALOG_RELEASE            Unity Catalog Helm release (default: unitycatalog)
-  UNITYCATALOG_USER_EMAIL         Principal receiving access
+  UNITYCATALOG_PRINCIPAL          Principal receiving access (default: unitycatalog-spark)
   SPARK_UNITY_CATALOG             Catalog name (default: unity)
   SPARK_UNITY_STORAGE_ROOT        RustFS URI prefix (default: s3://unitycatalog/spark)
   SPARK_UNITY_CREDENTIAL          Storage credential name

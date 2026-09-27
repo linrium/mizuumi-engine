@@ -7,7 +7,8 @@ RustFS.
 
 The example is intentionally small, but it exercises the complete integration:
 
-1. Spark authenticates to Unity Catalog with a user token.
+1. Spark exchanges its Keycloak service-principal credential for a short-lived
+   Unity Catalog access token.
 2. Spark creates or loads external Delta tables through the Unity Catalog Spark
    connector.
 3. Unity Catalog requests temporary STS credentials from RustFS for the table
@@ -67,7 +68,8 @@ The authentication and credential-vending flow is:
   Kubernetes Secret
   spark-runtime-credentials
   +-------------------------+
-  | UNITY_CATALOG_TOKEN     |
+  | KEYCLOAK_CLIENT_ID      |
+  | KEYCLOAK_CLIENT_SECRET  |
   | UNITY_CATALOG_NAME      |
   +------------+------------+
                |
@@ -75,8 +77,8 @@ The authentication and credential-vending flow is:
                v
   +------------+------------+                         +----------------------+
   | Spark driver            |                         | Unity Catalog server |
-  |                         |  1. Bearer user token   |                      |
-  | Unity Catalog connector +------------------------>| authenticate request |
+  | client-credentials      |  1. Bearer token        |                      |
+  | token + UC connector    +------------------------>| authenticate request |
   | UCSingleCatalog         |                         | authorize operation  |
   +------------+------------+                         +----------+-----------+
                ^                                                 |
@@ -109,7 +111,7 @@ The authentication and credential-vending flow is:
 
   Spark pods receive                 Unity Catalog alone holds
   +----------------------------+     +-------------------------------+
-  | Unity Catalog user token   |     | RustFS service-account key    |
+  | Keycloak client credential |     | RustFS service-account key    |
   | vended temporary STS keys  |     | used only to call RustFS STS  |
   +----------------------------+     +-------------------------------+
 
@@ -166,8 +168,11 @@ operation.
 
 The Spark driver receives these environment variables:
 
-- `UNITY_CATALOG_TOKEN`: user token from the `spark-runtime-credentials`
+- `KEYCLOAK_CLIENT_ID` and `KEYCLOAK_CLIENT_SECRET`: the dedicated
+  `unitycatalog-spark` service principal from the `spark-runtime-credentials`
   Kubernetes Secret.
+- `KEYCLOAK_TOKEN_URL` and `KEYCLOAK_CA_CERT`: the canonical token endpoint
+  and its CA certificate.
 - `UNITY_CATALOG_NAME`: catalog name, normally `unity`.
 - `UNITY_STORAGE_ROOT`: external table prefix, normally
   `s3://unitycatalog/spark`.
@@ -203,7 +208,8 @@ The local platform must already have the following components running:
 - Unity Catalog in the `tower` namespace.
 - A Unity Catalog RustFS service account stored in
   `tower/unitycatalog-credentials`.
-- A Unity Catalog user token supplied on the first deployment.
+- The `unitycatalog-spark` Keycloak service principal created by
+  `scripts/bootstrap_unitycatalog.sh`.
 - Docker, Helm, `kubectl`, Java, `keytool`, `curl`, and `jq` on the workstation.
 
 The setup uses `https://unitycatalog.mizuumi.test` and validates it with
@@ -229,7 +235,7 @@ The initializer is idempotent. It creates or verifies:
 Common overrides include:
 
 ```bash
-UNITYCATALOG_USER_EMAIL=user@example.com \
+UNITYCATALOG_PRINCIPAL=unitycatalog-spark \
 SPARK_UNITY_CATALOG=unity \
 SPARK_UNITY_STORAGE_ROOT=s3://unitycatalog/spark \
 ./scripts/init_spark_catalog.sh
@@ -237,16 +243,12 @@ SPARK_UNITY_STORAGE_ROOT=s3://unitycatalog/spark \
 
 ## Deploy and run
 
-On the first run, pass a Unity Catalog user token directly or through a file:
+Bootstrap and deploy Unity Catalog once so the Spark service principal is
+available, then deploy Spark:
 
 ```bash
-UNITYCATALOG_USER_TOKEN='token-value' ./scripts/setup_spark.sh
-```
-
-or:
-
-```bash
-UNITYCATALOG_USER_TOKEN_FILE=/secure/path/unitycatalog.token \
+./scripts/bootstrap_unitycatalog.sh
+./scripts/setup_unitycatalog.sh
 ./scripts/setup_spark.sh
 ```
 
@@ -259,8 +261,9 @@ The setup script performs the complete deployment:
 5. Installs or upgrades Kubeflow Spark Operator.
 6. Installs the Spark Helm chart and submits `unity-catalog-rustfs`.
 
-After the first deployment, the script can reuse the user token already stored
-in `spark/spark-runtime-credentials`:
+The setup copies the service-principal credential into
+`spark/spark-runtime-credentials`. The driver exchanges it for a fresh,
+short-lived Keycloak access token whenever the application starts:
 
 ```bash
 ./scripts/setup_spark.sh
@@ -313,10 +316,12 @@ The expected state is `COMPLETED`.
 List the registered tables through the Unity Catalog API:
 
 ```bash
+UNITYCATALOG_AUTH_TOKEN="$(kubectl -n tower exec deployment/unitycatalog-server -c server -- \
+  cat /var/run/unitycatalog/bootstrap-token)"
 for schema in bronze silver gold; do
   curl --fail --silent --show-error \
     --cacert k8s/auth/tls/ca.crt \
-    -H "Authorization: Bearer $UNITYCATALOG_USER_TOKEN" \
+    -H "Authorization: Bearer $UNITYCATALOG_AUTH_TOKEN" \
     "https://unitycatalog.mizuumi.test/api/2.1/unity-catalog/tables?catalog_name=unity&schema_name=$schema"
 done
 ```
@@ -345,8 +350,7 @@ overrides for `scripts/setup_spark.sh` include:
 | `SPARK_BUILD_IMAGE` | `true` | Build/load the image before deployment |
 | `SPARK_UNITY_CATALOG` | `unity` | Unity Catalog name |
 | `SPARK_UNITY_STORAGE_ROOT` | `s3://unitycatalog/spark` | Root for example tables |
-| `UNITYCATALOG_USER_TOKEN` | unset | User token provided directly |
-| `UNITYCATALOG_USER_TOKEN_FILE` | unset | File containing the user token |
+| `UNITYCATALOG_CREDENTIALS_SECRET` | `unitycatalog-credentials` | Source Secret containing the Keycloak service principal |
 
 Additional Helm values can be passed directly to the setup script. For
 example, to run two executors:
@@ -383,7 +387,7 @@ Check that the external table path is below `s3://unitycatalog/spark`, the
 its RustFS service account:
 
 ```bash
-UNITYCATALOG_AUTH_TOKEN="$UNITYCATALOG_USER_TOKEN" \
+UNITYCATALOG_AUTH_TOKEN="$(kubectl -n tower exec deployment/unitycatalog-server -c server -- cat /var/run/unitycatalog/bootstrap-token)" \
   ./scripts/validate_unitycatalog_vending.sh
 kubectl -n tower logs deployment/unitycatalog-server --tail=200
 ```
