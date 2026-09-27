@@ -23,9 +23,11 @@ spec:
     spark.sql.catalog.spark_catalog: org.apache.spark.sql.delta.catalog.DeltaCatalog
     spark.sql.catalog.{{ .Values.spark.catalog.name }}: io.unitycatalog.spark.UCSingleCatalog
     spark.sql.catalog.{{ .Values.spark.catalog.name }}.uri: {{ .Values.spark.catalog.uri | quote }}
-    spark.sql.catalog.{{ .Values.spark.catalog.name }}.warehouse: {{ .Values.spark.catalog.name | quote }}
     spark.sql.catalog.{{ .Values.spark.catalog.name }}.renewCredential.enabled: "true"
     spark.sql.catalog.{{ .Values.spark.catalog.name }}.credScopedFs.enabled: "true"
+    # The local Rust server implements the UC table and temporary-credential
+    # APIs, not the newer Delta REST commit API.
+    spark.sql.catalog.{{ .Values.spark.catalog.name }}.deltaRestApi.enabled: "false"
     spark.sql.defaultCatalog: {{ .Values.spark.catalog.name | quote }}
     spark.hadoop.fs.s3.impl: org.apache.hadoop.fs.s3a.S3AFileSystem
     spark.hadoop.fs.s3a.impl: org.apache.hadoop.fs.s3a.S3AFileSystem
@@ -33,7 +35,6 @@ spec:
     spark.hadoop.fs.s3a.endpoint.region: {{ .Values.spark.s3.region | quote }}
     spark.hadoop.fs.s3a.path.style.access: "true"
     spark.hadoop.fs.s3a.connection.ssl.enabled: "true"
-    spark.hadoop.fs.s3a.aws.credentials.provider: software.amazon.awssdk.auth.credentials.EnvironmentVariableCredentialsProvider
     spark.kubernetes.executor.deleteOnTermination: "true"
   restartPolicy:
     {{- toYaml .Values.application.restartPolicy | nindent 4 }}
@@ -62,26 +63,6 @@ spec:
             key: UNITY_CATALOG_NAME
       - name: UNITY_STORAGE_ROOT
         value: {{ .Values.spark.catalog.storageRoot | quote }}
-      - name: AWS_ACCESS_KEY_ID
-        valueFrom:
-          secretKeyRef:
-            name: {{ .Values.credentialsSecretName }}
-            key: AWS_ACCESS_KEY_ID
-      - name: AWS_SECRET_ACCESS_KEY
-        valueFrom:
-          secretKeyRef:
-            name: {{ .Values.credentialsSecretName }}
-            key: AWS_SECRET_ACCESS_KEY
-      - name: AWS_SESSION_TOKEN
-        valueFrom:
-          secretKeyRef:
-            name: {{ .Values.credentialsSecretName }}
-            key: AWS_SESSION_TOKEN
-      - name: AWS_REGION
-        valueFrom:
-          secretKeyRef:
-            name: {{ .Values.credentialsSecretName }}
-            key: AWS_REGION
     volumeMounts:
       - name: rustfs-trust
         mountPath: /opt/spark/trust
@@ -94,27 +75,6 @@ spec:
     javaOptions: >-
       -Djavax.net.ssl.trustStore=/opt/spark/trust/cacerts
       -Djavax.net.ssl.trustStorePassword=changeit
-    env:
-      - name: AWS_ACCESS_KEY_ID
-        valueFrom:
-          secretKeyRef:
-            name: {{ .Values.credentialsSecretName }}
-            key: AWS_ACCESS_KEY_ID
-      - name: AWS_SECRET_ACCESS_KEY
-        valueFrom:
-          secretKeyRef:
-            name: {{ .Values.credentialsSecretName }}
-            key: AWS_SECRET_ACCESS_KEY
-      - name: AWS_SESSION_TOKEN
-        valueFrom:
-          secretKeyRef:
-            name: {{ .Values.credentialsSecretName }}
-            key: AWS_SESSION_TOKEN
-      - name: AWS_REGION
-        valueFrom:
-          secretKeyRef:
-            name: {{ .Values.credentialsSecretName }}
-            key: AWS_REGION
     volumeMounts:
       - name: rustfs-trust
         mountPath: /opt/spark/trust

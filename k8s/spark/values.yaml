@@ -1,6 +1,6 @@
 image:
   repository: mizuumi/spark
-  tag: "4.0.1"
+  tag: "4.0.1-uc-rustfs"
   pullPolicy: IfNotPresent
 
 serviceAccountName: spark-operator-spark
@@ -17,14 +17,14 @@ spark:
   catalog:
     name: unity
     uri: http://unitycatalog-server.tower.svc.cluster.local:8080
-    storageRoot: s3://unitycatalog
+    storageRoot: s3://unitycatalog/spark
   s3:
     endpoint: https://rustfs-svc.storage.svc.cluster.local:9000
     region: us-east-1
 
 application:
   enabled: true
-  name: medallion-minimal
+  name: unity-catalog-rustfs
   mainApplicationFile: local:///opt/spark/work-dir/examples/minimal/main.py
   restartPolicy:
     type: Never
