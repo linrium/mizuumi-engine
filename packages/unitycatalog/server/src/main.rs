@@ -20,6 +20,7 @@ use crate::{
         auth::{AuthService, auth_router, authorize},
         catalogs::{DefaultCatalogService, catalog_router},
         credentials::{DefaultCredentialService, credential_router},
+        delta_commits::{DefaultDeltaCommitService, delta_commits_router},
         external_locations::{DefaultExternalLocationService, external_location_router},
         grants::{DefaultGrantService, grant_router},
         health::{DefaultHealthService, health_router},
@@ -67,6 +68,7 @@ async fn main() -> anyhow::Result<()> {
             pool.clone(),
             settings.vending.clone(),
         )),
+        delta_commits: Arc::new(DefaultDeltaCommitService::new(pool.clone())),
         external_locations: Arc::new(DefaultExternalLocationService::new(pool.clone())),
         grants: Arc::new(DefaultGrantService::new(pool.clone())),
         health: Arc::new(DefaultHealthService::new(pool.clone())),
@@ -90,6 +92,7 @@ async fn main() -> anyhow::Result<()> {
         .merge(vending_router())
         .merge(catalog_router())
         .merge(credential_router())
+        .merge(delta_commits_router())
         .merge(external_location_router())
         .merge(grant_router())
         .merge(schema_router())

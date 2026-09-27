@@ -294,9 +294,16 @@ pub async fn can_vend_table_credentials(
     if principal.is_admin {
         return Ok(true);
     }
-    state
+    if state
         .grants
         .has_table_access_by_id(principal.id.clone(), table_id.to_owned(), read_write)
+        .await?
+    {
+        return Ok(true);
+    }
+    state
+        .tables
+        .is_staging_table_owner(table_id.to_owned(), principal.id.clone())
         .await
 }
 

@@ -11,7 +11,7 @@ WITH parent_schema AS (
 ),
 next_table AS (
     SELECT
-        gen_random_uuid()::text AS id,
+        COALESCE(NULLIF(:table_id, ''), gen_random_uuid()::text) AS id,
         (EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::bigint AS now_ms
 ),
 inserted AS (

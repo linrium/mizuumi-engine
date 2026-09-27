@@ -22,6 +22,8 @@ pub enum AppError {
     InvalidParameter(String),
     #[error("failed precondition: {0}")]
     FailedPrecondition(String),
+    #[error("too many requests: {0}")]
+    TooManyRequests(String),
     #[error("json conversion failed")]
     Json(#[from] serde_json::Error),
     #[error("postgres query failed")]
@@ -58,6 +60,7 @@ impl IntoResponse for AppError {
             AppError::Conflict(_) => StatusCode::CONFLICT,
             AppError::InvalidParameter(_) => StatusCode::BAD_REQUEST,
             AppError::FailedPrecondition(_) => StatusCode::BAD_REQUEST,
+            AppError::TooManyRequests(_) => StatusCode::TOO_MANY_REQUESTS,
             AppError::Json(_) => StatusCode::INTERNAL_SERVER_ERROR,
             AppError::Postgres(_)
             | AppError::Pool(_)

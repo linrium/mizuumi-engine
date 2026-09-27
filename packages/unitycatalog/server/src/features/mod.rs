@@ -1,6 +1,7 @@
 pub mod auth;
 pub mod catalogs;
 pub mod credentials;
+pub mod delta_commits;
 pub mod external_locations;
 pub mod grants;
 pub mod health;

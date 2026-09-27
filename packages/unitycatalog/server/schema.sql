@@ -58,6 +58,31 @@ CREATE TABLE IF NOT EXISTS uc_tables (
     UNIQUE (schema_id, name)
 );
 
+CREATE TABLE IF NOT EXISTS uc_staging_tables (
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    schema_id TEXT NOT NULL REFERENCES uc_schemas(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    staging_location TEXT NOT NULL UNIQUE,
+    created_by TEXT NOT NULL,
+    created_at BIGINT NOT NULL,
+    finalized_at BIGINT
+);
+
+CREATE TABLE IF NOT EXISTS uc_delta_table_state (
+    table_id TEXT PRIMARY KEY REFERENCES uc_tables(id) ON DELETE CASCADE,
+    latest_table_version BIGINT NOT NULL DEFAULT 0,
+    latest_backfilled_version BIGINT NOT NULL DEFAULT -1,
+    uniform JSONB
+);
+
+CREATE TABLE IF NOT EXISTS uc_delta_commits (
+    table_id TEXT NOT NULL REFERENCES uc_tables(id) ON DELETE CASCADE,
+    version BIGINT NOT NULL,
+    commit_info JSONB NOT NULL,
+    is_backfilled BOOLEAN NOT NULL DEFAULT FALSE,
+    PRIMARY KEY (table_id, version)
+);
+
 CREATE TABLE IF NOT EXISTS uc_volumes (
     id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     schema_id TEXT NOT NULL REFERENCES uc_schemas(id) ON DELETE CASCADE,

@@ -13,13 +13,18 @@ use crate::{
 };
 
 use super::dtos::{
-    CreateTableRequest, GetTableRequest, ListTablesRequest, ListTablesResponse, TableInfo,
+    CreateStagingTableRequest, CreateTableRequest, GetTableRequest, ListTablesRequest,
+    ListTablesResponse, StagingTableInfo, TableInfo,
 };
 
 const TABLES_PATH: &str = "/api/2.1/unity-catalog/tables";
 
 pub fn table_router() -> Router<AppState> {
     Router::new()
+        .route(
+            "/api/2.1/unity-catalog/staging-tables",
+            post(create_staging_table),
+        )
         .route(TABLES_PATH, post(create_table).get(list_tables))
         .route(
             &format!("{TABLES_PATH}/{{full_name}}"),
@@ -29,9 +34,25 @@ pub fn table_router() -> Router<AppState> {
 
 async fn create_table(
     State(state): State<AppState>,
+    Extension(principal): Extension<AuthenticatedPrincipal>,
     Valid(Json(request)): Valid<Json<CreateTableRequest>>,
 ) -> Result<Json<TableInfo>, AppError> {
-    Ok(Json(state.tables.create_table(request).await?))
+    Ok(Json(
+        state.tables.create_table(request, principal.id).await?,
+    ))
+}
+
+async fn create_staging_table(
+    State(state): State<AppState>,
+    Extension(principal): Extension<AuthenticatedPrincipal>,
+    Valid(Json(request)): Valid<Json<CreateStagingTableRequest>>,
+) -> Result<Json<StagingTableInfo>, AppError> {
+    Ok(Json(
+        state
+            .tables
+            .create_staging_table(request, principal.id)
+            .await?,
+    ))
 }
 
 async fn list_tables(

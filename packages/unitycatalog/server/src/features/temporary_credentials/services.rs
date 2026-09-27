@@ -180,8 +180,19 @@ impl TemporaryCredentialsService for DefaultTemporaryCredentialsService {
         let storage_location = credential_queries::get_table_storage_location()
             .bind(&client, &request.table_id)
             .opt()
-            .await?
-            .ok_or_else(|| AppError::NotFound(format!("table {}", request.table_id)))?;
+            .await?;
+        let storage_location = match storage_location {
+            Some(location) => location,
+            None => client
+                .query_opt(
+                    "SELECT staging_location FROM uc_staging_tables \
+                     WHERE id = $1 AND finalized_at IS NULL",
+                    &[&request.table_id],
+                )
+                .await?
+                .map(|row| row.get(0))
+                .ok_or_else(|| AppError::NotFound(format!("table {}", request.table_id)))?,
+        };
         drop(client);
 
         self.vend(storage_location, access_mode).await

@@ -40,6 +40,25 @@ pub struct CreateTableRequest {
 }
 
 #[derive(Debug, Deserialize, Validate)]
+pub struct CreateStagingTableRequest {
+    #[validate(length(min = 1, max = 255), regex(path = *TABLE_NAME_REGEX))]
+    pub name: String,
+    #[validate(length(min = 1))]
+    pub catalog_name: String,
+    #[validate(length(min = 1))]
+    pub schema_name: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct StagingTableInfo {
+    pub name: String,
+    pub catalog_name: String,
+    pub schema_name: String,
+    pub id: String,
+    pub staging_location: String,
+}
+
+#[derive(Debug, Deserialize, Validate)]
 pub struct ListTablesRequest {
     #[validate(length(min = 1))]
     pub catalog_name: String,

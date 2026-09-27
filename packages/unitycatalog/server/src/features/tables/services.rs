@@ -2,22 +2,43 @@ use async_trait::async_trait;
 use deadpool_postgres::Pool;
 use serde_json::Value;
 use tokio_postgres::error::SqlState;
-use unitycatalog_queries::queries::{schemas as schema_queries, tables as table_queries};
+use unitycatalog_queries::{
+    client::GenericClient,
+    queries::{schemas as schema_queries, tables as table_queries},
+};
 
 use crate::error::AppError;
 
 use super::{
-    dtos::{CreateTableRequest, GetTableRequest, ListTablesRequest, ListTablesResponse, TableInfo},
+    dtos::{
+        CreateStagingTableRequest, CreateTableRequest, GetTableRequest, ListTablesRequest,
+        ListTablesResponse, StagingTableInfo, TableInfo,
+    },
     models::Table,
 };
 
 const DEFAULT_PAGE_SIZE: i32 = 100;
 const MANAGED_STORAGE_PREFIX: &str = "__unitystorage";
 const TABLE_TYPE_EXTERNAL: &str = "EXTERNAL";
+const TABLE_TYPE_MANAGED: &str = "MANAGED";
 
 #[async_trait]
 pub trait TableService: Send + Sync {
-    async fn create_table(&self, request: CreateTableRequest) -> Result<TableInfo, AppError>;
+    async fn create_table(
+        &self,
+        request: CreateTableRequest,
+        principal: String,
+    ) -> Result<TableInfo, AppError>;
+    async fn create_staging_table(
+        &self,
+        request: CreateStagingTableRequest,
+        principal: String,
+    ) -> Result<StagingTableInfo, AppError>;
+    async fn is_staging_table_owner(
+        &self,
+        staging_id: String,
+        principal: String,
+    ) -> Result<bool, AppError>;
     async fn list_tables(&self, request: ListTablesRequest)
     -> Result<ListTablesResponse, AppError>;
     async fn get_table(
@@ -40,26 +61,81 @@ impl DefaultTableService {
 
 #[async_trait]
 impl TableService for DefaultTableService {
-    async fn create_table(&self, mut request: CreateTableRequest) -> Result<TableInfo, AppError> {
+    async fn create_table(
+        &self,
+        mut request: CreateTableRequest,
+        principal: String,
+    ) -> Result<TableInfo, AppError> {
         validate_create_table(&request)?;
         normalize_columns(&mut request);
 
-        let client = self.pool.get().await?;
-        ensure_schema_exists(&client, &request.catalog_name, &request.schema_name).await?;
+        let mut client = self.pool.get().await?;
+        let transaction = client.transaction().await?;
+        ensure_schema_exists(&transaction, &request.catalog_name, &request.schema_name).await?;
 
         let columns = serde_json::to_value(request.columns)?;
         let properties = serde_json::to_value(request.properties.unwrap_or_default())?;
         let storage_location = request.storage_location.unwrap_or_default();
-        let data_source_format = request.data_source_format.unwrap_or_default();
+        let data_source_format = request.data_source_format.unwrap_or_else(|| {
+            if request.table_type == TABLE_TYPE_MANAGED {
+                "DELTA".to_string()
+            } else {
+                String::new()
+            }
+        });
         let comment = request.comment.unwrap_or_default();
         let view_definition = request.view_definition.unwrap_or_default();
         let view_dependencies = request.view_dependencies.unwrap_or(Value::Null);
 
+        let staging_id = if request.table_type == TABLE_TYPE_MANAGED {
+            let staging = transaction
+                .query_opt(
+                    "SELECT staging.id, staging.name, staging.created_by, staging.finalized_at \
+                     FROM uc_staging_tables staging \
+                     JOIN uc_schemas schemas ON schemas.id = staging.schema_id \
+                     JOIN uc_catalogs catalogs ON catalogs.id = schemas.catalog_id \
+                     WHERE staging.staging_location = $1 \
+                       AND catalogs.name = $2 AND schemas.name = $3 \
+                     FOR UPDATE OF staging",
+                    &[
+                        &storage_location,
+                        &request.catalog_name,
+                        &request.schema_name,
+                    ],
+                )
+                .await?
+                .ok_or_else(|| {
+                    AppError::FailedPrecondition(
+                        "managed table requires a matching staging table".to_string(),
+                    )
+                })?;
+            if staging.get::<_, String>("name") != request.name {
+                return Err(AppError::InvalidParameter(
+                    "managed table name must match its staging table".to_string(),
+                ));
+            }
+            if staging.get::<_, String>("created_by") != principal {
+                return Err(AppError::Forbidden(
+                    "staging table belongs to another principal".to_string(),
+                ));
+            }
+            if staging.get::<_, Option<i64>>("finalized_at").is_some() {
+                return Err(AppError::FailedPrecondition(
+                    "staging table has already been finalized".to_string(),
+                ));
+            }
+            Some(staging.get::<_, String>("id"))
+        } else {
+            None
+        };
+        let table_id = staging_id.clone().unwrap_or_default();
+
         let row = table_queries::create_table()
             .bind(
-                &client,
+                &transaction,
                 &request.catalog_name,
                 &request.schema_name,
+                &table_id,
                 &request.name,
                 &request.table_type,
                 &data_source_format,
@@ -80,7 +156,98 @@ impl TableService for DefaultTableService {
                 ))
             })?;
 
+        if let Some(staging_id) = staging_id {
+            transaction
+                .execute(
+                    "UPDATE uc_staging_tables \
+                     SET finalized_at = (EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::bigint \
+                     WHERE id = $1",
+                    &[&staging_id],
+                )
+                .await?;
+        }
+
+        transaction.commit().await?;
+
         Ok(row_to_table(row)?.into_info(false, false))
+    }
+
+    async fn create_staging_table(
+        &self,
+        request: CreateStagingTableRequest,
+        principal: String,
+    ) -> Result<StagingTableInfo, AppError> {
+        let mut client = self.pool.get().await?;
+        let transaction = client.transaction().await?;
+        let parent = transaction
+            .query_opt(
+                "SELECT schemas.id AS schema_id, \
+                        COALESCE(schemas.storage_location, catalogs.storage_location) AS storage_location \
+                 FROM uc_schemas schemas \
+                 JOIN uc_catalogs catalogs ON catalogs.id = schemas.catalog_id \
+                 WHERE catalogs.name = $1 AND schemas.name = $2",
+                &[&request.catalog_name, &request.schema_name],
+            )
+            .await?
+            .ok_or_else(|| {
+                AppError::NotFound(format!(
+                    "schema {}.{}",
+                    request.catalog_name, request.schema_name
+                ))
+            })?;
+        let root: Option<String> = parent.get("storage_location");
+        let root = root.filter(|value| !value.is_empty()).ok_or_else(|| {
+            AppError::FailedPrecondition(
+                "schema or catalog must have a managed storage location".to_string(),
+            )
+        })?;
+        let schema_id: String = parent.get("schema_id");
+        let already_exists: bool = transaction
+            .query_one(
+                "SELECT EXISTS (SELECT 1 FROM uc_tables WHERE schema_id = $1 AND name = $2)",
+                &[&schema_id, &request.name],
+            )
+            .await?
+            .get(0);
+        if already_exists {
+            return Err(AppError::Conflict("table name".to_string()));
+        }
+
+        let id = uuid::Uuid::new_v4().to_string();
+        let staging_location = format!("{}/tables/{id}", root.trim_end_matches('/'));
+        transaction
+            .execute(
+                "INSERT INTO uc_staging_tables \
+                 (id, schema_id, name, staging_location, created_by, created_at) \
+                 VALUES ($1, $2, $3, $4, $5, (EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::bigint)",
+                &[&id, &schema_id, &request.name, &staging_location, &principal],
+            )
+            .await?;
+        transaction.commit().await?;
+
+        Ok(StagingTableInfo {
+            name: request.name,
+            catalog_name: request.catalog_name,
+            schema_name: request.schema_name,
+            id,
+            staging_location,
+        })
+    }
+
+    async fn is_staging_table_owner(
+        &self,
+        staging_id: String,
+        principal: String,
+    ) -> Result<bool, AppError> {
+        let client = self.pool.get().await?;
+        let row = client
+            .query_one(
+                "SELECT EXISTS (SELECT 1 FROM uc_staging_tables \
+                 WHERE id = $1 AND created_by = $2 AND finalized_at IS NULL)",
+                &[&staging_id, &principal],
+            )
+            .await?;
+        Ok(row.get(0))
     }
 
     async fn list_tables(
@@ -165,8 +332,8 @@ impl TableService for DefaultTableService {
     }
 }
 
-async fn ensure_schema_exists(
-    client: &deadpool_postgres::Client,
+async fn ensure_schema_exists<C: GenericClient>(
+    client: &C,
     catalog_name: &str,
     schema_name: &str,
 ) -> Result<(), AppError> {
@@ -180,22 +347,48 @@ async fn ensure_schema_exists(
 }
 
 fn validate_create_table(request: &CreateTableRequest) -> Result<(), AppError> {
-    if request.table_type != TABLE_TYPE_EXTERNAL {
-        return Err(AppError::InvalidParameter(
-            "only EXTERNAL table creation is supported".to_string(),
-        ));
-    }
-
     let storage_location = request.storage_location.as_deref().unwrap_or_default();
-    if storage_location.is_empty() {
-        return Err(AppError::InvalidParameter(
-            "storage_location is required for external table".to_string(),
-        ));
-    }
-    if storage_location.contains(MANAGED_STORAGE_PREFIX) {
-        return Err(AppError::InvalidParameter(format!(
-            "input path '{storage_location}' contains managed storage prefix {MANAGED_STORAGE_PREFIX}"
-        )));
+    match request.table_type.as_str() {
+        TABLE_TYPE_EXTERNAL => {
+            if storage_location.is_empty() {
+                return Err(AppError::InvalidParameter(
+                    "storage_location is required for external table".to_string(),
+                ));
+            }
+            if storage_location.contains(MANAGED_STORAGE_PREFIX) {
+                return Err(AppError::InvalidParameter(format!(
+                    "input path '{storage_location}' contains managed storage prefix {MANAGED_STORAGE_PREFIX}"
+                )));
+            }
+        }
+        TABLE_TYPE_MANAGED => {
+            if storage_location.is_empty() {
+                return Err(AppError::InvalidParameter(
+                    "storage_location from a staging table is required for managed table"
+                        .to_string(),
+                ));
+            }
+        }
+        "STREAMING_TABLE" | "MATERIALIZED_VIEW" | "METRIC_VIEW" | "VIEW" => {
+            if request.view_definition.as_deref().is_none_or(str::is_empty) {
+                return Err(AppError::InvalidParameter(format!(
+                    "view_definition is required for {}",
+                    request.table_type
+                )));
+            }
+            if !storage_location.is_empty() {
+                return Err(AppError::InvalidParameter(format!(
+                    "storage_location is not supported for {}",
+                    request.table_type
+                )));
+            }
+        }
+        _ => {
+            return Err(AppError::InvalidParameter(format!(
+                "unsupported table_type: {}",
+                request.table_type
+            )));
+        }
     }
 
     if let Some(format) = &request.data_source_format {
