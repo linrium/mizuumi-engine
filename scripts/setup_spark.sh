@@ -18,6 +18,9 @@ uc_credentials_secret="${UNITYCATALOG_CREDENTIALS_SECRET:-unitycatalog-credentia
 trust_secret="${SPARK_TRUST_SECRET:-spark-rustfs-trust}"
 catalog="${SPARK_UNITY_CATALOG:-unity}"
 storage_root="${SPARK_UNITY_STORAGE_ROOT:-s3://unitycatalog/spark}"
+application_script="${SPARK_APPLICATION_SCRIPT:-}"
+script_configmap="${SPARK_APPLICATION_SCRIPT_CONFIGMAP:-}"
+script_mount_path="${SPARK_APPLICATION_SCRIPT_MOUNT_PATH:-}"
 work_dir=""
 
 cleanup() {
@@ -113,6 +116,17 @@ fi
 
 kubectl create namespace "$job_namespace" --dry-run=client -o yaml | kubectl apply -f - >/dev/null
 
+if [[ -n "$application_script" ]]; then
+  [[ -f "$application_script" ]] || { echo "Missing Spark application script: $application_script" >&2; exit 1; }
+  [[ -n "$script_configmap" && -n "$script_mount_path" ]] || {
+    echo "SPARK_APPLICATION_SCRIPT_CONFIGMAP and SPARK_APPLICATION_SCRIPT_MOUNT_PATH are required." >&2
+    exit 1
+  }
+  kubectl -n "$job_namespace" create configmap "$script_configmap" \
+    --from-file="$(basename "$application_script")=$application_script" \
+    --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+fi
+
 work_dir="$(mktemp -d "${TMPDIR:-/tmp}/spark-setup.XXXXXX")"
 java_home="$(java -XshowSettings:properties -version 2>&1 |
   sed -n 's/^[[:space:]]*java\.home = //p' | head -n 1)"
@@ -148,6 +162,16 @@ helm upgrade --install "$operator_release" spark-operator/spark-operator \
   --set "spark.jobNamespaces[0]=$job_namespace" \
   --wait --timeout 10m
 
+application_options=()
+if [[ -n "$application_script" ]]; then
+  script_revision="$(cksum "$application_script" | awk '{print $1 "-" $2}')-$(date +%s)"
+  application_options+=(
+    --set-string "application.scriptConfigMap=$script_configmap"
+    --set-string "application.scriptMountPath=$script_mount_path"
+    --set-string "application.scriptRevision=$script_revision"
+  )
+fi
+
 helm upgrade --install "$application_release" "$repo_root/k8s/spark" \
   --namespace "$job_namespace" \
   --set-string "image.repository=$image_repository" \
@@ -156,6 +180,7 @@ helm upgrade --install "$application_release" "$repo_root/k8s/spark" \
   --set-string "trustSecretName=$trust_secret" \
   --set-string "spark.catalog.name=$catalog" \
   --set-string "spark.catalog.storageRoot=$storage_root" \
+  "${application_options[@]}" \
   "$@"
 
 echo "Spark Operator and Unity Catalog / RustFS example are installed."

@@ -30,6 +30,9 @@ application:
   enabled: true
   name: unity-catalog-rustfs
   mainApplicationFile: local:///opt/spark/work-dir/examples/minimal/main.py
+  scriptConfigMap: ""
+  scriptMountPath: ""
+  scriptRevision: ""
   restartPolicy:
     type: Never
   driver:

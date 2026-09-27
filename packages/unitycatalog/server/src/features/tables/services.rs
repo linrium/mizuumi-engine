@@ -156,6 +156,25 @@ impl TableService for DefaultTableService {
                 ))
             })?;
 
+        // The creator must be able to load and write the table after creation.
+        let mut table = row_to_table(row)?;
+        transaction
+            .execute(
+                "UPDATE uc_tables SET owner = $2, created_by = $2, updated_by = $2 WHERE id = $1",
+                &[&table.table_id, &principal],
+            )
+            .await?;
+        transaction
+            .execute(
+                "INSERT INTO uc_permissions (principal, resource_id, securable_type, privilege) \
+                 VALUES ($1, $2, 'table', 'OWNER') ON CONFLICT DO NOTHING",
+                &[&principal, &table.table_id],
+            )
+            .await?;
+        table.owner = principal.clone();
+        table.created_by = principal.clone();
+        table.updated_by = principal;
+
         if let Some(staging_id) = staging_id {
             transaction
                 .execute(
@@ -169,7 +188,7 @@ impl TableService for DefaultTableService {
 
         transaction.commit().await?;
 
-        Ok(row_to_table(row)?.into_info(false, false))
+        Ok(table.into_info(false, false))
     }
 
     async fn create_staging_table(

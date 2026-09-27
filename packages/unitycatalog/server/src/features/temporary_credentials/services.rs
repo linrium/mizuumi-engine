@@ -12,8 +12,9 @@ use unitycatalog_queries::queries::{
 use url::Url;
 
 use crate::{
-    config::VendingSettings, error::AppError,
-    features::external_locations::normalize_external_location_url,
+    config::VendingSettings,
+    error::AppError,
+    features::external_locations::{normalize_external_location_url, normalize_managed_table_url},
 };
 
 use super::{
@@ -66,8 +67,15 @@ impl DefaultTemporaryCredentialsService {
         &self,
         url: String,
         access_mode: AccessMode,
+        managed_table: bool,
     ) -> Result<TemporaryCredentials, AppError> {
-        let url = normalize_external_location_url(&url)?;
+        // Table requests are authorized by table ID before reaching this method.
+        // Other paths must still reject the reserved managed-storage prefix.
+        let url = if managed_table {
+            normalize_managed_table_url(&url)?
+        } else {
+            normalize_external_location_url(&url)?
+        };
         let client = self.pool.get().await?;
         location_queries::find_external_location_for_path()
             .bind(&client, &url)
@@ -160,14 +168,15 @@ impl TemporaryCredentialsService for DefaultTemporaryCredentialsService {
         validate_model_version_status(&model_version.status, request.operation)?;
         drop(client);
 
-        self.vend(model_version.storage_location, access_mode).await
+        self.vend(model_version.storage_location, access_mode, false)
+            .await
     }
 
     async fn generate_path_credentials(
         &self,
         request: GenerateTemporaryPathCredentialRequest,
     ) -> Result<TemporaryCredentials, AppError> {
-        self.vend(request.url, path_access_mode(request.operation)?)
+        self.vend(request.url, path_access_mode(request.operation)?, false)
             .await
     }
 
@@ -195,7 +204,7 @@ impl TemporaryCredentialsService for DefaultTemporaryCredentialsService {
         };
         drop(client);
 
-        self.vend(storage_location, access_mode).await
+        self.vend(storage_location, access_mode, true).await
     }
 
     async fn generate_volume_credentials(
@@ -211,7 +220,7 @@ impl TemporaryCredentialsService for DefaultTemporaryCredentialsService {
             .ok_or_else(|| AppError::NotFound(format!("volume {}", request.volume_id)))?;
         drop(client);
 
-        self.vend(storage_location, access_mode).await
+        self.vend(storage_location, access_mode, false).await
     }
 }
 

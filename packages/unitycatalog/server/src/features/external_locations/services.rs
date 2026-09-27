@@ -227,6 +227,14 @@ async fn ensure_url_available(
 }
 
 pub(crate) fn normalize_external_location_url(input: &str) -> Result<String, AppError> {
+    normalize_storage_url(input, false)
+}
+
+pub(crate) fn normalize_managed_table_url(input: &str) -> Result<String, AppError> {
+    normalize_storage_url(input, true)
+}
+
+fn normalize_storage_url(input: &str, allow_managed_storage: bool) -> Result<String, AppError> {
     if input.trim().is_empty() {
         return Err(AppError::InvalidParameter(
             "path cannot be empty".to_string(),
@@ -267,7 +275,7 @@ pub(crate) fn normalize_external_location_url(input: &str) -> Result<String, App
     while normalized.ends_with('/') && !normalized.ends_with(":///") {
         normalized.pop();
     }
-    if normalized.contains(MANAGED_STORAGE_PREFIX) {
+    if !allow_managed_storage && normalized.contains(MANAGED_STORAGE_PREFIX) {
         return Err(AppError::InvalidParameter(format!(
             "input path '{normalized}' contains managed storage prefix {MANAGED_STORAGE_PREFIX}"
         )));
@@ -364,7 +372,7 @@ impl_into_external_location_parts!(queries::UpdateExternalLocation);
 
 #[cfg(test)]
 mod tests {
-    use super::normalize_external_location_url;
+    use super::{normalize_external_location_url, normalize_managed_table_url};
 
     #[test]
     fn normalizes_supported_urls() {
@@ -386,5 +394,9 @@ mod tests {
     fn rejects_unsupported_and_managed_urls() {
         assert!(normalize_external_location_url("ftp://host/path").is_err());
         assert!(normalize_external_location_url("s3://bucket/__unitystorage/path").is_err());
+        assert_eq!(
+            normalize_managed_table_url("s3://bucket/__unitystorage/path/").unwrap(),
+            "s3://bucket/__unitystorage/path"
+        );
     }
 }

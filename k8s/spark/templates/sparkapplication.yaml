@@ -42,7 +42,16 @@ spec:
     - name: rustfs-trust
       secret:
         secretName: {{ .Values.trustSecretName }}
+    {{- if .Values.application.scriptConfigMap }}
+    - name: application-script
+      configMap:
+        name: {{ .Values.application.scriptConfigMap }}
+    {{- end }}
   driver:
+    {{- if .Values.application.scriptRevision }}
+    annotations:
+      mizuumi.io/script-revision: {{ .Values.application.scriptRevision | quote }}
+    {{- end }}
     cores: {{ .Values.application.driver.cores }}
     coreLimit: {{ .Values.application.driver.coreLimit | quote }}
     memory: {{ .Values.application.driver.memory | quote }}
@@ -76,6 +85,11 @@ spec:
       - name: rustfs-trust
         mountPath: /opt/spark/trust
         readOnly: true
+      {{- if .Values.application.scriptConfigMap }}
+      - name: application-script
+        mountPath: {{ .Values.application.scriptMountPath | quote }}
+        readOnly: true
+      {{- end }}
   executor:
     instances: {{ .Values.application.executor.instances }}
     cores: {{ .Values.application.executor.cores }}

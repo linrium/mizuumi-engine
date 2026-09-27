@@ -7,6 +7,7 @@ release="${UNITYCATALOG_RELEASE:-unitycatalog}"
 catalog="${SPARK_UNITY_CATALOG:-unity}"
 principal="${UNITYCATALOG_PRINCIPAL:-unitycatalog-spark}"
 storage_root="${SPARK_UNITY_STORAGE_ROOT:-s3://unitycatalog/spark}"
+schemas="${SPARK_UNITY_SCHEMAS:-bronze silver gold}"
 credential="${SPARK_UNITY_CREDENTIAL:-rustfs_unitycatalog}"
 location="${SPARK_UNITY_EXTERNAL_LOCATION:-rustfs_spark}"
 credentials_secret="${UNITYCATALOG_CREDENTIALS_SECRET:-unitycatalog-credentials}"
@@ -25,7 +26,7 @@ usage() {
 Usage: ./scripts/init_spark_catalog.sh
 
 Idempotently creates the catalog, RustFS storage credential and external
-location, bronze/silver/gold schemas, and grants used by the Spark example.
+location, configured schemas, and grants used by the Spark example.
 
 Environment overrides:
   UNITYCATALOG_NAMESPACE          Unity Catalog namespace (default: tower)
@@ -33,6 +34,7 @@ Environment overrides:
   UNITYCATALOG_PRINCIPAL          Principal receiving access (default: unitycatalog-spark)
   SPARK_UNITY_CATALOG             Catalog name (default: unity)
   SPARK_UNITY_STORAGE_ROOT        RustFS URI prefix (default: s3://unitycatalog/spark)
+  SPARK_UNITY_SCHEMAS             Space-separated schema names (default: bronze silver gold)
   SPARK_UNITY_CREDENTIAL          Storage credential name
   SPARK_UNITY_EXTERNAL_LOCATION   External location name
   UNITYCATALOG_URL                API URL (default: https://unitycatalog.mizuumi.test)
@@ -116,10 +118,14 @@ location_payload="$(jq -cn --arg name "$location" --arg url "$storage_root" \
 ensure_resource "external location $location" "/external-locations/$location" \
   /external-locations "$location_payload"
 
-for schema in bronze silver gold; do
+for schema in $schemas; do
+  [[ "$schema" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || {
+    echo "Invalid Spark schema name: $schema" >&2
+    exit 2
+  }
   schema_payload="$(jq -cn --arg catalog "$catalog" --arg name "$schema" \
     --arg root "$storage_root/$schema" \
-    '{catalog_name:$catalog,name:$name,storage_root:$root,comment:("Spark medallion " + $name + " layer")}')"
+    '{catalog_name:$catalog,name:$name,storage_root:$root,comment:"Spark example schema"}')"
   ensure_resource "schema $catalog.$schema" "/schemas/$catalog.$schema" /schemas "$schema_payload"
 done
 
@@ -138,7 +144,7 @@ run_uc_admin() {
 
 run_uc_admin permission create --securable_type catalog --name "$catalog" \
   --privilege 'USE CATALOG' --principal "$principal"
-for schema in bronze silver gold; do
+for schema in $schemas; do
   run_uc_admin permission create --securable_type schema --name "$catalog.$schema" \
     --privilege 'USE SCHEMA' --principal "$principal"
   run_uc_admin permission create --securable_type schema --name "$catalog.$schema" \
@@ -149,4 +155,4 @@ for privilege in 'READ FILES' 'WRITE FILES' 'CREATE EXTERNAL TABLE'; do
     --privilege "$privilege" --principal "$principal"
 done
 
-echo "Unity Catalog is ready: $catalog.{bronze,silver,gold} at $storage_root"
+echo "Unity Catalog is ready: $catalog schemas ($schemas) at $storage_root"

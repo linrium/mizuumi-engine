@@ -22,6 +22,8 @@ Deploy the operator and example with:
 
 The setup initializes the `unity` catalog, the RustFS storage credential and
 external location, and the `bronze`, `silver`, and `gold` schemas before it
-submits the `unity-catalog-rustfs` SparkApplication. On the first run, set
-`UNITYCATALOG_USER_TOKEN` or `UNITYCATALOG_USER_TOKEN_FILE`; later runs reuse
-the token already stored in the Spark runtime Secret.
+submits the `unity-catalog-rustfs` SparkApplication. The Spark driver exchanges
+its Keycloak service-principal credential for a short-lived catalog token.
+
+For a single managed Delta table, see `examples/managed` and deploy it with
+`./scripts/setup_spark_managed.sh`.
