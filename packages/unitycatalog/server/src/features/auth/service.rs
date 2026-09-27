@@ -59,6 +59,8 @@ pub struct AuthenticatedPrincipal {
     pub subject: String,
     pub kind: PrincipalKind,
     pub roles: BTreeSet<String>,
+    #[serde(skip)]
+    pub is_admin: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -276,11 +278,13 @@ impl AuthService {
         if let Some(access) = claims.resource_access.get(&self.inner.audience) {
             roles.extend(access.roles.iter().cloned());
         }
+        let is_admin = roles.contains(&self.inner.admin_role);
         AuthenticatedPrincipal {
             id,
             subject: claims.sub,
             kind,
             roles,
+            is_admin,
         }
     }
 
@@ -328,6 +332,7 @@ impl AuthService {
             subject: "bootstrap".to_owned(),
             kind: PrincipalKind::Bootstrap,
             roles: BTreeSet::from([self.inner.admin_role.clone()]),
+            is_admin: true,
         }
     }
 
@@ -337,6 +342,7 @@ impl AuthService {
             subject: "anonymous".to_owned(),
             kind: PrincipalKind::Bootstrap,
             roles: BTreeSet::from([self.inner.admin_role.clone()]),
+            is_admin: true,
         }
     }
 }
@@ -485,6 +491,7 @@ mod tests {
             subject: "test".to_owned(),
             kind: PrincipalKind::Human,
             roles: BTreeSet::from([role.to_owned()]),
+            is_admin: role == "unitycatalog-admin",
         };
 
         assert!(

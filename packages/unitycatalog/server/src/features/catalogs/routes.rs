@@ -1,12 +1,16 @@
 use axum::{
     Json, Router,
-    extract::{Path, Query, State},
+    extract::{Extension, Path, Query, State},
     http::StatusCode,
     routing::{get, post},
 };
 use axum_valid::Valid;
 
-use crate::{app_state::AppState, error::AppError};
+use crate::{
+    app_state::AppState,
+    error::AppError,
+    features::auth::{AuthenticatedPrincipal, resource_authorization as authorization},
+};
 
 use super::dtos::{
     CatalogInfo, CreateCatalogRequest, DeleteCatalogRequest, ListCatalogsRequest,
@@ -35,15 +39,30 @@ async fn create_catalog(
 
 async fn list_catalogs(
     State(state): State<AppState>,
+    Extension(principal): Extension<AuthenticatedPrincipal>,
     Valid(Query(request)): Valid<Query<ListCatalogsRequest>>,
 ) -> Result<Json<ListCatalogsResponse>, AppError> {
-    Ok(Json(state.catalogs.list_catalogs(request).await?))
+    let mut response = state.catalogs.list_catalogs(request).await?;
+    let mut visible = Vec::new();
+    for catalog in response.catalogs {
+        if authorization::can_read_catalog(&state, &principal, &catalog.name).await? {
+            visible.push(catalog);
+        }
+    }
+    response.catalogs = visible;
+    Ok(Json(response))
 }
 
 async fn get_catalog(
     State(state): State<AppState>,
+    Extension(principal): Extension<AuthenticatedPrincipal>,
     Path(name): Path<String>,
 ) -> Result<Json<CatalogInfo>, AppError> {
+    authorization::require_allowed(
+        authorization::can_read_catalog(&state, &principal, &name).await?,
+        "read catalog",
+    )
+    .await?;
     Ok(Json(state.catalogs.get_catalog(name).await?))
 }
 
@@ -57,9 +76,15 @@ async fn update_catalog(
 
 async fn delete_catalog(
     State(state): State<AppState>,
+    Extension(principal): Extension<AuthenticatedPrincipal>,
     Path(name): Path<String>,
     Valid(Query(request)): Valid<Query<DeleteCatalogRequest>>,
 ) -> Result<StatusCode, AppError> {
+    authorization::require_allowed(
+        authorization::can_delete_catalog(&state, &principal, &name).await?,
+        "delete catalog",
+    )
+    .await?;
     state.catalogs.delete_catalog(name, request).await?;
     Ok(StatusCode::OK)
 }

@@ -1,3 +1,4 @@
+pub mod resource_authorization;
 mod routes;
 mod service;
 

@@ -12,7 +12,7 @@ pub enum PathOperation {
     PathCreateTable,
 }
 
-#[derive(Debug, Clone, Copy, Deserialize)]
+#[derive(Debug, Clone, Copy, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum TableOperation {
     UnknownTableOperation,

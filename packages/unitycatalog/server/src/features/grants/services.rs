@@ -13,6 +13,25 @@ use super::dtos::{
 
 #[async_trait]
 pub trait GrantService: Send + Sync {
+    async fn has_any_privilege(
+        &self,
+        principal: String,
+        securable_type: SecurableType,
+        full_name: String,
+        privileges: Vec<Privilege>,
+    ) -> Result<bool, AppError>;
+    async fn has_table_access_by_id(
+        &self,
+        principal: String,
+        table_id: String,
+        read_write: bool,
+    ) -> Result<bool, AppError>;
+    async fn has_external_location_access_by_path(
+        &self,
+        principal: String,
+        path: String,
+        read_write: bool,
+    ) -> Result<bool, AppError>;
     async fn get_permissions(
         &self,
         securable_type: SecurableType,
@@ -40,6 +59,94 @@ impl DefaultGrantService {
 
 #[async_trait]
 impl GrantService for DefaultGrantService {
+    async fn has_table_access_by_id(
+        &self,
+        principal: String,
+        table_id: String,
+        read_write: bool,
+    ) -> Result<bool, AppError> {
+        let client = self.pool.get().await?;
+        let row = client
+            .query_one(
+                "SELECT EXISTS (\
+                   SELECT 1 \
+                   FROM uc_tables t \
+                   JOIN uc_schemas s ON s.id = t.schema_id \
+                   JOIN uc_catalogs c ON c.id = s.catalog_id \
+                   WHERE t.id = $2 \
+                     AND (\
+                       EXISTS (SELECT 1 FROM uc_permissions p WHERE p.principal = $1 AND p.resource_id = c.id AND p.privilege IN ('OWNER', 'USE CATALOG')) \
+                     ) \
+                     AND EXISTS (SELECT 1 FROM uc_permissions p WHERE p.principal = $1 AND p.resource_id = s.id AND p.privilege IN ('OWNER', 'USE SCHEMA')) \
+                     AND (\
+                       EXISTS (SELECT 1 FROM uc_permissions p WHERE p.principal = $1 AND p.resource_id = t.id AND p.privilege = 'OWNER') \
+                       OR (NOT $3 AND EXISTS (SELECT 1 FROM uc_permissions p WHERE p.principal = $1 AND p.resource_id = t.id AND p.privilege = 'SELECT')) \
+                       OR ($3 AND EXISTS (SELECT 1 FROM uc_permissions p WHERE p.principal = $1 AND p.resource_id = t.id AND p.privilege = 'SELECT') AND EXISTS (SELECT 1 FROM uc_permissions p WHERE p.principal = $1 AND p.resource_id = t.id AND p.privilege = 'MODIFY')) \
+                     ) \
+                 ) AS allowed",
+                &[&principal, &table_id, &read_write],
+            )
+            .await?;
+        Ok(row.get("allowed"))
+    }
+
+    async fn has_external_location_access_by_path(
+        &self,
+        principal: String,
+        path: String,
+        read_write: bool,
+    ) -> Result<bool, AppError> {
+        let client = self.pool.get().await?;
+        let row = client
+            .query_one(
+                "WITH location AS (\
+                   SELECT id FROM uc_external_locations \
+                   WHERE url = $2 \
+                     OR starts_with($2, url || CASE WHEN right(url, 1) = '/' THEN '' ELSE '/' END) \
+                   ORDER BY length(url) DESC \
+                   LIMIT 1\
+                 ) \
+                 SELECT EXISTS (\
+                   SELECT 1 FROM location l \
+                   WHERE EXISTS (\
+                     SELECT 1 FROM uc_permissions p \
+                     WHERE p.principal = $1 AND p.resource_id = l.id AND p.privilege = 'OWNER'\
+                   ) OR (\
+                     EXISTS (\
+                       SELECT 1 FROM uc_permissions p \
+                       WHERE p.principal = $1 AND p.resource_id = l.id AND p.privilege = 'READ FILES'\
+                     ) AND (NOT $3 OR EXISTS (\
+                       SELECT 1 FROM uc_permissions p \
+                       WHERE p.principal = $1 AND p.resource_id = l.id AND p.privilege = 'WRITE FILES'\
+                     ))\
+                   )\
+                 ) AS allowed",
+                &[&principal, &path, &read_write],
+            )
+            .await?;
+        Ok(row.get("allowed"))
+    }
+
+    async fn has_any_privilege(
+        &self,
+        principal: String,
+        securable_type: SecurableType,
+        full_name: String,
+        privileges: Vec<Privilege>,
+    ) -> Result<bool, AppError> {
+        let client = self.pool.get().await?;
+        let resource_id = get_resource_id(&client, securable_type, &full_name).await?;
+        let rows = queries::list_permissions()
+            .bind(&client, &resource_id, &principal)
+            .all()
+            .await?;
+        Ok(rows.iter().any(|row| {
+            privileges
+                .iter()
+                .any(|privilege| row.privilege == privilege.as_str())
+        }))
+    }
+
     async fn get_permissions(
         &self,
         securable_type: SecurableType,

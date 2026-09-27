@@ -33,6 +33,8 @@ impl SecurableType {
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum Privilege {
+    #[serde(rename = "OWNER")]
+    Owner,
     #[serde(rename = "CREATE CATALOG")]
     CreateCatalog,
     #[serde(rename = "USE CATALOG")]
@@ -76,6 +78,7 @@ pub enum Privilege {
 impl Privilege {
     pub fn as_str(self) -> &'static str {
         match self {
+            Self::Owner => "OWNER",
             Self::CreateCatalog => "CREATE CATALOG",
             Self::UseCatalog => "USE CATALOG",
             Self::CreateSchema => "CREATE SCHEMA",
@@ -104,6 +107,7 @@ impl TryFrom<String> for Privilege {
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
         match value.as_str() {
+            "OWNER" => Ok(Self::Owner),
             "CREATE CATALOG" => Ok(Self::CreateCatalog),
             "USE CATALOG" => Ok(Self::UseCatalog),
             "CREATE SCHEMA" => Ok(Self::CreateSchema),
@@ -166,6 +170,7 @@ mod tests {
     #[test]
     fn privilege_values_match_openapi() {
         let cases = [
+            (Privilege::Owner, "OWNER"),
             (Privilege::CreateCatalog, "CREATE CATALOG"),
             (Privilege::UseCatalog, "USE CATALOG"),
             (Privilege::CreateSchema, "CREATE SCHEMA"),
