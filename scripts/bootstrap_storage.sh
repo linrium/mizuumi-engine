@@ -84,13 +84,14 @@ clients="$(kc GET '/admin/realms/sovico/clients?clientId=rustfs-console')"
 client_uuid="$(printf '%s' "$clients" | jq -r '[.[] | select(.clientId == "rustfs-console")][0].id // empty')"
 callback=https://api.storage.mizuumi.test/rustfs/admin/v3/oidc/callback/default
 console_origin=https://storage.mizuumi.test
-client_payload="$(jq -cn --arg callback "$callback" --arg origin "$console_origin" '{clientId:"rustfs-console",enabled:true,protocol:"openid-connect",publicClient:false,clientAuthenticatorType:"client-secret",standardFlowEnabled:true,directAccessGrantsEnabled:false,serviceAccountsEnabled:false,redirectUris:[$callback],webOrigins:[$origin],attributes:{"pkce.code.challenge.method":"S256"}}')"
+post_logout_url="$console_origin/rustfs/console/auth/login"
+client_payload="$(jq -cn --arg callback "$callback" --arg origin "$console_origin" --arg post_logout "$post_logout_url" '{clientId:"rustfs-console",enabled:true,protocol:"openid-connect",publicClient:false,clientAuthenticatorType:"client-secret",standardFlowEnabled:true,directAccessGrantsEnabled:false,serviceAccountsEnabled:false,redirectUris:[$callback],webOrigins:[$origin],attributes:{"pkce.code.challenge.method":"S256","post.logout.redirect.uris":$post_logout}}')"
 if [[ -z "$client_uuid" ]]; then
   kc POST /admin/realms/sovico/clients "$client_payload" >/dev/null
   client_uuid="$(kc GET '/admin/realms/sovico/clients?clientId=rustfs-console' | jq -er '[.[] | select(.clientId == "rustfs-console")][0].id')"
 else
   current_client="$(kc GET "/admin/realms/sovico/clients/$client_uuid")"
-  client_payload="$(printf '%s' "$current_client" | jq -c --arg callback "$callback" --arg origin "$console_origin" '.enabled=true | .publicClient=false | .clientAuthenticatorType="client-secret" | .standardFlowEnabled=true | .directAccessGrantsEnabled=false | .serviceAccountsEnabled=false | .redirectUris=[$callback] | .webOrigins=[$origin] | .attributes["pkce.code.challenge.method"]="S256"')"
+  client_payload="$(printf '%s' "$current_client" | jq -c --arg callback "$callback" --arg origin "$console_origin" --arg post_logout "$post_logout_url" '.enabled=true | .publicClient=false | .clientAuthenticatorType="client-secret" | .standardFlowEnabled=true | .directAccessGrantsEnabled=false | .serviceAccountsEnabled=false | .redirectUris=[$callback] | .webOrigins=[$origin] | .attributes=(.attributes // {}) | .attributes["pkce.code.challenge.method"]="S256" | .attributes["post.logout.redirect.uris"]=$post_logout')"
   kc PUT "/admin/realms/sovico/clients/$client_uuid" "$client_payload" >/dev/null
 fi
 mapper_list="$(kc GET "/admin/realms/sovico/clients/$client_uuid/protocol-mappers/models")"
