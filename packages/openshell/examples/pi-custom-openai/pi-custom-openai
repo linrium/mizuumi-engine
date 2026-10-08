@@ -1,0 +1,41 @@
+#!/bin/sh
+set -eu
+
+: "${CUSTOM_OPENAI_BASE_URL:?CUSTOM_OPENAI_BASE_URL is required}"
+: "${CUSTOM_OPENAI_MODEL:?CUSTOM_OPENAI_MODEL is required}"
+: "${OPENAI_API_KEY:?OPENAI_API_KEY is required}"
+
+agent_dir="${PI_CODING_AGENT_DIR:-/tmp/pi-agent-$(id -u)}"
+if ! mkdir -p "$agent_dir" 2>/dev/null || ! test -w "$agent_dir"; then
+  fallback_dir="/tmp/pi-agent-$(id -u)-$$"
+  echo "Pi agent directory is not writable; using $fallback_dir instead." >&2
+  mkdir -p "$fallback_dir"
+  agent_dir="$fallback_dir"
+fi
+PI_CODING_AGENT_DIR="$agent_dir"
+export PI_CODING_AGENT_DIR
+
+# Use Node for JSON serialization so provider values cannot break the config.
+node <<'NODE'
+const fs = require("node:fs");
+const path = require("node:path");
+
+const config = {
+  providers: {
+    "custom-openai": {
+      baseUrl: process.env.CUSTOM_OPENAI_BASE_URL,
+      api: "openai-completions",
+      apiKey: "$OPENAI_API_KEY",
+      models: [{ id: process.env.CUSTOM_OPENAI_MODEL }],
+    },
+  },
+};
+
+fs.writeFileSync(
+  path.join(process.env.PI_CODING_AGENT_DIR, "models.json"),
+  `${JSON.stringify(config, null, 2)}\n`,
+  { mode: 0o600 },
+);
+NODE
+
+exec pi --model "custom-openai/$CUSTOM_OPENAI_MODEL" "$@"
