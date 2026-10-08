@@ -1,0 +1,25 @@
+# Local evaluation values for the upstream NVIDIA OpenShell chart.
+# The setup script pins the chart version separately.
+
+replicaCount: 1
+
+workload:
+  kind: statefulset
+
+server:
+  telemetryEnabled: false
+  auth:
+    # Safe only while the ClusterIP service is reached through a local
+    # port-forward. Configure OIDC and set this to false for shared access.
+    allowUnauthenticatedUsers: true
+
+networkPolicy:
+  enabled: true
+
+service:
+  type: ClusterIP
+
+sandbox:
+  image:
+    repository: nvcr.io/nvidia/base/ubuntu
+    tag: "24.04"

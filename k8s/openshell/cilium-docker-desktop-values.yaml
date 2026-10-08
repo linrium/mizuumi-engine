@@ -1,0 +1,20 @@
+# Add NetworkPolicy enforcement to Docker Desktop's kindnet CNI without
+# replacing the networking managed by Docker Desktop.
+cni:
+  chainingMode: generic-veth
+  customConf: true
+  configMap: cni-configuration
+
+routingMode: native
+enableIPv4Masquerade: false
+kubeProxyReplacement: false
+rollOutCiliumPods: true
+
+# Match the PodCIDR assigned to Docker Desktop's Kind node. The chained
+# kindnet plugin remains responsible for allocating each pod address.
+ipam:
+  mode: kubernetes
+
+operator:
+  replicas: 1
+  rollOutPods: true
