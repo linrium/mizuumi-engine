@@ -175,4 +175,5 @@ openshell sandbox create \
   --env "CUSTOM_OPENAI_BASE_URL=$CUSTOM_OPENAI_BASE_URL" \
   --env "CUSTOM_OPENAI_MODEL=$CUSTOM_OPENAI_MODEL" \
   --env "PI_CODING_AGENT_DIR=/tmp/pi-agent-runtime" \
+  --label "mizuumi.studio.agent=true" \
   -- pi-custom-openai

@@ -1,8 +1,8 @@
 import { headers } from "next/headers"
+import Link from "next/link"
 import { redirect } from "next/navigation"
 import { SignOutButton } from "@/components/sign-out-button"
 import { auth } from "@/lib/auth"
-import Link from "next/link"
 
 export default async function Home() {
   const session = await auth.api.getSession({
@@ -16,6 +16,7 @@ export default async function Home() {
   return (
     <main className="">
       <div>
+        <Link href="/chat">Pi Agents</Link>
         <Link href="/lineages">Lineages</Link>
         <Link href="/unitycatalog">Unity Catalog</Link>
       </div>

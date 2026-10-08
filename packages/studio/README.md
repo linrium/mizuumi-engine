@@ -27,3 +27,34 @@ curl --fail --cacert ../../k8s/auth/tls/ca.crt \
 
 For `npm run start` or another deployment, configure Node's TLS trust for that
 environment before starting Studio.
+
+## Pi agents
+
+The `/chat` page is a minimal OpenShell agent runner. It uses the local
+`openshell` CLI to list, create, and delete sandboxes, and streams Pi's JSONL
+events to the browser while a prompt runs.
+
+First initialize the Vault KV secret, custom provider, and image as described in
+`../openshell/examples/pi-custom-openai/README.md`. Studio reads `base_url` and
+`model` from that KV v2 secret. Configure its location in `.env.local`:
+
+```sh
+OPENSHELL_PI_IMAGE=pi-custom-openai:local
+OPENSHELL_PI_PROVIDER=pi-custom-openai
+VAULT_ADDR=https://vault.mizuumi.test
+VAULT_CACERT=../../k8s/auth/tls/ca.crt
+VAULT_KV_MOUNT=pi-custom-openai
+VAULT_KV_SECRET_PATH=config
+```
+
+Authenticate the Vault CLI (`vault login`) before starting Studio, or provide a
+Vault token through the process environment. Studio reads only `base_url` and
+`model`; it never reads or returns `api_key`. New sandboxes attach the existing
+OpenShell provider, and OpenShell injects its endpoint-bound credential into Pi.
+
+The public `vault.mizuumi.test` endpoint terminates TLS at the shared gateway,
+so `VAULT_CACERT` must point to the gateway CA under `k8s/auth/tls`. The separate
+CA under `k8s/vault/tls` is only for the gateway-to-Vault upstream connection.
+
+For a non-local deployment, give the Studio workload a read-only Vault identity
+for `<mount>/data/<secret-path>` instead of using a developer token.

@@ -3,11 +3,15 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 keycloak_ca="$repo_root/k8s/auth/tls/ca.crt"
+vault_ca="${VAULT_CACERT:-$repo_root/k8s/auth/tls/ca.crt}"
 studio_env="$repo_root/packages/studio/.env.local"
 realm="${KEYCLOAK_REALM:-sovico}"
 client_id="${STUDIO_KEYCLOAK_CLIENT_ID:-studio}"
 studio_url="${STUDIO_URL:-http://localhost:3000}"
 public_keycloak_url="${KEYCLOAK_PUBLIC_URL:-https://auth.mizuumi.test}"
+vault_addr="${VAULT_ADDR:-https://vault.mizuumi.test}"
+vault_kv_mount="${VAULT_KV_MOUNT:-pi-custom-openai}"
+vault_kv_secret_path="${VAULT_KV_SECRET_PATH:-config}"
 keycloak_url="https://127.0.0.1:18080"
 rotate_secret=0
 
@@ -26,6 +30,10 @@ Environment overrides:
   KEYCLOAK_PUBLIC_URL         Default: https://auth.mizuumi.test
   STUDIO_KEYCLOAK_CLIENT_ID   Default: studio
   STUDIO_URL                  Default: http://localhost:3000
+  VAULT_ADDR                 Default: https://vault.mizuumi.test
+  VAULT_CACERT               Default: k8s/auth/tls/ca.crt
+  VAULT_KV_MOUNT             Default: pi-custom-openai
+  VAULT_KV_SECRET_PATH       Default: config
 EOF
 }
 
@@ -67,6 +75,24 @@ esac
   echo "Run ./scripts/setup_auth.sh and ./scripts/bootstrap_sovico.sh first." >&2
   exit 1
 }
+
+[[ -f "$vault_ca" ]] || {
+  echo "Missing Vault CA: $vault_ca" >&2
+  echo "Run ./scripts/setup_vault.sh first." >&2
+  exit 1
+}
+
+if [[ ! "$vault_kv_mount" =~ ^[A-Za-z0-9_-]+$ ]]; then
+  echo "VAULT_KV_MOUNT must contain only letters, numbers, underscores, or hyphens." >&2
+  exit 1
+fi
+
+if [[ ! "$vault_kv_secret_path" =~ ^[A-Za-z0-9._/-]+$ ]] ||
+   [[ "$vault_kv_secret_path" == /* ]] ||
+   [[ "/$vault_kv_secret_path/" == *"/../"* ]]; then
+  echo "VAULT_KV_SECRET_PATH must be a relative Vault path without '..' segments." >&2
+  exit 1
+fi
 
 admin_user="$(kubectl -n auth get deployment keycloak -o json | jq -er '.spec.template.spec.containers[] | select(.name == "keycloak") | .env[] | select(.name == "KC_BOOTSTRAP_ADMIN_USERNAME") | .value')"
 admin_password="$(kubectl -n auth get secret keycloak-credentials -o json | jq -er '.data.ADMIN_PASSWORD | @base64d')"
@@ -168,10 +194,11 @@ fi
 umask 077
 env_tmp="$(mktemp "$repo_root/packages/studio/.env.local.XXXXXX")"
 if [[ -f "$studio_env" ]]; then
-  awk '!/^(KEYCLOAK_CLIENT_ID|KEYCLOAK_CLIENT_SECRET|KEYCLOAK_ISSUER)=/' "$studio_env" > "$env_tmp"
+  awk '!/^(KEYCLOAK_CLIENT_ID|KEYCLOAK_CLIENT_SECRET|KEYCLOAK_ISSUER|VAULT_ADDR|VAULT_CACERT|VAULT_KV_MOUNT|VAULT_KV_SECRET_PATH)=/' "$studio_env" > "$env_tmp"
 fi
-printf 'KEYCLOAK_CLIENT_ID=%s\nKEYCLOAK_CLIENT_SECRET=%s\nKEYCLOAK_ISSUER=%s\n' \
-  "$client_id" "$client_secret" "$issuer" >> "$env_tmp"
+printf 'KEYCLOAK_CLIENT_ID=%s\nKEYCLOAK_CLIENT_SECRET=%s\nKEYCLOAK_ISSUER=%s\nVAULT_ADDR=%s\nVAULT_CACERT=%s\nVAULT_KV_MOUNT=%s\nVAULT_KV_SECRET_PATH=%s\n' \
+  "$client_id" "$client_secret" "$issuer" "$vault_addr" "$vault_ca" \
+  "$vault_kv_mount" "$vault_kv_secret_path" >> "$env_tmp"
 chmod 600 "$env_tmp"
 mv "$env_tmp" "$studio_env"
 env_tmp=""
