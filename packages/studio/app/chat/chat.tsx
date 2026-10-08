@@ -12,11 +12,29 @@ import {
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
 import { Textarea } from "@/components/ui/textarea"
+import {
+  DEFAULT_PI_MODEL,
+  DEFAULT_PI_THINKING_LEVEL,
+  getPiThinkingLevels,
+  PI_MODELS,
+  type PiModel,
+  type PiThinkingLevel,
+} from "@/lib/pi-models"
 import { buildPiSteps, type PiEvent, type StepStatus } from "./pi-steps"
 
 type Agent = { name: string; status: string }
+
+const modelItems = PI_MODELS.map(({ id, label }) => ({ value: id, label }))
 
 const statusVariant: Record<
   StepStatus,
@@ -45,6 +63,10 @@ export function Chat() {
   const [selected, setSelected] = useState<string>()
   const [name, setName] = useState("")
   const [prompt, setPrompt] = useState("")
+  const [model, setModel] = useState<PiModel>(DEFAULT_PI_MODEL)
+  const [thinkingLevel, setThinkingLevel] = useState<PiThinkingLevel>(
+    DEFAULT_PI_THINKING_LEVEL,
+  )
   const [events, setEvents] = useState<PiEvent[]>([])
   const [debug, setDebug] = useState(false)
   const [newSessionAgents, setNewSessionAgents] = useState<Set<string>>(
@@ -134,7 +156,7 @@ export function Chat() {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ prompt, newSession }),
+          body: JSON.stringify({ prompt, newSession, model, thinkingLevel }),
         },
       )
       if (!response.ok) throw new Error(await responseError(response))
@@ -199,6 +221,20 @@ export function Chat() {
     setNewSessionAgents((current) => new Set(current).add(selected))
     setEvents([])
     setError(undefined)
+  }
+
+  const thinkingLevels = getPiThinkingLevels(model)
+  const thinkingItems = thinkingLevels.map((level) => ({
+    value: level,
+    label: level === "off" ? "None" : level,
+  }))
+
+  function selectModel(nextModel: PiModel) {
+    setModel(nextModel)
+    const supportedLevels = getPiThinkingLevels(nextModel)
+    if (!supportedLevels.some((level) => level === thinkingLevel)) {
+      setThinkingLevel(DEFAULT_PI_THINKING_LEVEL)
+    }
   }
 
   return (
@@ -285,6 +321,56 @@ export function Chat() {
         </CardHeader>
         <CardContent className="space-y-4">
           <form className="space-y-2" onSubmit={runAgent}>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <label className="space-y-1" htmlFor="agent-model">
+                <span className="text-sm font-medium">Model</span>
+                <Select
+                  items={modelItems}
+                  value={model}
+                  disabled={busy}
+                  onValueChange={(value) =>
+                    value && selectModel(value as PiModel)
+                  }
+                >
+                  <SelectTrigger className="h-9 w-full" id="agent-model">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      {modelItems.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </label>
+              <label className="space-y-1" htmlFor="thinking-level">
+                <span className="text-sm font-medium">Thinking level</span>
+                <Select
+                  items={thinkingItems}
+                  value={thinkingLevel}
+                  disabled={busy}
+                  onValueChange={(value) =>
+                    value && setThinkingLevel(value as PiThinkingLevel)
+                  }
+                >
+                  <SelectTrigger className="h-9 w-full" id="thinking-level">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      {thinkingItems.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </label>
+            </div>
             <label htmlFor="agent-prompt">
               <span className="sr-only">Prompt</span>
               <Textarea
@@ -295,9 +381,11 @@ export function Chat() {
                 required
               />
             </label>
-            <Button type="submit" disabled={busy || !selected}>
-              Run
-            </Button>
+            <div className="mt-3">
+              <Button type="submit" disabled={busy || !selected}>
+                Run
+              </Button>
+            </div>
           </form>
 
           {error ? (

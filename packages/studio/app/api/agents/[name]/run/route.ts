@@ -6,6 +6,13 @@ import {
   errorMessage,
   spawnOpenShell,
 } from "@/lib/openshell"
+import {
+  isPiModel,
+  isPiThinkingLevel,
+  type PiModel,
+  type PiThinkingLevel,
+  supportsPiThinkingLevel,
+} from "@/lib/pi-models"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -22,6 +29,8 @@ export async function POST(
   let name: string
   let prompt: string
   let newSession: boolean
+  let model: PiModel
+  let thinkingLevel: PiThinkingLevel
 
   try {
     name = (await context.params).name
@@ -39,6 +48,28 @@ export async function POST(
       typeof body.prompt === "string"
         ? body.prompt.trim()
         : ""
+    const requestedModel =
+      typeof body === "object" && body !== null && "model" in body
+        ? body.model
+        : undefined
+    if (!isPiModel(requestedModel)) {
+      throw new Error("Select a supported GPT model.")
+    }
+    model = requestedModel
+
+    const requestedThinkingLevel =
+      typeof body === "object" && body !== null && "thinkingLevel" in body
+        ? body.thinkingLevel
+        : undefined
+    if (!isPiThinkingLevel(requestedThinkingLevel)) {
+      throw new Error("Select a supported thinking level.")
+    }
+    thinkingLevel = requestedThinkingLevel
+    if (!supportsPiThinkingLevel(model, thinkingLevel)) {
+      throw new Error(
+        `${model} does not support the ${thinkingLevel} thinking level.`,
+      )
+    }
     if (!prompt || prompt.length > 20_000) {
       throw new Error("Prompt must contain between 1 and 20,000 characters.")
     }
@@ -68,6 +99,10 @@ export async function POST(
     "--no-tty",
     "--",
     "pi-custom-openai",
+    "--model",
+    `custom-openai/${model}`,
+    "--thinking",
+    thinkingLevel,
     "--mode",
     "json",
     ...(newSession ? [] : ["--continue"]),

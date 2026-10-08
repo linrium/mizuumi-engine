@@ -7,6 +7,7 @@ import {
   runOpenShell,
 } from "@/lib/openshell"
 import { getPiConfig } from "@/lib/pi-config"
+import { DEFAULT_PI_MODEL, PI_MODELS_JSON } from "@/lib/pi-models"
 
 export const runtime = "nodejs"
 
@@ -41,7 +42,7 @@ export async function POST(request: Request) {
 
     const image = process.env.OPENSHELL_PI_IMAGE ?? "pi-custom-openai:local"
     const provider = process.env.OPENSHELL_PI_PROVIDER ?? "pi-custom-openai"
-    const { baseUrl, model } = await getPiConfig()
+    const { baseUrl } = await getPiConfig()
 
     const output = await runOpenShell([
       "sandbox",
@@ -55,7 +56,9 @@ export async function POST(request: Request) {
       "--env",
       `CUSTOM_OPENAI_BASE_URL=${baseUrl}`,
       "--env",
-      `CUSTOM_OPENAI_MODEL=${model}`,
+      `CUSTOM_OPENAI_MODEL=${DEFAULT_PI_MODEL}`,
+      "--env",
+      `CUSTOM_OPENAI_MODELS_JSON=${PI_MODELS_JSON}`,
       "--env",
       "PI_CODING_AGENT_DIR=/tmp/pi-agent-runtime",
       "--label",

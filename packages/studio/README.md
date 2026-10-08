@@ -35,8 +35,9 @@ The `/chat` page is a minimal OpenShell agent runner. It uses the local
 events to the browser while a prompt runs.
 
 First initialize the Vault KV secret, custom provider, and image as described in
-`../openshell/examples/pi-custom-openai/README.md`. Studio reads `base_url` and
-`model` from that KV v2 secret. Configure its location in `.env.local`:
+`../openshell/examples/pi-custom-openai/README.md`. Studio reads `base_url`
+from that KV v2 secret; users select the GPT model and thinking level on the
+chat page. Configure the secret's location in `.env.local`:
 
 ```sh
 OPENSHELL_PI_IMAGE=pi-custom-openai:local
@@ -48,9 +49,13 @@ VAULT_KV_SECRET_PATH=config
 ```
 
 Authenticate the Vault CLI (`vault login`) before starting Studio, or provide a
-Vault token through the process environment. Studio reads only `base_url` and
-`model`; it never reads or returns `api_key`. New sandboxes attach the existing
-OpenShell provider, and OpenShell injects its endpoint-bound credential into Pi.
+Vault token through the process environment. Studio reads only `base_url`; it
+never reads or returns `api_key`. New sandboxes attach the existing OpenShell
+provider, and OpenShell injects its endpoint-bound credential into Pi.
+
+The chat model selector supports GPT-5.5 and GPT-5.6 Sol, Terra, and Luna. The
+thinking selector is validated for the selected family. Recreate sandboxes made
+with an older Studio image so their Pi model registry includes these models.
 
 The public `vault.mizuumi.test` endpoint terminates TLS at the shared gateway,
 so `VAULT_CACERT` must point to the gateway CA under `k8s/auth/tls`. The separate

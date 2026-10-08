@@ -20,13 +20,17 @@ node <<'NODE'
 const fs = require("node:fs");
 const path = require("node:path");
 
+const models = process.env.CUSTOM_OPENAI_MODELS_JSON
+  ? JSON.parse(process.env.CUSTOM_OPENAI_MODELS_JSON)
+  : [{ id: process.env.CUSTOM_OPENAI_MODEL }];
+
 const config = {
   providers: {
     "custom-openai": {
       baseUrl: process.env.CUSTOM_OPENAI_BASE_URL,
       api: "openai-completions",
       apiKey: "$OPENAI_API_KEY",
-      models: [{ id: process.env.CUSTOM_OPENAI_MODEL }],
+      models,
     },
   },
 };

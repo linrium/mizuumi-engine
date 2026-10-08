@@ -5,7 +5,6 @@ const execFileAsync = promisify(execFile)
 
 export type PiConfig = {
   baseUrl: string
-  model: string
 }
 
 function vaultError(error: unknown) {
@@ -56,21 +55,13 @@ function parseVaultPiConfig(output: string): PiConfig {
     typeof secret.base_url === "string"
       ? secret.base_url
       : ""
-  const model =
-    typeof secret === "object" &&
-    secret !== null &&
-    "model" in secret &&
-    typeof secret.model === "string"
-      ? secret.model
-      : ""
-
-  if (!baseUrl || !model) {
+  if (!baseUrl) {
     throw new Error(
-      "The Pi Vault secret must contain non-empty base_url and model fields.",
+      "The Pi Vault secret must contain a non-empty base_url field.",
     )
   }
 
-  return { baseUrl, model }
+  return { baseUrl }
 }
 
 export async function getPiConfig(): Promise<PiConfig> {
