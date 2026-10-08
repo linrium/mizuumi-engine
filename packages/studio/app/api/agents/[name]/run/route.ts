@@ -21,11 +21,17 @@ export async function POST(
 
   let name: string
   let prompt: string
+  let newSession: boolean
 
   try {
     name = (await context.params).name
     assertSandboxName(name)
     const body: unknown = await request.json()
+    newSession =
+      typeof body === "object" &&
+      body !== null &&
+      "newSession" in body &&
+      body.newSession === true
     prompt =
       typeof body === "object" &&
       body !== null &&
@@ -64,7 +70,7 @@ export async function POST(
     "pi-custom-openai",
     "--mode",
     "json",
-    "--no-session",
+    ...(newSession ? [] : ["--continue"]),
     "--",
     prompt,
   ])

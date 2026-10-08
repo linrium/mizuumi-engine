@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { Textarea } from "@/components/ui/textarea"
-import { reducePiEvent, type StepStatus, type UiStep } from "./pi-steps"
+import { buildPiSteps, type PiEvent, type StepStatus } from "./pi-steps"
 
 type Agent = { name: string; status: string }
 
@@ -45,9 +45,14 @@ export function Chat() {
   const [selected, setSelected] = useState<string>()
   const [name, setName] = useState("")
   const [prompt, setPrompt] = useState("")
-  const [steps, setSteps] = useState<UiStep[]>([])
+  const [events, setEvents] = useState<PiEvent[]>([])
+  const [debug, setDebug] = useState(false)
+  const [newSessionAgents, setNewSessionAgents] = useState<Set<string>>(
+    () => new Set(),
+  )
   const [error, setError] = useState<string>()
   const [busy, setBusy] = useState(false)
+  const steps = useMemo(() => buildPiSteps(events, debug), [events, debug])
 
   const loadAgents = useCallback(async () => {
     const response = await fetch("/api/agents", { cache: "no-store" })
@@ -122,19 +127,26 @@ export function Chat() {
 
     setBusy(true)
     setError(undefined)
-    setSteps([])
+    const newSession = newSessionAgents.has(selected)
     try {
       const response = await fetch(
         `/api/agents/${encodeURIComponent(selected)}/run`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ prompt }),
+          body: JSON.stringify({ prompt, newSession }),
         },
       )
       if (!response.ok) throw new Error(await responseError(response))
       if (!response.body) throw new Error("The server did not return a stream.")
 
+      if (newSession) {
+        setNewSessionAgents((current) => {
+          const next = new Set(current)
+          next.delete(selected)
+          return next
+        })
+      }
       setPrompt("")
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
@@ -150,11 +162,12 @@ export function Chat() {
           if (!line) continue
           try {
             const piEvent = JSON.parse(line) as Record<string, unknown>
-            setSteps((current) => reducePiEvent(current, piEvent))
+            setEvents((current) => [...current, piEvent])
           } catch {
-            setSteps((current) =>
-              reducePiEvent(current, { type: "unparsed", message: line }),
-            )
+            setEvents((current) => [
+              ...current,
+              { type: "unparsed", message: line },
+            ])
           }
         }
 
@@ -164,11 +177,12 @@ export function Chat() {
       if (buffer) {
         try {
           const piEvent = JSON.parse(buffer) as Record<string, unknown>
-          setSteps((current) => reducePiEvent(current, piEvent))
+          setEvents((current) => [...current, piEvent])
         } catch {
-          setSteps((current) =>
-            reducePiEvent(current, { type: "unparsed", message: buffer }),
-          )
+          setEvents((current) => [
+            ...current,
+            { type: "unparsed", message: buffer },
+          ])
         }
       }
     } catch (reason) {
@@ -178,6 +192,13 @@ export function Chat() {
     } finally {
       setBusy(false)
     }
+  }
+
+  function startNewSession() {
+    if (!selected) return
+    setNewSessionAgents((current) => new Set(current).add(selected))
+    setEvents([])
+    setError(undefined)
   }
 
   return (
@@ -245,9 +266,21 @@ export function Chat() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Run {selected ?? "an agent"}</CardTitle>
+          <div className="flex items-center justify-between gap-2">
+            <CardTitle>Run {selected ?? "an agent"}</CardTitle>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={busy || !selected}
+              onClick={startNewSession}
+            >
+              New session
+            </Button>
+          </div>
           <CardDescription>
-            Pi events appear below while the prompt runs.
+            {selected && newSessionAgents.has(selected)
+              ? "Your next message will start a new Pi session."
+              : "Messages continue the current Pi session."}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -276,9 +309,20 @@ export function Chat() {
           <Separator />
 
           <section aria-labelledby="steps-heading">
-            <h2 className="mb-2 font-medium" id="steps-heading">
-              Steps
-            </h2>
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <h2 className="font-medium" id="steps-heading">
+                Steps
+              </h2>
+              <Button
+                type="button"
+                size="sm"
+                variant={debug ? "secondary" : "outline"}
+                aria-pressed={debug}
+                onClick={() => setDebug((current) => !current)}
+              >
+                Debug {debug ? "on" : "off"}
+              </Button>
+            </div>
             <ScrollArea className="h-96 rounded-md border">
               {steps.length === 0 ? (
                 <p className="p-3 text-muted-foreground">No steps yet.</p>
@@ -304,6 +348,16 @@ export function Chat() {
                         <p className="text-xs text-muted-foreground">
                           {step.meta}
                         </p>
+                      ) : null}
+                      {debug ? (
+                        <details>
+                          <summary className="cursor-pointer text-sm">
+                            JSON
+                          </summary>
+                          <pre className="mt-2 overflow-x-auto whitespace-pre-wrap rounded-md border p-2 text-xs">
+                            {JSON.stringify(step.event, null, 2)}
+                          </pre>
+                        </details>
                       ) : null}
                     </li>
                   ))}

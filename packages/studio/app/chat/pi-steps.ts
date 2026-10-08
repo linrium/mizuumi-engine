@@ -1,14 +1,17 @@
 export type StepStatus = "running" | "completed" | "error"
 
+export type PiEvent = Record<string, unknown>
+
 export type UiStep = {
   id: string
   title: string
   status: StepStatus
   detail?: string
   meta?: string
+  streamKey?: string
+  runIndex?: number
+  event: PiEvent
 }
-
-type PiEvent = Record<string, unknown>
 
 function object(value: unknown): Record<string, unknown> | undefined {
   return typeof value === "object" && value !== null
@@ -27,7 +30,6 @@ function number(value: unknown) {
 function messageText(messageValue: unknown) {
   const message = object(messageValue)
   if (!message) return undefined
-
   if (typeof message.content === "string") return message.content
   if (!Array.isArray(message.content)) return undefined
 
@@ -48,45 +50,12 @@ function truncate(value: unknown, length = 500) {
     text = value
   } else {
     try {
-      text = JSON.stringify(value, null, 2)
+      text = JSON.stringify(value, null, 2) ?? String(value)
     } catch {
       text = String(value)
     }
   }
-
   return text.length > length ? `${text.slice(0, length)}…` : text
-}
-
-function upsert(steps: UiStep[], step: UiStep) {
-  const index = steps.findIndex((current) => current.id === step.id)
-  if (index === -1) return [...steps, step]
-
-  const next = [...steps]
-  next[index] = { ...next[index], ...step }
-  return next
-}
-
-function update(
-  steps: UiStep[],
-  id: string,
-  changes: Partial<Omit<UiStep, "id">>,
-) {
-  const current = steps.find((step) => step.id === id)
-  if (!current) return steps
-  return upsert(steps, { ...current, ...changes })
-}
-
-function completeLifecycle(steps: UiStep[], aborted: boolean) {
-  const status = aborted ? "error" : "completed"
-  let next = update(steps, "turn", { status })
-  next = update(next, "agent", {
-    status,
-    title: aborted ? "Agent stopped" : "Agent finished",
-  })
-  return update(next, "run", {
-    status,
-    title: aborted ? "Run stopped" : "Run completed",
-  })
 }
 
 function assistantMeta(message: Record<string, unknown>) {
@@ -103,178 +72,145 @@ function assistantMeta(message: Record<string, unknown>) {
     .join(" · ")
 }
 
-function finishAssistantMessage(
+function titleCase(value: string) {
+  return value
+    .split("_")
+    .map((word) => `${word.charAt(0).toUpperCase()}${word.slice(1)}`)
+    .join(" ")
+}
+
+function previousStreamText(steps: UiStep[], streamKey: string) {
+  for (let index = steps.length - 1; index >= 0; index -= 1) {
+    const step = steps[index]
+    if (step.streamKey === streamKey) return step.detail ?? ""
+    if (step.event.type === "run_start") break
+  }
+  return ""
+}
+
+function describeEvent(
   steps: UiStep[],
-  message: Record<string, unknown>,
-) {
-  const stopReason = string(message.stopReason)
-  const status =
-    stopReason === "error" || stopReason === "aborted" ? "error" : "completed"
-  const meta = assistantMeta(message) || undefined
-  let next = steps
-
-  if (typeof message.content === "string") {
-    return upsert(next, {
-      id: "response-0",
-      title: "Assistant response",
-      status,
-      detail: message.content,
-      meta,
-    })
-  }
-
-  if (Array.isArray(message.content)) {
-    message.content.forEach((item, index) => {
-      const content = object(item)
-      if (content?.type !== "text") return
-      next = upsert(next, {
-        id: `response-${index}`,
-        title: "Assistant response",
-        status,
-        detail: string(content.text),
-        meta,
-      })
-    })
-  }
-
-  return update(next, "response-0", { status, meta })
-}
-
-function reduceMessageUpdate(steps: UiStep[], event: PiEvent) {
-  const messageEvent = object(event.assistantMessageEvent)
-  const eventType = string(messageEvent?.type)
-  const contentIndex = number(messageEvent?.contentIndex) ?? 0
-
-  if (eventType === "text_start") {
-    return upsert(steps, {
-      id: `response-${contentIndex}`,
-      title: "Assistant response",
-      status: "running",
-    })
-  }
-
-  if (eventType === "text_delta") {
-    const id = `response-${contentIndex}`
-    const current = steps.find((step) => step.id === id)
-    return upsert(steps, {
-      id,
-      title: "Assistant response",
-      status: "running",
-      detail: `${current?.detail ?? ""}${string(messageEvent?.delta) ?? ""}`,
-    })
-  }
-
-  if (eventType === "text_end") {
-    return upsert(steps, {
-      id: `response-${contentIndex}`,
-      title: "Assistant response",
-      status: "completed",
-      detail: string(messageEvent?.content),
-    })
-  }
-
-  if (eventType?.startsWith("thinking_")) {
-    return upsert(steps, {
-      id: `thinking-${contentIndex}`,
-      title: "Thinking",
-      status: eventType === "thinking_end" ? "completed" : "running",
-    })
-  }
-
-  if (eventType?.startsWith("toolcall_")) {
-    const call =
-      object(messageEvent?.toolCall) ?? object(messageEvent?.partialCall)
-    const id = string(call?.id) ?? `pending-${contentIndex}`
-    const name = string(call?.name) ?? "tool"
-    return upsert(steps, {
-      id: `tool-${id}`,
-      title: `Preparing ${name}`,
-      status: eventType === "toolcall_end" ? "completed" : "running",
-      detail:
-        call?.arguments === undefined ? undefined : truncate(call.arguments),
-    })
-  }
-
-  return steps
-}
-
-export function reducePiEvent(steps: UiStep[], event: PiEvent): UiStep[] {
-  const type = string(event.type)
+  event: PiEvent,
+): Omit<UiStep, "id" | "event"> {
+  const type = string(event.type) ?? "unknown"
 
   if (type === "run_start") {
     const agent = string(event.agent)
-    return upsert(steps, {
-      id: "run",
-      title: agent ? `Running ${agent}` : "Run started",
+    return {
+      title: agent ? `Run started for ${agent}` : "Run started",
       status: "running",
-    })
+    }
   }
 
   if (type === "session") {
-    return upsert(steps, {
-      id: "session",
+    return {
       title: "Session started",
       status: "completed",
       detail: string(event.cwd),
       meta: string(event.id),
-    })
+    }
   }
 
-  if (type === "agent_start") {
-    return upsert(steps, {
-      id: "agent",
-      title: "Agent working",
-      status: "running",
-    })
-  }
-
-  if (type === "turn_start") {
-    return upsert(steps, {
-      id: "turn",
-      title: "Processing prompt",
-      status: "running",
-    })
-  }
+  if (type === "agent_start")
+    return { title: "Agent started", status: "running" }
+  if (type === "turn_start") return { title: "Turn started", status: "running" }
 
   if (type === "message_start" || type === "message_end") {
     const message = object(event.message)
-    const role = string(message?.role)
-    if (role === "system") return steps
+    const role = string(message?.role) ?? "unknown"
+    const status = type === "message_end" ? "completed" : "running"
 
+    if (role === "system") {
+      return {
+        title: `System message ${type === "message_end" ? "ended" : "started"}`,
+        status,
+      }
+    }
     if (role === "user") {
-      return upsert(steps, {
-        id: "prompt",
-        title: "Prompt",
-        status: type === "message_end" ? "completed" : "running",
+      return { title: "User message", status, detail: messageText(message) }
+    }
+    if (role === "assistant") {
+      const stopReason = string(message?.stopReason)
+      return {
+        title: "Assistant message",
+        status:
+          stopReason === "error" || stopReason === "aborted" ? "error" : status,
         detail: messageText(message),
-      })
+        meta: message ? assistantMeta(message) || undefined : undefined,
+      }
     }
 
-    if (role === "assistant" && message) {
-      if (type === "message_end") return finishAssistantMessage(steps, message)
-      return steps
-    }
+    return { title: `${titleCase(role)} message`, status }
   }
 
-  if (type === "message_update") return reduceMessageUpdate(steps, event)
+  if (type === "message_update") {
+    const messageEvent = object(event.assistantMessageEvent)
+    const updateType = string(messageEvent?.type) ?? "update"
+    const contentIndex = number(messageEvent?.contentIndex) ?? 0
 
-  if (type === "tool_execution_start") {
-    const id = string(event.toolCallId) ?? String(steps.length)
+    if (updateType.startsWith("text_")) {
+      const streamKey = `text-${contentIndex}`
+      const delta = string(messageEvent?.delta)
+      const content = string(messageEvent?.content)
+      const detail =
+        delta === undefined
+          ? content
+          : `${previousStreamText(steps, streamKey)}${delta}`
+      return {
+        title:
+          updateType === "text_start"
+            ? "Assistant text started"
+            : updateType === "text_end"
+              ? "Assistant text completed"
+              : "Assistant text updated",
+        status: updateType === "text_end" ? "completed" : "running",
+        detail,
+        streamKey,
+      }
+    }
+
+    if (updateType.startsWith("thinking_")) {
+      return {
+        title:
+          updateType === "thinking_end" ? "Thinking completed" : "Thinking",
+        status: updateType === "thinking_end" ? "completed" : "running",
+      }
+    }
+
+    if (updateType.startsWith("toolcall_")) {
+      const call =
+        object(messageEvent?.toolCall) ?? object(messageEvent?.partialCall)
+      const name = string(call?.name) ?? "tool"
+      return {
+        title: `Preparing ${name}`,
+        status: updateType === "toolcall_end" ? "completed" : "running",
+        detail:
+          call?.arguments === undefined ? undefined : truncate(call.arguments),
+      }
+    }
+
+    return { title: titleCase(updateType), status: "running" }
+  }
+
+  if (type === "tool_execution_start" || type === "tool_execution_update") {
     const name = string(event.toolName) ?? "tool"
-    return upsert(steps, {
-      id: `tool-${id}`,
-      title: `Using ${name}`,
+    return {
+      title:
+        type === "tool_execution_start" ? `Using ${name}` : `${name} updated`,
       status: "running",
-      detail: event.args === undefined ? undefined : truncate(event.args),
-    })
+      detail:
+        event.args === undefined
+          ? event.partialResult === undefined
+            ? undefined
+            : truncate(event.partialResult)
+          : truncate(event.args),
+    }
   }
 
   if (type === "tool_execution_end") {
-    const id = string(event.toolCallId) ?? String(steps.length)
     const name = string(event.toolName) ?? "tool"
     const isError = event.isError === true
-    return upsert(steps, {
-      id: `tool-${id}`,
+    return {
       title: `${name} ${isError ? "failed" : "finished"}`,
       status: isError ? "error" : "completed",
       detail: event.result === undefined ? undefined : truncate(event.result),
@@ -282,68 +218,162 @@ export function reducePiEvent(steps: UiStep[], event: PiEvent): UiStep[] {
         typeof event.durationMs === "number"
           ? `${event.durationMs} ms`
           : undefined,
-    })
+    }
   }
 
-  if (type === "turn_end") {
-    return update(steps, "turn", {
-      title: "Turn completed",
-      status: "completed",
-    })
-  }
-
+  if (type === "turn_end")
+    return { title: "Turn completed", status: "completed" }
   if (type === "agent_end") {
-    return update(steps, "agent", {
-      title: event.willRetry === true ? "Agent retrying" : "Agent finished",
+    return {
+      title: event.willRetry === true ? "Agent will retry" : "Agent finished",
       status: event.willRetry === true ? "running" : "completed",
-    })
+    }
   }
 
   if (type === "auto_retry_start") {
     const attempt = number(event.attempt)
     const maxAttempts = number(event.maxAttempts)
-    return upsert(steps, {
-      id: "retry",
-      title: "Retrying",
+    return {
+      title: "Retry started",
       status: "running",
       detail: string(event.error),
       meta:
         attempt === undefined
           ? undefined
           : `Attempt ${attempt}${maxAttempts ? ` of ${maxAttempts}` : ""}`,
-    })
+    }
   }
 
   if (type === "auto_retry_end") {
-    return update(steps, "retry", {
+    return {
+      title: "Retry finished",
       status: event.success === false ? "error" : "completed",
-    })
+    }
   }
 
   if (type === "agent_settled") {
-    return completeLifecycle(steps, event.aborted === true)
+    const aborted = event.aborted === true
+    return {
+      title: aborted ? "Agent stopped" : "Agent settled",
+      status: aborted ? "error" : "completed",
+    }
   }
 
   if (type === "process_exit") {
     const code = number(event.code)
-    return update(steps, "run", {
-      title: code === 0 ? "Run completed" : "Run failed",
+    return {
+      title: code === 0 ? "Process exited" : "Process failed",
       status: code === 0 ? "completed" : "error",
       meta: code === undefined ? undefined : `Exit code ${code}`,
-    })
+    }
   }
 
   if (type === "stderr" || type === "process_error" || type === "unparsed") {
-    return [
-      ...steps,
-      {
-        id: `error-${steps.length}`,
-        title: "Run error",
-        status: "error",
-        detail: string(event.message) ?? truncate(event),
-      },
-    ]
+    return {
+      title: "Run error",
+      status: "error",
+      detail: string(event.message) ?? truncate(event),
+    }
   }
 
-  return steps
+  return { title: titleCase(type), status: "completed" }
+}
+
+function appendDebugEvent(steps: UiStep[], event: PiEvent): UiStep[] {
+  const type = string(event.type) ?? "event"
+  return [
+    ...steps,
+    {
+      id: `${type}-${steps.length}`,
+      ...describeEvent(steps, event),
+      event,
+    },
+  ]
+}
+
+function upsert(steps: UiStep[], step: UiStep) {
+  const index = steps.findIndex((current) => current.id === step.id)
+  if (index === -1) return [...steps, step]
+
+  const next = [...steps]
+  next[index] = { ...next[index], ...step }
+  return next
+}
+
+function currentRunIndex(steps: UiStep[], startsNewRun: boolean) {
+  const latestRun = steps.reduce(
+    (latest, step) => Math.max(latest, step.runIndex ?? -1),
+    -1,
+  )
+  return startsNewRun ? latestRun + 1 : Math.max(0, latestRun)
+}
+
+function reduceFriendlyEvent(steps: UiStep[], event: PiEvent): UiStep[] {
+  const type = string(event.type) ?? "event"
+  const runIndex = currentRunIndex(steps, type === "run_start")
+  const id = (key: string) => `run-${runIndex}-${key}`
+  const described = describeEvent(steps, event)
+  const step = (key: string, changes: Partial<UiStep> = {}) =>
+    upsert(steps, {
+      id: id(key),
+      ...described,
+      ...changes,
+      runIndex,
+      event,
+    })
+
+  if (type === "run_start") {
+    const agent = string(event.agent)
+    return step("run", {
+      title: agent ? `Running ${agent}` : "Run started",
+    })
+  }
+  if (type === "session") return step("session")
+  if (type === "agent_start") return step("agent", { title: "Agent working" })
+  if (type === "agent_end" || type === "agent_settled") return step("agent")
+  if (type === "turn_start") return step("turn", { title: "Processing prompt" })
+  if (type === "turn_end") return step("turn")
+
+  if (type === "message_start" || type === "message_end") {
+    const message = object(event.message)
+    const role = string(message?.role)
+    if (role === "system") return steps
+    if (role === "user") return step("prompt", { title: "Prompt" })
+    if (role === "assistant")
+      return step("response-0", { title: "Assistant response" })
+  }
+
+  if (type === "message_update") {
+    const messageEvent = object(event.assistantMessageEvent)
+    const updateType = string(messageEvent?.type) ?? "update"
+    const contentIndex = number(messageEvent?.contentIndex) ?? 0
+    if (updateType.startsWith("text_")) {
+      return step(`response-${contentIndex}`, { title: "Assistant response" })
+    }
+    if (updateType.startsWith("thinking_")) {
+      return step(`thinking-${contentIndex}`)
+    }
+    if (updateType.startsWith("toolcall_")) {
+      const call =
+        object(messageEvent?.toolCall) ?? object(messageEvent?.partialCall)
+      return step(`tool-${string(call?.id) ?? contentIndex}`)
+    }
+  }
+
+  if (type.startsWith("tool_execution_")) {
+    return step(`tool-${string(event.toolCallId) ?? steps.length}`)
+  }
+  if (type.startsWith("auto_retry_")) return step("retry")
+  if (type === "process_exit") {
+    const code = number(event.code)
+    return step("run", {
+      title: code === 0 ? "Run completed" : "Run failed",
+    })
+  }
+
+  return step(`${type}-${steps.length}`)
+}
+
+export function buildPiSteps(events: PiEvent[], debug: boolean) {
+  return events.reduce(debug ? appendDebugEvent : reduceFriendlyEvent, [])
 }
