@@ -41,7 +41,7 @@ export CUSTOM_OPENAI_MODEL=your-model-id
 ## Run Pi
 
 Unset the seed values and launch Pi. `run.sh` reads the existing Vault secret,
-builds `pi-custom-openai:local`, creates an endpoint-bound provider, and starts
+builds `pi-custom-openai:local-1`, creates an endpoint-bound provider, and starts
 Pi in a sandbox:
 
 ```sh
@@ -80,7 +80,7 @@ For Podman, use an image name visible to the gateway:
 
 ```sh
 CONTAINER_ENGINE=podman \
-CUSTOM_OPENAI_IMAGE=localhost/pi-custom-openai:local \
+CUSTOM_OPENAI_IMAGE=localhost/pi-custom-openai:local-1 \
 ./run.sh
 ```
 

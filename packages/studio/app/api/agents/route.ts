@@ -40,7 +40,7 @@ export async function POST(request: Request) {
         : undefined
     assertSandboxName(name)
 
-    const image = process.env.OPENSHELL_PI_IMAGE ?? "pi-custom-openai:local"
+    const image = process.env.OPENSHELL_PI_IMAGE ?? "pi-custom-openai:local-1"
     const provider = process.env.OPENSHELL_PI_PROVIDER ?? "pi-custom-openai"
     const { baseUrl } = await getPiConfig()
 
@@ -55,6 +55,13 @@ export async function POST(request: Request) {
         PI_CODING_AGENT_DIR: "/tmp/pi-agent-runtime",
       },
       labels: { "mizuumi.studio.agent": "true" },
+      policy: {
+        version: 1,
+        filesystem: {
+          includeWorkdir: true,
+          readWrite: ["/workspace"],
+        },
+      },
       command: ["sleep", "infinity"],
       tty: false,
     })

@@ -51,7 +51,7 @@ export const PI_MODELS = [
 export type PiModel = (typeof PI_MODELS)[number]["id"]
 
 export const DEFAULT_PI_MODEL: PiModel = "gpt-5.5"
-export const DEFAULT_PI_THINKING_LEVEL: PiThinkingLevel = "medium"
+export const DEFAULT_PI_THINKING_LEVEL: PiThinkingLevel = "off"
 
 export function isPiModel(value: unknown): value is PiModel {
   return PI_MODELS.some((model) => model.id === value)

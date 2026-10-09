@@ -34,6 +34,8 @@ The `/chat` page is a minimal OpenShell agent runner. It uses the OpenShell
 TypeScript SDK to list, create, delete, and execute in sandboxes, and streams
 Pi's JSONL events to the browser while a prompt runs. By default, the SDK uses
 the active gateway and mTLS credentials from the local OpenShell configuration.
+It obtains renewable Keycloak access tokens with the Studio service account;
+`bootstrap_studio.sh` creates the required audience and role mapping.
 
 First initialize the Vault KV secret, custom provider, and image as described in
 `../openshell/examples/pi-custom-openai/README.md`. Studio reads `base_url`
@@ -41,8 +43,12 @@ from that KV v2 secret; users select the GPT model and thinking level on the
 chat page. Configure the secret's location in `.env.local`:
 
 ```sh
-OPENSHELL_PI_IMAGE=pi-custom-openai:local
+OPENSHELL_PI_IMAGE=pi-custom-openai:local-1
 OPENSHELL_PI_PROVIDER=pi-custom-openai
+OPENSHELL_OIDC_ISSUER=https://auth.mizuumi.test/realms/sovico
+OPENSHELL_OIDC_CLIENT_ID=studio
+OPENSHELL_OIDC_CLIENT_SECRET=<studio-client-secret>
+OPENSHELL_OIDC_AUDIENCE=openshell-cli
 VAULT_ADDR=https://vault.mizuumi.test
 VAULT_CACERT=../../k8s/auth/tls/ca.crt
 VAULT_KV_MOUNT=pi-custom-openai

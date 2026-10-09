@@ -8,6 +8,7 @@ openshell_version="${OPENSHELL_VERSION:-0.1.2}"
 agent_sandbox_version="${AGENT_SANDBOX_VERSION:-v1.0.5}"
 chart="${OPENSHELL_CHART:-oci://ghcr.io/nvidia/openshell/helm-chart}"
 values_file="${OPENSHELL_VALUES_FILE:-$repo_root/k8s/openshell/values.yaml}"
+keycloak_ca="${KEYCLOAK_CA:-$repo_root/k8s/auth/tls/ca.crt}"
 agent_sandbox_manifest="https://github.com/kubernetes-sigs/agent-sandbox/releases/download/${agent_sandbox_version}/sandbox.yaml"
 
 usage() {
@@ -22,6 +23,7 @@ Environment overrides:
   OPENSHELL_VERSION                    Helm chart version (default: 0.1.2)
   OPENSHELL_CHART                      Helm OCI reference
   OPENSHELL_VALUES_FILE                Helm values file
+  KEYCLOAK_CA                          Keycloak issuer CA (default: k8s/auth/tls/ca.crt)
   AGENT_SANDBOX_VERSION                Controller release (default: v1.0.5)
   OPENSHELL_NETWORK_POLICY_ENFORCED    Set true after verifying an unrecognized
                                        CNI enforces ingress and egress policies
@@ -43,6 +45,11 @@ for command in kubectl helm jq; do
 done
 [[ -f "$values_file" ]] || {
   echo "OpenShell values file does not exist: $values_file" >&2
+  exit 1
+}
+[[ -f "$keycloak_ca" ]] || {
+  echo "Keycloak CA does not exist: $keycloak_ca" >&2
+  echo "Run ./scripts/setup_auth.sh before installing OpenShell." >&2
   exit 1
 }
 
@@ -87,6 +94,9 @@ if [[ "$namespace" == openshell ]]; then
 else
   kubectl create namespace "$namespace" --dry-run=client -o yaml | kubectl apply -f -
 fi
+kubectl -n "$namespace" create configmap openshell-keycloak-ca \
+  --from-file=ca.crt="$keycloak_ca" \
+  --dry-run=client -o yaml | kubectl apply -f -
 kubectl apply --server-side -f "$agent_sandbox_manifest"
 kubectl -n agent-sandbox-system wait \
   --for=condition=Available deployment --all --timeout=5m

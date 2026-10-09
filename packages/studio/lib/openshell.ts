@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises"
 import { homedir } from "node:os"
 import { join } from "node:path"
 import {
+  clientCredentials,
   type ExecOptions,
   type ExecStreamEvent,
   OpenShellClient,
@@ -25,6 +26,17 @@ let clientPromise: Promise<OpenShellClient> | undefined
 function environmentPath(name: string, fallback: string) {
   const value = process.env[name]?.trim()
   return value || fallback
+}
+
+function requiredEnvironment(name: string, fallbackName?: string) {
+  const value =
+    process.env[name]?.trim() ||
+    (fallbackName ? process.env[fallbackName]?.trim() : undefined)
+  if (!value) {
+    const fallback = fallbackName ? ` or ${fallbackName}` : ""
+    throw new Error(`Set ${name}${fallback} to authenticate with OpenShell.`)
+  }
+  return value
 }
 
 async function connectOpenShell() {
@@ -55,6 +67,22 @@ async function connectOpenShell() {
   }
 
   const mtlsRoot = join(gatewayRoot, "mtls")
+  const oidcIssuer = requiredEnvironment(
+    "OPENSHELL_OIDC_ISSUER",
+    "KEYCLOAK_ISSUER",
+  )
+  const oidcClientId = requiredEnvironment(
+    "OPENSHELL_OIDC_CLIENT_ID",
+    "KEYCLOAK_CLIENT_ID",
+  )
+  const oidcClientSecret = requiredEnvironment(
+    "OPENSHELL_OIDC_CLIENT_SECRET",
+    "KEYCLOAK_CLIENT_SECRET",
+  )
+  const oidcAudience =
+    process.env.OPENSHELL_OIDC_AUDIENCE?.trim() || "openshell-cli"
+  const oidcScopes = process.env.OPENSHELL_OIDC_SCOPES?.trim()
+
   return OpenShellClient.connect({
     gateway,
     caCert: await readFile(
@@ -66,11 +94,21 @@ async function connectOpenShell() {
     clientKey: await readFile(
       environmentPath("OPENSHELL_CLIENT_KEY", join(mtlsRoot, "tls.key")),
     ),
+    oidcTokenProvider: clientCredentials({
+      issuer: oidcIssuer,
+      clientId: oidcClientId,
+      clientSecret: () => oidcClientSecret,
+      audience: oidcAudience,
+      scopes: oidcScopes ? oidcScopes.split(/\s+/) : undefined,
+    }),
   })
 }
 
 function getOpenShellClient() {
-  clientPromise ??= connectOpenShell()
+  clientPromise ??= connectOpenShell().catch((error) => {
+    clientPromise = undefined
+    throw error
+  })
   return clientPromise
 }
 

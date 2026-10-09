@@ -9,9 +9,14 @@ workload:
 server:
   telemetryEnabled: false
   auth:
-    # Safe only while access is restricted by the local gateway's required
-    # client certificate. Configure OIDC and set this to false for shared use.
-    allowUnauthenticatedUsers: true
+    allowUnauthenticatedUsers: false
+  oidc:
+    issuer: https://auth.mizuumi.test/realms/sovico
+    audience: openshell-cli
+    caConfigMapName: openshell-keycloak-ca
+    rolesClaim: realm_access.roles
+    adminRole: openshell-admin
+    userRole: openshell-user
 
 networkPolicy:
   enabled: true

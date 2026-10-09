@@ -9,7 +9,11 @@ RUN apt-get update \
 
 RUN npm install -g --ignore-scripts "@earendil-works/pi-coding-agent@${PI_VERSION}"
 
-RUN mkdir -p /workspace \
+# OpenShell runs sandbox processes as 10001:10001. Keep the image account in
+# sync so the runtime UID has a passwd entry and can write to its workspace.
+RUN groupmod --gid 10001 node \
+    && usermod --uid 10001 --gid 10001 node \
+    && mkdir -p /workspace \
     && chown node:node /workspace
 
 COPY --chown=node:node pi-custom-openai /usr/local/bin/pi-custom-openai

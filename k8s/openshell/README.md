@@ -3,7 +3,9 @@
 This directory deploys NVIDIA OpenShell with its upstream OCI Helm chart. The
 default values are intended for local evaluation through the shared local
 gateway. They enable the chart's built-in PKI, use a single SQLite-backed
-gateway, and allow unauthenticated application requests through mTLS.
+gateway, and validate Keycloak access tokens for the `openshell-cli` audience.
+The setup script installs the local Keycloak CA as the gateway's OIDC trust
+bundle; mTLS remains in use at the transport layer.
 
 ## Requirements
 
@@ -65,31 +67,38 @@ Additional arguments are passed to `helm upgrade --install`.
 With the gateway installed and the OpenShell CLI available, run:
 
 ```sh
+./scripts/bootstrap_studio.sh
 ./scripts/openshell/bootstrap.sh
 ```
 
-The script exposes OpenShell at `https://openshell.mizuumi.test`, copies the
-chart-generated client identity and shared-gateway CA to the OpenShell user
-configuration, registers the `k8s` gateway, and runs the minimal example under
-`packages/openshell`. Later CLI commands reconnect through that hostname:
+The Studio bootstrap enables the Keycloak service account, audience, and
+OpenShell roles. The OpenShell bootstrap then exposes the gateway at
+`https://openshell.mizuumi.test`, copies its TLS identity and CA to the local
+OpenShell configuration, registers the `k8s` gateway for OIDC, and runs the
+minimal example under `packages/openshell`. Later CLI commands reconnect
+through that hostname:
 
 ```sh
 openshell status
 ```
 
 Run `sudo ./scripts/configure_workstation_dns.sh` once if the workstation does
-not resolve the hostname yet. The shared gateway requires and verifies the
-OpenShell CLI certificate, then uses mTLS again for the upstream connection.
+not resolve the hostname yet. The shared gateway verifies both the Keycloak
+bearer token and the OpenShell CLI certificate, then uses mTLS again for the
+upstream connection. The bootstrap supplies the local CA to the CLI for OIDC
+discovery. For later direct CLI use, trust that CA once with
+`./scripts/forward.sh --trust` or set `SSL_CERT_FILE=k8s/auth/tls/ca.crt`.
 
 Pass `--skip-example` to configure and verify the gateway without creating a
 sandbox. Environment overrides are documented by each script's `--help`.
 
 ## Shared clusters
 
-Before exposing the gateway through an ingress or access proxy, set
-`server.auth.allowUnauthenticatedUsers` to `false` and configure OIDC or a
-trusted authentication proxy. Keep the Service as `ClusterIP` unless the
-external access path provides the required authentication and TLS behavior.
+The bundled values reject unauthenticated user requests and configure the local
+Keycloak issuer. For a shared cluster, replace the issuer, audience, CA, and
+role names with that environment's identity-provider settings. Keep the Service
+as `ClusterIP` unless the external access path provides the required TLS
+behavior.
 
 The setup follows NVIDIA's Kubernetes deployment model: the Agent Sandbox
 controller owns workload pods, while OpenShell creates the supervisor, service,

@@ -9,6 +9,7 @@ realm="${KEYCLOAK_REALM:-sovico}"
 client_id="${STUDIO_KEYCLOAK_CLIENT_ID:-studio}"
 studio_url="${STUDIO_URL:-http://localhost:3000}"
 public_keycloak_url="${KEYCLOAK_PUBLIC_URL:-https://auth.mizuumi.test}"
+openshell_audience="${OPENSHELL_OIDC_AUDIENCE:-openshell-cli}"
 vault_addr="${VAULT_ADDR:-https://vault.mizuumi.test}"
 vault_kv_mount="${VAULT_KV_MOUNT:-pi-custom-openai}"
 vault_kv_secret_path="${VAULT_KV_SECRET_PATH:-config}"
@@ -30,6 +31,7 @@ Environment overrides:
   KEYCLOAK_PUBLIC_URL         Default: https://auth.mizuumi.test
   STUDIO_KEYCLOAK_CLIENT_ID   Default: studio
   STUDIO_URL                  Default: http://localhost:3000
+  OPENSHELL_OIDC_AUDIENCE     Default: openshell-cli
   VAULT_ADDR                 Default: https://vault.mizuumi.test
   VAULT_CACERT               Default: k8s/auth/tls/ca.crt
   VAULT_KV_MOUNT             Default: pi-custom-openai
@@ -157,7 +159,7 @@ client_uuid="$(printf '%s' "$clients" | jq -r --arg id "$client_id" '[.[] | sele
 if [[ -z "$client_uuid" ]]; then
   client_payload="$(jq -cn \
     --arg id "$client_id" --arg callback "$callback_url" --arg origin "$studio_url" --arg post_logout "$post_logout_url" \
-    '{clientId:$id,name:"Mizuumi Studio",enabled:true,protocol:"openid-connect",publicClient:false,clientAuthenticatorType:"client-secret",standardFlowEnabled:true,directAccessGrantsEnabled:false,serviceAccountsEnabled:false,redirectUris:[$callback],webOrigins:[$origin],attributes:{"pkce.code.challenge.method":"S256","post.logout.redirect.uris":$post_logout}}')"
+    '{clientId:$id,name:"Mizuumi Studio",enabled:true,protocol:"openid-connect",publicClient:false,clientAuthenticatorType:"client-secret",standardFlowEnabled:true,directAccessGrantsEnabled:false,serviceAccountsEnabled:true,redirectUris:[$callback],webOrigins:[$origin],attributes:{"pkce.code.challenge.method":"S256","post.logout.redirect.uris":$post_logout}}')"
   kc POST "/admin/realms/$realm/clients" "$client_payload" >/dev/null
   client_uuid="$(kc GET "/admin/realms/$realm/clients?clientId=$client_id" | jq -er --arg id "$client_id" '[.[] | select(.clientId == $id)][0].id')"
   echo "Created Keycloak client $realm/$client_id."
@@ -165,7 +167,7 @@ else
   current_client="$(kc GET "/admin/realms/$realm/clients/$client_uuid")"
   client_payload="$(printf '%s' "$current_client" | jq -c \
     --arg id "$client_id" --arg callback "$callback_url" --arg origin "$studio_url" --arg post_logout "$post_logout_url" \
-    '.clientId=$id | .name="Mizuumi Studio" | .enabled=true | .protocol="openid-connect" | .publicClient=false | .clientAuthenticatorType="client-secret" | .standardFlowEnabled=true | .directAccessGrantsEnabled=false | .serviceAccountsEnabled=false | .redirectUris=[$callback] | .webOrigins=[$origin] | .attributes=(.attributes // {}) | .attributes["pkce.code.challenge.method"]="S256" | .attributes["post.logout.redirect.uris"]=$post_logout')"
+    '.clientId=$id | .name="Mizuumi Studio" | .enabled=true | .protocol="openid-connect" | .publicClient=false | .clientAuthenticatorType="client-secret" | .standardFlowEnabled=true | .directAccessGrantsEnabled=false | .serviceAccountsEnabled=true | .redirectUris=[$callback] | .webOrigins=[$origin] | .attributes=(.attributes // {}) | .attributes["pkce.code.challenge.method"]="S256" | .attributes["post.logout.redirect.uris"]=$post_logout')"
   kc PUT "/admin/realms/$realm/clients/$client_uuid" "$client_payload" >/dev/null
   echo "Updated Keycloak client $realm/$client_id."
 fi
@@ -178,6 +180,37 @@ audience_mappers="$(kc GET "/admin/realms/$realm/clients/$client_uuid/protocol-m
 if ! printf '%s' "$audience_mappers" | jq -e 'any(.[]; .name == "unitycatalog-audience")' >/dev/null; then
   kc POST "/admin/realms/$realm/clients/$client_uuid/protocol-mappers/models" "$audience_payload" >/dev/null
   echo "Added the Unity Catalog audience to Studio access tokens."
+fi
+
+openshell_audience_payload="$(jq -cn --arg audience "$openshell_audience" \
+  '{name:"openshell-audience",protocol:"openid-connect",protocolMapper:"oidc-audience-mapper",consentRequired:false,config:{"included.client.audience":$audience,"access.token.claim":"true","id.token.claim":"false"}}')"
+openshell_mapper_id="$(printf '%s' "$audience_mappers" | jq -r '[.[] | select(.name == "openshell-audience")][0].id // empty')"
+if [[ -z "$openshell_mapper_id" ]]; then
+  kc POST "/admin/realms/$realm/clients/$client_uuid/protocol-mappers/models" "$openshell_audience_payload" >/dev/null
+  echo "Added the OpenShell audience to Studio access tokens."
+else
+  openshell_audience_payload="$(printf '%s' "$openshell_audience_payload" | jq -c --arg id "$openshell_mapper_id" '.id=$id')"
+  kc PUT "/admin/realms/$realm/clients/$client_uuid/protocol-mappers/models/$openshell_mapper_id" "$openshell_audience_payload" >/dev/null
+  echo "Updated the OpenShell audience for Studio access tokens."
+fi
+
+realm_roles="$(kc GET "/admin/realms/$realm/roles")"
+for role in openshell-admin openshell-user; do
+  if ! printf '%s' "$realm_roles" | jq -e --arg role "$role" 'any(.[]; .name == $role)' >/dev/null; then
+    role_payload="$(jq -cn --arg name "$role" '{name:$name}')"
+    kc POST "/admin/realms/$realm/roles" "$role_payload" >/dev/null
+    echo "Created Keycloak realm role $role."
+  fi
+done
+
+service_account="$(kc GET "/admin/realms/$realm/clients/$client_uuid/service-account-user")"
+service_account_id="$(printf '%s' "$service_account" | jq -er '.id')"
+assigned_roles="$(kc GET "/admin/realms/$realm/users/$service_account_id/role-mappings/realm")"
+if ! printf '%s' "$assigned_roles" | jq -e 'any(.[]; .name == "openshell-admin")' >/dev/null; then
+  openshell_admin_role="$(kc GET "/admin/realms/$realm/roles/openshell-admin")"
+  role_mapping="$(printf '%s' "$openshell_admin_role" | jq -c '[.]')"
+  kc POST "/admin/realms/$realm/users/$service_account_id/role-mappings/realm" "$role_mapping" >/dev/null
+  echo "Granted openshell-admin to the Studio service account."
 fi
 
 if (( rotate_secret )); then
@@ -194,10 +227,10 @@ fi
 umask 077
 env_tmp="$(mktemp "$repo_root/packages/studio/.env.local.XXXXXX")"
 if [[ -f "$studio_env" ]]; then
-  awk '!/^(KEYCLOAK_CLIENT_ID|KEYCLOAK_CLIENT_SECRET|KEYCLOAK_ISSUER|VAULT_ADDR|VAULT_CACERT|VAULT_KV_MOUNT|VAULT_KV_SECRET_PATH)=/' "$studio_env" > "$env_tmp"
+  awk '!/^(KEYCLOAK_CLIENT_ID|KEYCLOAK_CLIENT_SECRET|KEYCLOAK_ISSUER|OPENSHELL_OIDC_ISSUER|OPENSHELL_OIDC_CLIENT_ID|OPENSHELL_OIDC_CLIENT_SECRET|OPENSHELL_OIDC_AUDIENCE|VAULT_ADDR|VAULT_CACERT|VAULT_KV_MOUNT|VAULT_KV_SECRET_PATH)=/' "$studio_env" > "$env_tmp"
 fi
-printf 'KEYCLOAK_CLIENT_ID=%s\nKEYCLOAK_CLIENT_SECRET=%s\nKEYCLOAK_ISSUER=%s\nVAULT_ADDR=%s\nVAULT_CACERT=%s\nVAULT_KV_MOUNT=%s\nVAULT_KV_SECRET_PATH=%s\n' \
-  "$client_id" "$client_secret" "$issuer" "$vault_addr" "$vault_ca" \
+printf 'KEYCLOAK_CLIENT_ID=%s\nKEYCLOAK_CLIENT_SECRET=%s\nKEYCLOAK_ISSUER=%s\nOPENSHELL_OIDC_ISSUER=%s\nOPENSHELL_OIDC_CLIENT_ID=%s\nOPENSHELL_OIDC_CLIENT_SECRET=%s\nOPENSHELL_OIDC_AUDIENCE=%s\nVAULT_ADDR=%s\nVAULT_CACERT=%s\nVAULT_KV_MOUNT=%s\nVAULT_KV_SECRET_PATH=%s\n' \
+  "$client_id" "$client_secret" "$issuer" "$issuer" "$client_id" "$client_secret" "$openshell_audience" "$vault_addr" "$vault_ca" \
   "$vault_kv_mount" "$vault_kv_secret_path" >> "$env_tmp"
 chmod 600 "$env_tmp"
 mv "$env_tmp" "$studio_env"

@@ -27,7 +27,7 @@ fi
 profile_name="${CUSTOM_OPENAI_PROFILE:-pi-custom-openai}"
 provider_name="${CUSTOM_OPENAI_PROVIDER:-pi-custom-openai}"
 sandbox_name="${CUSTOM_OPENAI_SANDBOX:-pi-custom-openai}"
-image="${CUSTOM_OPENAI_IMAGE:-pi-custom-openai:local}"
+image="${CUSTOM_OPENAI_IMAGE:-pi-custom-openai:local-1}"
 container_engine="${CONTAINER_ENGINE:-docker}"
 skip_build="${CUSTOM_OPENAI_SKIP_BUILD:-false}"
 
