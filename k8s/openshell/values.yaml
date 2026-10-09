@@ -9,8 +9,8 @@ workload:
 server:
   telemetryEnabled: false
   auth:
-    # Safe only while the ClusterIP service is reached through a local
-    # port-forward. Configure OIDC and set this to false for shared access.
+    # Safe only while access is restricted by the local gateway's required
+    # client certificate. Configure OIDC and set this to false for shared use.
     allowUnauthenticatedUsers: true
 
 networkPolicy:

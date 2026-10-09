@@ -50,6 +50,12 @@ service:
 
 gateway:
   enabled: true
+  openshell:
+    # Enabled automatically by the OpenShell exposure script once its mTLS
+    # client Secret is available.
+    enabled: false
+    namespace: openshell
+    serviceName: openshell
   image:
     repository: caddy
     tag: "2.11.3-alpine"

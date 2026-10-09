@@ -30,9 +30,10 @@ environment before starting Studio.
 
 ## Pi agents
 
-The `/chat` page is a minimal OpenShell agent runner. It uses the local
-`openshell` CLI to list, create, and delete sandboxes, and streams Pi's JSONL
-events to the browser while a prompt runs.
+The `/chat` page is a minimal OpenShell agent runner. It uses the OpenShell
+TypeScript SDK to list, create, delete, and execute in sandboxes, and streams
+Pi's JSONL events to the browser while a prompt runs. By default, the SDK uses
+the active gateway and mTLS credentials from the local OpenShell configuration.
 
 First initialize the Vault KV secret, custom provider, and image as described in
 `../openshell/examples/pi-custom-openai/README.md`. Studio reads `base_url`

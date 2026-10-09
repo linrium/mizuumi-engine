@@ -53,8 +53,25 @@ kubectl -n "$namespace" create secret generic local-gateway-tls \
   --dry-run=client -o yaml | kubectl apply -f -
 "$repo_root/scripts/update_gateway_trust.sh"
 
+openshell_gateway_enabled=false
+if kubectl -n openshell get secret openshell-client-tls >/dev/null 2>&1; then
+  openshell_gateway_enabled=true
+  openshell_tls_manifest="$(kubectl -n openshell get secret openshell-client-tls -o json | jq '
+    {
+      apiVersion: "v1",
+      kind: "Secret",
+      metadata: {name: "openshell-gateway-client-tls", namespace: "auth"},
+      type: .type,
+      data: .data
+    }
+  ')"
+  printf '%s\n' "$openshell_tls_manifest" | kubectl apply -f - >/dev/null
+fi
+
 helm upgrade --install "$release" "$repo_root/k8s/auth" \
-  --namespace "$namespace" --wait --timeout 10m
+  --namespace "$namespace" \
+  --set "gateway.openshell.enabled=$openshell_gateway_enabled" \
+  --wait --timeout 10m
 "$repo_root/scripts/configure_cluster_dns.sh"
 if [[ -n "$previous_cert" && "$previous_cert" != "$current_cert" ]]; then
   kubectl -n "$namespace" rollout restart deployment/"$release"

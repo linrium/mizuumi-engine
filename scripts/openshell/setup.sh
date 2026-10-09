@@ -102,5 +102,11 @@ helm upgrade --install "$release" "$chart" \
 workload_kind="$(helm get values "$release" -n "$namespace" -a -o json | jq -r '.workload.kind // "statefulset"')"
 kubectl -n "$namespace" rollout status "$workload_kind/$release" --timeout=5m
 
+if kubectl -n auth get deployment keycloak-gateway >/dev/null 2>&1; then
+  "$repo_root/scripts/openshell/expose.sh"
+else
+  echo "The shared local gateway is not installed; skipping openshell.mizuumi.test exposure."
+fi
+
 echo "OpenShell $openshell_version is ready in namespace $namespace."
 echo "Next: ./scripts/openshell/bootstrap.sh"

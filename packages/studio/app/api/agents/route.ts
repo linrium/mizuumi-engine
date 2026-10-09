@@ -2,9 +2,9 @@ import { headers } from "next/headers"
 import { auth } from "@/lib/auth"
 import {
   assertSandboxName,
+  createSandbox,
   errorMessage,
   listAgentSandboxes,
-  runOpenShell,
 } from "@/lib/openshell"
 import { getPiConfig } from "@/lib/pi-config"
 import { DEFAULT_PI_MODEL, PI_MODELS_JSON } from "@/lib/pi-models"
@@ -44,35 +44,22 @@ export async function POST(request: Request) {
     const provider = process.env.OPENSHELL_PI_PROVIDER ?? "pi-custom-openai"
     const { baseUrl } = await getPiConfig()
 
-    const output = await runOpenShell([
-      "sandbox",
-      "create",
-      "--name",
+    const agent = await createSandbox({
       name,
-      "--from",
       image,
-      "--provider",
-      provider,
-      "--env",
-      `CUSTOM_OPENAI_BASE_URL=${baseUrl}`,
-      "--env",
-      `CUSTOM_OPENAI_MODEL=${DEFAULT_PI_MODEL}`,
-      "--env",
-      `CUSTOM_OPENAI_MODELS_JSON=${PI_MODELS_JSON}`,
-      "--env",
-      "PI_CODING_AGENT_DIR=/tmp/pi-agent-runtime",
-      "--label",
-      "mizuumi.studio.agent=true",
-      "--detach",
-      "--no-tty",
-      "--output",
-      "json",
-      "--",
-      "sleep",
-      "infinity",
-    ])
+      providers: [provider],
+      environment: {
+        CUSTOM_OPENAI_BASE_URL: baseUrl,
+        CUSTOM_OPENAI_MODEL: DEFAULT_PI_MODEL,
+        CUSTOM_OPENAI_MODELS_JSON: PI_MODELS_JSON,
+        PI_CODING_AGENT_DIR: "/tmp/pi-agent-runtime",
+      },
+      labels: { "mizuumi.studio.agent": "true" },
+      command: ["sleep", "infinity"],
+      tty: false,
+    })
 
-    return Response.json({ agent: JSON.parse(output) }, { status: 201 })
+    return Response.json({ agent }, { status: 201 })
   } catch (error) {
     const message = errorMessage(error)
     return Response.json(

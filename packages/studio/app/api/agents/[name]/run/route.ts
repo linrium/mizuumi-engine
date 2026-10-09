@@ -4,7 +4,7 @@ import {
   assertManagedAgentSandbox,
   assertSandboxName,
   errorMessage,
-  spawnOpenShell,
+  execSandboxStream,
 } from "@/lib/openshell"
 import {
   isPiModel,
@@ -87,35 +87,34 @@ export async function POST(
     )
   }
 
-  const child = spawnOpenShell([
-    "sandbox",
-    "exec",
-    "--name",
+  const abortController = new AbortController()
+  const execution = execSandboxStream(
     name,
-    "--workdir",
-    "/workspace",
-    "--timeout",
-    "120",
-    "--no-tty",
-    "--",
-    "pi-custom-openai",
-    "--model",
-    `custom-openai/${model}`,
-    "--thinking",
-    thinkingLevel,
-    "--mode",
-    "json",
-    ...(newSession ? [] : ["--continue"]),
-    "--",
-    prompt,
-  ])
-  child.stdin.end()
+    [
+      "pi-custom-openai",
+      "--model",
+      `custom-openai/${model}`,
+      "--thinking",
+      thinkingLevel,
+      "--mode",
+      "json",
+      ...(newSession ? [] : ["--continue"]),
+      "--",
+      prompt,
+    ],
+    {
+      workdir: "/workspace",
+      timeoutSecs: 120,
+      signal: abortController.signal,
+    },
+  )
 
   const encoder = new TextEncoder()
   let streamClosed = false
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
       let stderr = ""
+      const stderrDecoder = new TextDecoder()
 
       const enqueue = (chunk: Uint8Array) => {
         if (!streamClosed) controller.enqueue(chunk)
@@ -134,9 +133,8 @@ export async function POST(
         ),
       )
 
-      child.stdout.on("data", (chunk: Buffer) => enqueue(chunk))
-      child.stderr.on("data", (chunk: Buffer) => {
-        stderr += chunk.toString("utf8")
+      const enqueueStderr = (chunk: Uint8Array, stream = true) => {
+        stderr += stderrDecoder.decode(chunk, { stream })
         const lines = stderr.split("\n")
         stderr = lines.pop() ?? ""
         for (const line of lines) {
@@ -148,17 +146,10 @@ export async function POST(
             )
           }
         }
-      })
-      child.on("error", (error) => {
-        enqueue(
-          encoder.encode(
-            `${JSON.stringify({ type: "process_error", message: error.message })}\n`,
-          ),
-        )
-        close()
-      })
-      child.on("close", (code) => {
-        if (streamClosed) return
+      }
+
+      const finish = (code: number) => {
+        enqueueStderr(new Uint8Array(), false)
         if (stderr) {
           enqueue(
             encoder.encode(
@@ -167,20 +158,41 @@ export async function POST(
           )
         }
         enqueue(
-          encoder.encode(
-            `${JSON.stringify({ type: "process_exit", code: code ?? 1 })}\n`,
-          ),
+          encoder.encode(`${JSON.stringify({ type: "process_exit", code })}\n`),
         )
         close()
-      })
+      }
 
-      request.signal.addEventListener("abort", () => child.kill("SIGTERM"), {
+      void (async () => {
+        try {
+          for await (const event of execution) {
+            if ("type" in event) {
+              finish(event.exitCode)
+              return
+            }
+
+            if (event.stream === "stdout") enqueue(event.data)
+            else enqueueStderr(event.data)
+          }
+        } catch (error) {
+          if (!streamClosed) {
+            enqueue(
+              encoder.encode(
+                `${JSON.stringify({ type: "process_error", message: errorMessage(error) })}\n`,
+              ),
+            )
+            close()
+          }
+        }
+      })()
+
+      request.signal.addEventListener("abort", () => abortController.abort(), {
         once: true,
       })
     },
     cancel() {
       streamClosed = true
-      child.kill("SIGTERM")
+      abortController.abort()
     },
   })
 

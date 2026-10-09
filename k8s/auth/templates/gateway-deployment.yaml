@@ -63,6 +63,11 @@ spec:
             - name: upstream-cas
               mountPath: /etc/caddy/upstream-cas
               readOnly: true
+{{- if .Values.gateway.openshell.enabled }}
+            - name: openshell-client-tls
+              mountPath: /etc/caddy/openshell-client-tls
+              readOnly: true
+{{- end }}
             - name: data
               mountPath: /data
             - name: runtime-config
@@ -79,6 +84,11 @@ spec:
         - name: upstream-cas
           secret:
             secretName: local-gateway-upstream-cas
+{{- if .Values.gateway.openshell.enabled }}
+        - name: openshell-client-tls
+          secret:
+            secretName: openshell-gateway-client-tls
+{{- end }}
         - name: data
           emptyDir: {}
         - name: runtime-config

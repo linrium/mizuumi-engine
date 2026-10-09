@@ -60,8 +60,8 @@ CUSTOM_OPENAI_MODEL="$vault_model"
 
 if ! openshell status >/dev/null; then
   cat >&2 <<'EOF'
-Cannot reach the selected OpenShell gateway. Start or reconnect the gateway
-(for the Kubernetes setup, keep its kubectl port-forward running), then retry.
+Cannot reach the selected OpenShell gateway. Start or reconnect the gateway,
+then retry.
 EOF
   exit 1
 fi

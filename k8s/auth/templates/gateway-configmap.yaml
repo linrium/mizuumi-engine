@@ -107,4 +107,22 @@ data:
         header_up X-Forwarded-Proto https
       }
     }
+
+{{- if .Values.gateway.openshell.enabled }}
+    https://openshell.mizuumi.test:8443 {
+      tls /etc/caddy/gateway-tls/tls.crt /etc/caddy/gateway-tls/tls.key {
+        client_auth {
+          mode require_and_verify
+          trust_pool file /etc/caddy/openshell-client-tls/ca.crt
+        }
+      }
+      reverse_proxy https://{{ .Values.gateway.openshell.serviceName }}.{{ .Values.gateway.openshell.namespace }}.svc.cluster.local:8080 {
+        transport http {
+          tls_client_auth /etc/caddy/openshell-client-tls/tls.crt /etc/caddy/openshell-client-tls/tls.key
+          tls_trust_pool file /etc/caddy/openshell-client-tls/ca.crt
+          tls_server_name {{ .Values.gateway.openshell.serviceName }}.{{ .Values.gateway.openshell.namespace }}.svc.cluster.local
+        }
+      }
+    }
+{{- end }}
 {{- end }}

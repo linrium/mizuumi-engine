@@ -3,8 +3,8 @@ import { auth } from "@/lib/auth"
 import {
   assertManagedAgentSandbox,
   assertSandboxName,
+  deleteSandbox,
   errorMessage,
-  runOpenShell,
 } from "@/lib/openshell"
 
 export const runtime = "nodejs"
@@ -22,7 +22,7 @@ export async function DELETE(
     const { name } = await context.params
     assertSandboxName(name)
     await assertManagedAgentSandbox(name)
-    await runOpenShell(["sandbox", "delete", name])
+    await deleteSandbox(name)
     return new Response(null, { status: 204 })
   } catch (error) {
     const message = errorMessage(error)

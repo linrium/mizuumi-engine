@@ -1,9 +1,9 @@
 # OpenShell on Kubernetes
 
 This directory deploys NVIDIA OpenShell with its upstream OCI Helm chart. The
-default values are intended for local evaluation through `kubectl port-forward`.
-They enable the chart's built-in PKI, use a single SQLite-backed gateway, and
-allow unauthenticated application requests through the local mTLS connection.
+default values are intended for local evaluation through the shared local
+gateway. They enable the chart's built-in PKI, use a single SQLite-backed
+gateway, and allow unauthenticated application requests through mTLS.
 
 ## Requirements
 
@@ -68,15 +68,18 @@ With the gateway installed and the OpenShell CLI available, run:
 ./scripts/openshell/bootstrap.sh
 ```
 
-The script copies the chart-generated client TLS bundle to the OpenShell user
-configuration, starts a temporary local port-forward, registers the `k8s`
-gateway, and runs the minimal example under `packages/openshell`. The temporary
-port-forward stops when the script exits. Start it again for later CLI use:
+The script exposes OpenShell at `https://openshell.mizuumi.test`, copies the
+chart-generated client identity and shared-gateway CA to the OpenShell user
+configuration, registers the `k8s` gateway, and runs the minimal example under
+`packages/openshell`. Later CLI commands reconnect through that hostname:
 
 ```sh
-kubectl -n openshell port-forward svc/openshell 8080:8080
 openshell status
 ```
+
+Run `sudo ./scripts/configure_workstation_dns.sh` once if the workstation does
+not resolve the hostname yet. The shared gateway requires and verifies the
+OpenShell CLI certificate, then uses mTLS again for the upstream connection.
 
 Pass `--skip-example` to configure and verify the gateway without creating a
 sandbox. Environment overrides are documented by each script's `--help`.

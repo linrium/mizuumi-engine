@@ -1,11 +1,12 @@
+import { readFile } from "node:fs/promises"
+import { homedir } from "node:os"
+import { join } from "node:path"
 import {
-  type ChildProcessWithoutNullStreams,
-  execFile,
-  spawn,
-} from "node:child_process"
-import { promisify } from "node:util"
-
-const execFileAsync = promisify(execFile)
+  type ExecOptions,
+  type ExecStreamEvent,
+  OpenShellClient,
+  type SandboxSpec,
+} from "@nvidia/openshell-sdk"
 
 const sandboxNamePattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 const studioAgentSelector = "mizuumi.studio.agent=true"
@@ -15,8 +16,62 @@ export type AgentSandbox = {
   status: string
 }
 
-function openshellArgs(args: string[]) {
-  return ["--color", "never", ...args]
+type GatewayMetadata = {
+  gateway_endpoint?: unknown
+}
+
+let clientPromise: Promise<OpenShellClient> | undefined
+
+function environmentPath(name: string, fallback: string) {
+  const value = process.env[name]?.trim()
+  return value || fallback
+}
+
+async function connectOpenShell() {
+  const configHome =
+    process.env.XDG_CONFIG_HOME?.trim() || join(homedir(), ".config")
+  const configRoot = join(configHome, "openshell")
+  const gatewayName =
+    process.env.OPENSHELL_GATEWAY_NAME?.trim() ||
+    (await readFile(join(configRoot, "active_gateway"), "utf8")).trim()
+
+  if (!gatewayName) {
+    throw new Error("OpenShell has no active gateway.")
+  }
+
+  const gatewayRoot = join(configRoot, "gateways", gatewayName)
+  const metadata = JSON.parse(
+    await readFile(join(gatewayRoot, "metadata.json"), "utf8"),
+  ) as GatewayMetadata
+  const configuredGateway =
+    typeof metadata.gateway_endpoint === "string"
+      ? metadata.gateway_endpoint.trim()
+      : ""
+  const gateway =
+    process.env.OPENSHELL_GATEWAY_ENDPOINT?.trim() || configuredGateway
+
+  if (!gateway) {
+    throw new Error(`OpenShell gateway "${gatewayName}" has no endpoint.`)
+  }
+
+  const mtlsRoot = join(gatewayRoot, "mtls")
+  return OpenShellClient.connect({
+    gateway,
+    caCert: await readFile(
+      environmentPath("OPENSHELL_CA_CERT", join(mtlsRoot, "ca.crt")),
+    ),
+    clientCert: await readFile(
+      environmentPath("OPENSHELL_CLIENT_CERT", join(mtlsRoot, "tls.crt")),
+    ),
+    clientKey: await readFile(
+      environmentPath("OPENSHELL_CLIENT_KEY", join(mtlsRoot, "tls.key")),
+    ),
+  })
+}
+
+function getOpenShellClient() {
+  clientPromise ??= connectOpenShell()
+  return clientPromise
 }
 
 export function assertSandboxName(name: unknown): asserts name is string {
@@ -31,80 +86,33 @@ export function assertSandboxName(name: unknown): asserts name is string {
   }
 }
 
-export async function runOpenShell(args: string[]) {
-  try {
-    const { stdout } = await execFileAsync("openshell", openshellArgs(args), {
-      maxBuffer: 10 * 1024 * 1024,
-      timeout: 120_000,
-    })
-    return stdout
-  } catch (error) {
-    if (
-      typeof error === "object" &&
-      error !== null &&
-      "stderr" in error &&
-      typeof error.stderr === "string" &&
-      error.stderr.trim()
-    ) {
-      throw new Error(error.stderr.trim())
-    }
-    throw error
-  }
+export async function createSandbox(spec: SandboxSpec) {
+  const client = await getOpenShellClient()
+  return client.sandbox.create(spec)
 }
 
-export function spawnOpenShell(args: string[]): ChildProcessWithoutNullStreams {
-  return spawn("openshell", openshellArgs(args), {
-    stdio: ["pipe", "pipe", "pipe"],
-  })
+export async function deleteSandbox(name: string) {
+  const client = await getOpenShellClient()
+  return client.sandbox.delete(name)
 }
 
-function objectValue(value: unknown, keys: string[]): unknown {
-  if (typeof value !== "object" || value === null) return undefined
-
-  for (const key of keys) {
-    if (key in value) return (value as Record<string, unknown>)[key]
-  }
-}
-
-export function parseAgentSandboxes(output: string): AgentSandbox[] {
-  const parsed: unknown = JSON.parse(output)
-  const sandboxes = Array.isArray(parsed)
-    ? parsed
-    : objectValue(parsed, ["sandboxes", "items"])
-
-  if (!Array.isArray(sandboxes)) {
-    throw new Error("OpenShell returned an unexpected sandbox list.")
-  }
-
-  return sandboxes.flatMap((sandbox) => {
-    const name = objectValue(sandbox, ["name"])
-    if (typeof name !== "string") return []
-
-    const statusValue = objectValue(sandbox, ["status", "phase", "state"])
-    const nestedPhase = objectValue(statusValue, ["phase", "state"])
-    const status =
-      typeof statusValue === "string"
-        ? statusValue
-        : typeof nestedPhase === "string"
-          ? nestedPhase
-          : "unknown"
-
-    return [{ name, status }]
-  })
+export async function* execSandboxStream(
+  name: string,
+  command: string[],
+  options?: ExecOptions,
+): AsyncGenerator<ExecStreamEvent, void, void> {
+  const client = await getOpenShellClient()
+  yield* client.sandbox.execStream(name, command, options)
 }
 
 export async function listAgentSandboxes() {
-  const output = await runOpenShell([
-    "sandbox",
-    "list",
-    "--selector",
-    studioAgentSelector,
-    "--page-size",
-    "100",
-    "--output",
-    "json",
-  ])
-  return parseAgentSandboxes(output)
+  const client = await getOpenShellClient()
+  const sandboxes = await client.sandbox.listAll({
+    labelSelector: studioAgentSelector,
+    pageSize: 100,
+  })
+
+  return sandboxes.map(({ name, phase }) => ({ name, status: phase }))
 }
 
 export async function assertManagedAgentSandbox(name: string) {
