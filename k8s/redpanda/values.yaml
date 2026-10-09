@@ -1,0 +1,85 @@
+image:
+  repository: docker.io/redpandadata/redpanda
+  tag: v24.3.2
+
+statefulset:
+  replicas: 1
+  sideCars:
+    controllers:
+      image:
+        repository: docker.io/redpandadata/redpanda-operator
+        tag: v2.3.4-24.3.2
+
+tls:
+  enabled: false
+
+auth:
+  sasl:
+    enabled: false
+
+listeners:
+  kafka:
+    port: 9092
+    authenticationMethod: none
+    advertisedPorts:
+      - 9092
+  admin:
+    port: 9644
+    authenticationMethod: none
+  http:
+    enabled: true
+    port: 8082
+    authenticationMethod: none
+  schemaRegistry:
+    enabled: true
+    port: 8081
+    authenticationMethod: none
+  rpc:
+    port: 33145
+
+storage:
+  persistentVolume:
+    enabled: true
+    size: 10Gi
+    storageClass: standard
+
+resources:
+  cpu:
+    cores: 1
+    overprovisioned: true
+  memory:
+    enable_memory_locking: false
+    container:
+      max: 2.5Gi
+
+config:
+  cluster:
+    auto_create_topics_enabled: true
+
+console:
+  enabled: true
+  image:
+    registry: docker.io
+    repository: redpandadata/console
+    tag: v2.7.2
+  console:
+    config:
+      kafka:
+        brokers:
+          - redpanda-0.redpanda.redpanda.svc.cluster.local:9092
+        schemaRegistry:
+          enabled: true
+          urls:
+            - http://redpanda.redpanda.svc.cluster.local:8081
+      redpanda:
+        adminApi:
+          enabled: true
+          urls:
+            - http://redpanda.redpanda.svc.cluster.local:9644
+  ingress:
+    enabled: false
+    className: ""
+  service:
+    type: ClusterIP
+    port: 8080
+    targetPort: 8080

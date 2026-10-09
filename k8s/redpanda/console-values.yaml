@@ -1,0 +1,29 @@
+replicaCount: 1
+
+console:
+  config:
+    kafka:
+      brokers:
+        - redpanda-0.redpanda.redpanda.svc.cluster.local:9092
+      tls:
+        enabled: false
+      schemaRegistry:
+        enabled: true
+        urls:
+          - http://redpanda.redpanda.svc.cluster.local:8081
+        tls:
+          enabled: false
+    redpanda:
+      adminApi:
+        enabled: true
+        urls:
+          - http://redpanda.redpanda.svc.cluster.local:9644
+        tls:
+          enabled: false
+
+ingress:
+  enabled: false
+
+service:
+  type: ClusterIP
+  port: 8080
