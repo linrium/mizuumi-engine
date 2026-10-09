@@ -1,9 +1,16 @@
 # Spark runtime
 
-The container extends Apache Spark `4.0.1` with the repository's PySpark
-examples. Maven dependencies are declared by the `SparkApplication`, allowing
-the Spark Operator to resolve Delta Lake, Unity Catalog, and Hadoop S3A at
-submission time.
+The reusable container extends Apache Spark `4.0.1` and preloads Delta Lake,
+Hadoop S3A, and the Unity Catalog connector versions used by the examples.
+Each connector version has a dependency classpath under
+`/opt/spark/dependencies`; the chart selects one without asking the Spark
+Operator to run Ivy or download Maven packages.
+
+Application code is not coupled to the image. Setup uploads each Python entry
+point to a content-addressed RustFS object and stores a short-lived presigned
+GET URL in a Kubernetes Secret. A driver init container downloads the object
+to an `emptyDir` before Spark starts. The presigned URL grants access to only
+that object, so no long-lived RustFS key is mounted in the driver or executor.
 
 `examples/minimal` writes a tiny bronze/silver/gold Delta pipeline through the
 Unity Catalog connector and reads the result back for validation. The catalog

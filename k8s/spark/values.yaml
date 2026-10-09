@@ -1,6 +1,6 @@
 image:
   repository: mizuumi/spark
-  tag: "4.0.1-uc-rustfs"
+  tag: "4.0.1-uc-rustfs-baked"
   pullPolicy: IfNotPresent
 
 serviceAccountName: spark-operator-spark
@@ -14,10 +14,7 @@ keycloak:
 spark:
   version: "4.0.1"
   scalaVersion: "2.13"
-  packages:
-    - io.delta:delta-spark_4.0_2.13:4.3.1
-    - io.unitycatalog:unitycatalog-spark_4.0_2.13:0.5.0
-    - org.apache.hadoop:hadoop-aws:3.4.1
+  dependenciesPath: /opt/spark/dependencies/0.5.0/*
   catalog:
     name: unity
     uri: http://unitycatalog-server.tower.svc.cluster.local:8080
@@ -29,10 +26,15 @@ spark:
 application:
   enabled: true
   name: unity-catalog-rustfs
-  mainApplicationFile: local:///opt/spark/work-dir/examples/minimal/main.py
+  mainApplicationFile: local:///opt/spark/work-dir/application/main.py
   scriptConfigMap: ""
   scriptMountPath: ""
   scriptRevision: ""
+  artifact:
+    enabled: false
+    urlSecretName: ""
+    mountPath: /opt/spark/work-dir/application
+    fileName: main.py
   restartPolicy:
     type: Never
   driver:

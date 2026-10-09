@@ -14,11 +14,7 @@ spec:
   image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
   imagePullPolicy: {{ .Values.image.pullPolicy }}
   mainApplicationFile: {{ .Values.application.mainApplicationFile | quote }}
-  deps:
-    packages:
-      {{- toYaml .Values.spark.packages | nindent 6 }}
   sparkConf:
-    spark.jars.ivy: /tmp/.ivy2
     spark.sql.extensions: io.delta.sql.DeltaSparkSessionExtension
     spark.sql.catalog.spark_catalog: org.apache.spark.sql.delta.catalog.DeltaCatalog
     spark.sql.catalog.{{ .Values.spark.catalog.name }}: io.unitycatalog.spark.UCSingleCatalog
@@ -42,6 +38,10 @@ spec:
     - name: rustfs-trust
       secret:
         secretName: {{ .Values.trustSecretName }}
+    {{- if .Values.application.artifact.enabled }}
+    - name: application-artifact
+      emptyDir: {}
+    {{- end }}
     {{- if .Values.application.scriptConfigMap }}
     - name: application-script
       configMap:
@@ -56,10 +56,43 @@ spec:
     coreLimit: {{ .Values.application.driver.coreLimit | quote }}
     memory: {{ .Values.application.driver.memory | quote }}
     serviceAccount: {{ .Values.serviceAccountName }}
+    {{- if .Values.application.artifact.enabled }}
+    initContainers:
+      - name: download-application
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        command: ["/usr/bin/python3", "-c"]
+        args:
+          - |-
+            import os, shutil, ssl, urllib.request
+            context = ssl.create_default_context(cafile="/opt/spark/trust/rustfs-ca.crt")
+            with urllib.request.urlopen(os.environ["SPARK_APPLICATION_URL"], context=context, timeout=60) as source:
+                with open(os.environ["SPARK_APPLICATION_TARGET"], "wb") as target:
+                    shutil.copyfileobj(source, target)
+            os.chmod(os.environ["SPARK_APPLICATION_TARGET"], 0o444)
+        env:
+          - name: SPARK_APPLICATION_URL
+            valueFrom:
+              secretKeyRef:
+                name: {{ .Values.application.artifact.urlSecretName }}
+                key: url
+          - name: SPARK_APPLICATION_TARGET
+            value: {{ printf "%s/%s" .Values.application.artifact.mountPath .Values.application.artifact.fileName | quote }}
+        securityContext:
+          runAsUser: 0
+        volumeMounts:
+          - name: rustfs-trust
+            mountPath: /opt/spark/trust
+            readOnly: true
+          - name: application-artifact
+            mountPath: {{ .Values.application.artifact.mountPath | quote }}
+    {{- end }}
     javaOptions: >-
       -Djavax.net.ssl.trustStore=/opt/spark/trust/cacerts
       -Djavax.net.ssl.trustStorePassword=changeit
     env:
+      - name: SPARK_DIST_CLASSPATH
+        value: {{ .Values.spark.dependenciesPath | quote }}
       - name: KEYCLOAK_CLIENT_ID
         valueFrom:
           secretKeyRef:
@@ -85,6 +118,11 @@ spec:
       - name: rustfs-trust
         mountPath: /opt/spark/trust
         readOnly: true
+      {{- if .Values.application.artifact.enabled }}
+      - name: application-artifact
+        mountPath: {{ .Values.application.artifact.mountPath | quote }}
+        readOnly: true
+      {{- end }}
       {{- if .Values.application.scriptConfigMap }}
       - name: application-script
         mountPath: {{ .Values.application.scriptMountPath | quote }}
@@ -98,6 +136,9 @@ spec:
     javaOptions: >-
       -Djavax.net.ssl.trustStore=/opt/spark/trust/cacerts
       -Djavax.net.ssl.trustStorePassword=changeit
+    env:
+      - name: SPARK_DIST_CLASSPATH
+        value: {{ .Values.spark.dependenciesPath | quote }}
     volumeMounts:
       - name: rustfs-trust
         mountPath: /opt/spark/trust

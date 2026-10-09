@@ -31,18 +31,26 @@ Spark setup reads the generated service-principal client ID and secret from
 `tower/unitycatalog-credentials`. Only the driver receives the secret and
 exchanges it at the canonical Keycloak token endpoint.
 
-The script builds `packages/spark/Dockerfile`, imports the image into common
-local Kubernetes runtimes, installs the operator, synchronizes runtime
-credentials and RustFS trust, and installs this chart in the `spark`
-namespace. Override the image for a registry-backed cluster with:
+The script builds the reusable base image from `packages/spark/Dockerfile`,
+imports it into common local Kubernetes runtimes, uploads the Python entry
+point to RustFS, installs the operator, synchronizes runtime credentials and
+RustFS trust, and installs this chart in the `spark` namespace. The image has
+separate dependency classpaths for the connector versions used by both
+examples, so the operator does not resolve Maven packages. A driver init
+container fetches the entry point with an object-only presigned URL before
+Spark starts.
+
+Override the image for a registry-backed cluster with:
 
 ```sh
 SPARK_IMAGE_REPOSITORY=registry.example.com/mizuumi/spark \
 SPARK_IMAGE_TAG=4.0.1 ./scripts/setup_spark.sh
 ```
 
-Set `SPARK_BUILD_IMAGE=false` when that image is already available. Additional
-arguments are passed to this chart's `helm upgrade --install` command.
+Set `SPARK_BUILD_IMAGE=false` when that image is already available. Python
+application changes are uploaded separately and do not require another image.
+Additional arguments are passed to this chart's `helm upgrade --install`
+command.
 
 Inspect a run with:
 

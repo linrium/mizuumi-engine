@@ -21,11 +21,12 @@ esac
 export SPARK_UNITY_SCHEMAS=demo
 export SPARK_RELEASE="${SPARK_RELEASE:-spark-managed}"
 export SPARK_APPLICATION_SCRIPT="$repo_root/packages/spark/examples/managed/main.py"
+export SPARK_APPLICATION_SOURCE="${SPARK_APPLICATION_SOURCE:-rustfs}"
+export SPARK_APPLICATION_URL_SECRET="${SPARK_APPLICATION_URL_SECRET:-unity-catalog-managed-artifact}"
 export SPARK_APPLICATION_SCRIPT_CONFIGMAP=unity-catalog-managed-script
 export SPARK_APPLICATION_SCRIPT_MOUNT_PATH=/opt/spark/work-dir/examples/managed
 
 exec "$repo_root/scripts/setup_spark.sh" \
   --set-string application.name=unity-catalog-managed \
-  --set-string application.mainApplicationFile=local:///opt/spark/work-dir/examples/managed/main.py \
   --values "$repo_root/k8s/spark/managed-values.yaml" \
   "$@"

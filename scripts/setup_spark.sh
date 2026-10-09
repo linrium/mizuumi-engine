@@ -8,7 +8,7 @@ operator_release="${SPARK_OPERATOR_RELEASE:-spark-operator}"
 application_release="${SPARK_RELEASE:-spark}"
 operator_version="${SPARK_OPERATOR_VERSION:-2.5.2}"
 image_repository="${SPARK_IMAGE_REPOSITORY:-mizuumi/spark}"
-image_tag="${SPARK_IMAGE_TAG:-4.0.1-uc-rustfs}"
+image_tag="${SPARK_IMAGE_TAG:-4.0.1-uc-rustfs-baked}"
 spark_version="${SPARK_VERSION:-4.0.1}"
 build_image="${SPARK_BUILD_IMAGE:-true}"
 uc_namespace="${UNITYCATALOG_NAMESPACE:-tower}"
@@ -18,12 +18,22 @@ uc_credentials_secret="${UNITYCATALOG_CREDENTIALS_SECRET:-unitycatalog-credentia
 trust_secret="${SPARK_TRUST_SECRET:-spark-rustfs-trust}"
 catalog="${SPARK_UNITY_CATALOG:-unity}"
 storage_root="${SPARK_UNITY_STORAGE_ROOT:-s3://unitycatalog/spark}"
-application_script="${SPARK_APPLICATION_SCRIPT:-}"
+application_script="${SPARK_APPLICATION_SCRIPT:-$repo_root/packages/spark/examples/minimal/main.py}"
+application_source="${SPARK_APPLICATION_SOURCE:-rustfs}"
 script_configmap="${SPARK_APPLICATION_SCRIPT_CONFIGMAP:-}"
 script_mount_path="${SPARK_APPLICATION_SCRIPT_MOUNT_PATH:-}"
+artifact_bucket="${SPARK_APPLICATION_ARTIFACT_BUCKET:-unitycatalog}"
+artifact_prefix="${SPARK_APPLICATION_ARTIFACT_PREFIX:-spark-applications}"
+artifact_url_secret="${SPARK_APPLICATION_URL_SECRET:-spark-application-artifact}"
+artifact_url_expiration="${SPARK_APPLICATION_URL_EXPIRATION:-3600}"
+rustfs_namespace="${RUSTFS_NAMESPACE:-storage}"
+rustfs_service="${RUSTFS_SERVICE:-rustfs-svc}"
+rustfs_upload_port="${SPARK_ARTIFACT_UPLOAD_PORT:-19001}"
 work_dir=""
+rustfs_pid=""
 
 cleanup() {
+  [[ -z "$rustfs_pid" ]] || { kill "$rustfs_pid" 2>/dev/null || true; wait "$rustfs_pid" 2>/dev/null || true; }
   [[ -z "$work_dir" ]] || rm -rf "$work_dir"
 }
 trap cleanup EXIT
@@ -38,9 +48,14 @@ application chart's `helm upgrade --install` command.
 
 Environment overrides:
   SPARK_IMAGE_REPOSITORY    Image repository (default: mizuumi/spark)
-  SPARK_IMAGE_TAG           Image tag (default: 4.0.1-uc-rustfs)
+  SPARK_IMAGE_TAG           Image tag (default: 4.0.1-uc-rustfs-baked)
   SPARK_VERSION             Apache Spark base version (default: 4.0.1)
   SPARK_BUILD_IMAGE         Build/import the image (default: true)
+  SPARK_APPLICATION_SOURCE  rustfs, configmap, or image (default: rustfs)
+  SPARK_APPLICATION_SCRIPT  Local Python file uploaded for the application
+  SPARK_APPLICATION_ARTIFACT_BUCKET  RustFS bucket (default: unitycatalog)
+  SPARK_APPLICATION_ARTIFACT_PREFIX  Object prefix (default: spark-applications)
+  SPARK_APPLICATION_URL_EXPIRATION  Presigned GET lifetime in seconds (default: 3600)
   SPARK_NAMESPACE           Spark job namespace (default: spark)
   SPARK_OPERATOR_NAMESPACE  Operator namespace (default: spark-operator)
   UNITYCATALOG_CREDENTIALS_SECRET  Source Secret containing the Keycloak
@@ -58,6 +73,15 @@ esac
 for command in kubectl helm java keytool; do
   command -v "$command" >/dev/null || { echo "Missing required command: $command" >&2; exit 1; }
 done
+case "$application_source" in
+  rustfs)
+    for command in curl openssl python3; do
+      command -v "$command" >/dev/null || { echo "Missing required command: $command" >&2; exit 1; }
+    done
+    ;;
+  configmap|image) ;;
+  *) echo "SPARK_APPLICATION_SOURCE must be rustfs, configmap, or image." >&2; exit 1 ;;
+esac
 if [[ "$build_image" == true ]]; then
   command -v docker >/dev/null || { echo "Missing required command: docker" >&2; exit 1; }
 fi
@@ -115,9 +139,13 @@ if [[ "$build_image" == true ]]; then
 fi
 
 kubectl create namespace "$job_namespace" --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+work_dir="$(mktemp -d "${TMPDIR:-/tmp}/spark-setup.XXXXXX")"
 
-if [[ -n "$application_script" ]]; then
+if [[ "$application_source" != image ]]; then
   [[ -f "$application_script" ]] || { echo "Missing Spark application script: $application_script" >&2; exit 1; }
+fi
+
+if [[ "$application_source" == configmap ]]; then
   [[ -n "$script_configmap" && -n "$script_mount_path" ]] || {
     echo "SPARK_APPLICATION_SCRIPT_CONFIGMAP and SPARK_APPLICATION_SCRIPT_MOUNT_PATH are required." >&2
     exit 1
@@ -127,7 +155,81 @@ if [[ -n "$application_script" ]]; then
     --dry-run=client -o yaml | kubectl apply -f - >/dev/null
 fi
 
-work_dir="$(mktemp -d "${TMPDIR:-/tmp}/spark-setup.XXXXXX")"
+application_file_name="$(basename "$application_script")"
+application_revision=""
+if [[ "$application_source" == rustfs ]]; then
+  [[ "$application_file_name" =~ ^[A-Za-z0-9._-]+$ ]] || {
+    echo "Spark application file name may contain only letters, digits, dot, underscore, and hyphen." >&2
+    exit 1
+  }
+  [[ "$artifact_bucket" =~ ^[a-z0-9][a-z0-9.-]*[a-z0-9]$ ]] || {
+    echo "SPARK_APPLICATION_ARTIFACT_BUCKET is not a valid S3 bucket name." >&2
+    exit 1
+  }
+  [[ "$artifact_prefix" =~ ^[A-Za-z0-9._/-]+$ && "$artifact_prefix" != /* ]] || {
+    echo "SPARK_APPLICATION_ARTIFACT_PREFIX must be a relative object prefix." >&2
+    exit 1
+  }
+  case "$artifact_url_expiration" in
+    ''|*[!0-9]*) echo "SPARK_APPLICATION_URL_EXPIRATION must be an integer." >&2; exit 1 ;;
+  esac
+  (( artifact_url_expiration >= 1 && artifact_url_expiration <= 604800 )) || {
+    echo "SPARK_APPLICATION_URL_EXPIRATION must be between 1 and 604800 seconds." >&2
+    exit 1
+  }
+
+  s3_access_key="$(kubectl -n "$uc_namespace" get secret "$uc_credentials_secret" \
+    -o jsonpath='{.data.S3_ACCESS_KEY}' | base64 --decode)"
+  s3_secret_key="$(kubectl -n "$uc_namespace" get secret "$uc_credentials_secret" \
+    -o jsonpath='{.data.S3_SECRET_KEY}' | base64 --decode)"
+  [[ -n "$s3_access_key" && -n "$s3_secret_key" ]] || {
+    echo "RustFS upload credentials are missing from $uc_namespace/$uc_credentials_secret." >&2
+    exit 1
+  }
+
+  application_digest="$(openssl dgst -sha256 "$application_script" | awk '{print $NF}')"
+  application_revision="$application_digest-$(date +%s)"
+  artifact_key="${artifact_prefix%/}/$application_digest/$application_file_name"
+  rustfs_upload_url="https://127.0.0.1:$rustfs_upload_port"
+  kubectl -n "$rustfs_namespace" port-forward --address 127.0.0.1 \
+    "service/$rustfs_service" "$rustfs_upload_port:9000" >/dev/null 2>&1 &
+  rustfs_pid=$!
+  for attempt in {1..60}; do
+    if curl -fsS --cacert "$repo_root/k8s/storage/tls/ca.crt" \
+      "$rustfs_upload_url/minio/health/live" >/dev/null 2>&1; then
+      break
+    fi
+    if [[ "$attempt" -eq 60 ]]; then
+      echo "RustFS is unavailable through service/$rustfs_service." >&2
+      exit 1
+    fi
+    sleep 1
+  done
+
+  upload_status="$(curl -sS --cacert "$repo_root/k8s/storage/tls/ca.crt" \
+    -o "$work_dir/rustfs-upload" -w '%{http_code}' -X PUT \
+    --aws-sigv4 'aws:amz:us-east-1:s3' --user "$s3_access_key:$s3_secret_key" \
+    --data-binary "@$application_script" \
+    "$rustfs_upload_url/$artifact_bucket/$artifact_key")"
+  [[ "$upload_status" == 200 ]] || {
+    echo "Spark application upload failed (HTTP $upload_status): $(<"$work_dir/rustfs-upload")" >&2
+    exit 1
+  }
+
+  application_url="$(
+    AWS_ACCESS_KEY_ID="$s3_access_key" AWS_SECRET_ACCESS_KEY="$s3_secret_key" \
+      python3 "$repo_root/scripts/presign_s3_get.py" \
+        --endpoint "https://$rustfs_service.$rustfs_namespace.svc.cluster.local:9000" \
+        --bucket "$artifact_bucket" --key "$artifact_key" \
+        --expires "$artifact_url_expiration"
+  )"
+  unset s3_access_key s3_secret_key
+  kubectl -n "$job_namespace" create secret generic "$artifact_url_secret" \
+    --from-literal=url="$application_url" \
+    --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+  unset application_url
+fi
+
 java_home="$(java -XshowSettings:properties -version 2>&1 |
   sed -n 's/^[[:space:]]*java\.home = //p' | head -n 1)"
 [[ -n "$java_home" && -f "$java_home/lib/security/cacerts" ]] || {
@@ -153,6 +255,7 @@ kubectl -n "$job_namespace" create secret generic "$credentials_secret" \
 kubectl -n "$job_namespace" create secret generic "$trust_secret" \
   --from-file=cacerts="$work_dir/cacerts" \
   --from-file=keycloak-ca.crt="$repo_root/k8s/auth/tls/ca.crt" \
+  --from-file=rustfs-ca.crt="$repo_root/k8s/storage/tls/ca.crt" \
   --dry-run=client -o yaml | kubectl apply -f - >/dev/null
 
 helm repo add spark-operator https://kubeflow.github.io/spark-operator --force-update
@@ -165,12 +268,21 @@ helm upgrade --install "$operator_release" spark-operator/spark-operator \
   --wait --timeout 10m
 
 application_options=()
-if [[ -n "$application_script" ]]; then
+if [[ "$application_source" == configmap ]]; then
   script_revision="$(cksum "$application_script" | awk '{print $1 "-" $2}')-$(date +%s)"
   application_options+=(
+    --set-string "application.mainApplicationFile=local://$script_mount_path/$application_file_name"
     --set-string "application.scriptConfigMap=$script_configmap"
     --set-string "application.scriptMountPath=$script_mount_path"
     --set-string "application.scriptRevision=$script_revision"
+  )
+elif [[ "$application_source" == rustfs ]]; then
+  application_options+=(
+    --set-string "application.mainApplicationFile=local:///opt/spark/work-dir/application/$application_file_name"
+    --set "application.artifact.enabled=true"
+    --set-string "application.artifact.urlSecretName=$artifact_url_secret"
+    --set-string "application.artifact.fileName=$application_file_name"
+    --set-string "application.scriptRevision=$application_revision"
   )
 fi
 

@@ -255,11 +255,14 @@ available, then deploy Spark:
 The setup script performs the complete deployment:
 
 1. Initializes the Unity Catalog resources.
-2. Builds `mizuumi/spark:4.0.1-uc-rustfs` from `packages/spark/Dockerfile`.
-3. Creates the Spark namespace and runtime Secrets.
-4. Creates a Java truststore containing the RustFS CA.
-5. Installs or upgrades Kubeflow Spark Operator.
-6. Installs the Spark Helm chart and submits `unity-catalog-rustfs`.
+2. Builds `mizuumi/spark:4.0.1-uc-rustfs-baked` from `packages/spark/Dockerfile` with
+   the example dependencies cached in the image.
+3. Uploads `main.py` to RustFS and gives the driver a short-lived, object-only
+   presigned URL.
+4. Creates the Spark namespace and runtime Secrets.
+5. Creates a Java truststore containing the RustFS CA.
+6. Installs or upgrades Kubeflow Spark Operator.
+7. Installs the Spark Helm chart and submits `unity-catalog-rustfs`.
 
 The setup copies the service-principal credential into
 `spark/spark-runtime-credentials`. The driver exchanges it for a fresh,
@@ -346,8 +349,11 @@ overrides for `scripts/setup_spark.sh` include:
 | `SPARK_NAMESPACE` | `spark` | Namespace for the SparkApplication |
 | `SPARK_OPERATOR_NAMESPACE` | `spark-operator` | Operator namespace |
 | `SPARK_IMAGE_REPOSITORY` | `mizuumi/spark` | Spark image repository |
-| `SPARK_IMAGE_TAG` | `4.0.1-uc-rustfs` | Spark image tag |
+| `SPARK_IMAGE_TAG` | `4.0.1-uc-rustfs-baked` | Spark image tag |
 | `SPARK_BUILD_IMAGE` | `true` | Build/load the image before deployment |
+| `SPARK_APPLICATION_SOURCE` | `rustfs` | Load the Python entry point from `rustfs`, a `configmap`, or the `image` |
+| `SPARK_APPLICATION_SCRIPT` | `packages/spark/examples/minimal/main.py` | Local Python entry point uploaded to RustFS |
+| `SPARK_APPLICATION_URL_EXPIRATION` | `3600` | Presigned artifact URL lifetime in seconds (maximum `604800`) |
 | `SPARK_UNITY_CATALOG` | `unity` | Unity Catalog name |
 | `SPARK_UNITY_STORAGE_ROOT` | `s3://unitycatalog/spark` | Root for example tables |
 | `UNITYCATALOG_CREDENTIALS_SECRET` | `unitycatalog-credentials` | Source Secret containing the Keycloak service principal |
@@ -401,12 +407,12 @@ designed to validate.
 Confirm `k8s/storage/tls/ca.crt` exists, then rerun `scripts/setup_spark.sh` so
 the `spark-rustfs-trust` Secret is rebuilt.
 
-### Dependency downloads are slow
+### Rebuilding the image
 
-The first driver run downloads Delta Lake, Unity Catalog, and Hadoop AWS jars
-from Maven Central. Later runs may still download them because the driver pod's
-Ivy directory is ephemeral. Bake the dependencies into the Spark image or add
-a persistent Ivy cache if faster cold starts are required.
+The Spark image contains version-specific classpaths for Delta Lake, Unity
+Catalog, and Hadoop AWS. Build it once, then use `SPARK_BUILD_IMAGE=false` for later runs.
+Changes to `main.py` are uploaded to RustFS and do not require a new image.
+Rebuild only after changing a dependency or Spark version.
 
 ## Related files
 
