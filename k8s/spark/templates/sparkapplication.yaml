@@ -32,6 +32,13 @@ spec:
     spark.hadoop.fs.s3a.path.style.access: "true"
     spark.hadoop.fs.s3a.connection.ssl.enabled: "true"
     spark.kubernetes.executor.deleteOnTermination: "true"
+    {{- range $key, $value := .Values.spark.extraSparkConf }}
+    {{ $key }}: {{ $value | quote }}
+    {{- end }}
+  {{- with .Values.spark.deps }}
+  deps:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
   restartPolicy:
     {{- toYaml .Values.application.restartPolicy | nindent 4 }}
   volumes:
@@ -114,6 +121,18 @@ spec:
             key: UNITY_CATALOG_NAME
       - name: UNITY_STORAGE_ROOT
         value: {{ .Values.spark.catalog.storageRoot | quote }}
+      - name: S3_ACCESS_KEY
+        valueFrom:
+          secretKeyRef:
+            name: {{ .Values.credentialsSecretName }}
+            key: S3_ACCESS_KEY
+            optional: true
+      - name: S3_SECRET_KEY
+        valueFrom:
+          secretKeyRef:
+            name: {{ .Values.credentialsSecretName }}
+            key: S3_SECRET_KEY
+            optional: true
     volumeMounts:
       - name: rustfs-trust
         mountPath: /opt/spark/trust
@@ -139,6 +158,18 @@ spec:
     env:
       - name: SPARK_DIST_CLASSPATH
         value: {{ .Values.spark.dependenciesPath | quote }}
+      - name: S3_ACCESS_KEY
+        valueFrom:
+          secretKeyRef:
+            name: {{ .Values.credentialsSecretName }}
+            key: S3_ACCESS_KEY
+            optional: true
+      - name: S3_SECRET_KEY
+        valueFrom:
+          secretKeyRef:
+            name: {{ .Values.credentialsSecretName }}
+            key: S3_SECRET_KEY
+            optional: true
     volumeMounts:
       - name: rustfs-trust
         mountPath: /opt/spark/trust

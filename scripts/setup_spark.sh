@@ -8,7 +8,7 @@ operator_release="${SPARK_OPERATOR_RELEASE:-spark-operator}"
 application_release="${SPARK_RELEASE:-spark}"
 operator_version="${SPARK_OPERATOR_VERSION:-2.5.2}"
 image_repository="${SPARK_IMAGE_REPOSITORY:-mizuumi/spark}"
-image_tag="${SPARK_IMAGE_TAG:-4.0.1-uc-rustfs-baked}"
+image_tag="${SPARK_IMAGE_TAG:-4.0.1-uc-kafka-rustfs-baked}"
 spark_version="${SPARK_VERSION:-4.0.1}"
 build_image="${SPARK_BUILD_IMAGE:-true}"
 uc_namespace="${UNITYCATALOG_NAMESPACE:-tower}"
@@ -48,7 +48,7 @@ application chart's `helm upgrade --install` command.
 
 Environment overrides:
   SPARK_IMAGE_REPOSITORY    Image repository (default: mizuumi/spark)
-  SPARK_IMAGE_TAG           Image tag (default: 4.0.1-uc-rustfs-baked)
+  SPARK_IMAGE_TAG           Image tag (default: 4.0.1-uc-kafka-rustfs-baked)
   SPARK_VERSION             Apache Spark base version (default: 4.0.1)
   SPARK_BUILD_IMAGE         Build/import the image (default: true)
   SPARK_APPLICATION_SOURCE  rustfs, configmap, or image (default: rustfs)
@@ -242,12 +242,23 @@ keytool -importcert -noprompt -storepass changeit -keystore "$work_dir/cacerts" 
 keytool -importcert -noprompt -storepass changeit -keystore "$work_dir/cacerts" \
   -alias mizuumi-keycloak -file "$repo_root/k8s/auth/tls/ca.crt" >/dev/null
 
+runtime_s3_access_key="$(kubectl -n "$uc_namespace" get secret "$uc_credentials_secret" \
+  -o jsonpath='{.data.S3_ACCESS_KEY}' | base64 --decode)"
+runtime_s3_secret_key="$(kubectl -n "$uc_namespace" get secret "$uc_credentials_secret" \
+  -o jsonpath='{.data.S3_SECRET_KEY}' | base64 --decode)"
+[[ -n "$runtime_s3_access_key" && -n "$runtime_s3_secret_key" ]] || {
+  echo "RustFS credentials are missing from $uc_namespace/$uc_credentials_secret." >&2
+  exit 1
+}
+
 credentials_file="$work_dir/credentials.env"
 umask 077
 printf 'KEYCLOAK_CLIENT_ID=%s\n' "$keycloak_client_id" > "$credentials_file"
 printf 'KEYCLOAK_CLIENT_SECRET=%s\n' "$keycloak_client_secret" >> "$credentials_file"
 printf 'UNITY_CATALOG_NAME=%s\n' "$catalog" >> "$credentials_file"
-unset keycloak_client_secret
+printf 'S3_ACCESS_KEY=%s\n' "$runtime_s3_access_key" >> "$credentials_file"
+printf 'S3_SECRET_KEY=%s\n' "$runtime_s3_secret_key" >> "$credentials_file"
+unset keycloak_client_secret runtime_s3_access_key runtime_s3_secret_key
 kubectl -n "$job_namespace" create secret generic "$credentials_secret" \
   --from-env-file="$credentials_file" \
   --dry-run=client -o yaml | kubectl apply -f - >/dev/null

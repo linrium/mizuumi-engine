@@ -1,6 +1,6 @@
 image:
   repository: mizuumi/spark
-  tag: "4.0.1-uc-rustfs-baked"
+  tag: "4.0.1-uc-kafka-rustfs-baked"
   pullPolicy: IfNotPresent
 
 serviceAccountName: spark-operator-spark
@@ -22,6 +22,8 @@ spark:
   s3:
     endpoint: https://rustfs-svc.storage.svc.cluster.local:9000
     region: us-east-1
+  extraSparkConf: {}
+  deps: {}
 
 application:
   enabled: true

@@ -17,8 +17,8 @@ export default async function Home() {
     <main className="">
       <div>
         <Link href="/chat">Pi Agents</Link>
-        <Link href="/lineages">Lineages</Link>
         <Link href="/unitycatalog">Unity Catalog</Link>
+        <Link href="/banking">Banking</Link>
       </div>
       <div className="flex min-h-screen items-center justify-center">
         <section className="space-y-4 rounded-lg border p-6">

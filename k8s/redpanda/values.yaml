@@ -17,12 +17,30 @@ auth:
   sasl:
     enabled: false
 
+external:
+  enabled: true
+  # Docker Desktop k8s only exposes Services of type LoadBalancer on the host's
+  # localhost (via its vpnkit tunnel). NodePorts don't bind to 127.0.0.1 there,
+  # so clients outside the cluster can't reach them.
+  type: LoadBalancer
+  # The chart advertises external listeners as `<pod>.<external.domain>:<port>`.
+  # /etc/hosts resolves this subdomain to 127.0.0.1, which Docker Desktop then
+  # forwards into the LoadBalancer Service.
+  domain: api.redpanda.mizuumi.test
+
 listeners:
   kafka:
     port: 9092
     authenticationMethod: none
     advertisedPorts:
       - 9092
+    external:
+      default:
+        port: 30092
+        advertisedPorts:
+          - 30092
+    tls:
+      enabled: false
   admin:
     port: 9644
     authenticationMethod: none
