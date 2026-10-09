@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useState, useTransition } from "react"
+import { authClient } from "@/lib/auth-client"
 import { getUnityCatalogInfo } from "./actions"
 
 type UnityCatalogResult = Awaited<ReturnType<typeof getUnityCatalogInfo>>
@@ -11,7 +12,15 @@ export function UnityCatalogView() {
 
   const load = useCallback(() => {
     startTransition(async () => {
-      setResult(await getUnityCatalogInfo())
+      const next = await getUnityCatalogInfo()
+      if (next.needsReconnect) {
+        await authClient.signIn.social({
+          provider: "keycloak",
+          callbackURL: "/unitycatalog",
+        })
+        return
+      }
+      setResult(next)
     })
   }, [])
 

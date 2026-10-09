@@ -1,6 +1,7 @@
 "use server"
 
 import { headers } from "next/headers"
+import { redirect } from "next/navigation"
 import { auth } from "@/lib/auth"
 
 type UnityCatalogObject = Record<string, unknown>
@@ -39,22 +40,31 @@ async function unityCatalogGet<T>(
 export async function getUnityCatalogInfo(): Promise<{
   data?: UnityCatalogObject
   error?: string
+  needsReconnect?: boolean
 }> {
   const requestHeaders = await headers()
   const session = await auth.api.getSession({ headers: requestHeaders })
 
   if (!session) {
-    return { error: "You must sign in with Keycloak to view Unity Catalog." }
+    redirect("/login")
   }
 
+  let accessToken: string
   try {
     // Better Auth stores the OAuth account in a signed cookie when no database
     // adapter is configured, and refreshes the token here when needed.
-    const { accessToken } = await auth.api.getAccessToken({
+    ;({ accessToken } = await auth.api.getAccessToken({
       headers: requestHeaders,
       body: { useAccountCookie: true, userId: session.user.id },
-    })
+    }))
+  } catch {
+    // Session is still valid but the stored Keycloak refresh token is gone.
+    // Signal the client to re-run the OAuth flow via authClient so the state
+    // cookie is set on the same response that issues the authorize redirect.
+    return { needsReconnect: true }
+  }
 
+  try {
     const { catalogs = [] } = await unityCatalogGet<{
       catalogs?: UnityCatalogObject[]
     }>("/catalogs", accessToken, { max_results: "100" })
