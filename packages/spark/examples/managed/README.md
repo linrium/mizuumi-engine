@@ -9,7 +9,7 @@ From the repository root, after the local RustFS, Keycloak, and Unity Catalog
 services are set up, deploy with:
 
 ```bash
-./scripts/setup_spark_managed.sh
+./scripts/spark/setup-managed.sh
 ```
 
 The script initializes the `demo` schema and its grants, uploads `main.py` to a
@@ -17,10 +17,10 @@ content-addressed object in RustFS, builds the reusable Spark base image,
 installs the Spark Operator, and submits `unity-catalog-managed`. The driver
 downloads the script through a one-object presigned URL before Spark starts.
 It accepts the same environment overrides and extra Helm options as
-`setup_spark.sh`. For an image already available to the cluster:
+`scripts/spark/setup.sh`. For an image already available to the cluster:
 
 ```bash
-SPARK_BUILD_IMAGE=false ./scripts/setup_spark_managed.sh
+SPARK_BUILD_IMAGE=false ./scripts/spark/setup-managed.sh
 ```
 
 The base image preloads the Maven artifacts used by both examples. Rebuild it

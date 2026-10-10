@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 keycloak_ca="$repo_root/k8s/auth/tls/ca.crt"
 vault_ca="${VAULT_CACERT:-$repo_root/k8s/auth/tls/ca.crt}"
 studio_env="$repo_root/packages/studio/.env.local"
@@ -18,7 +18,7 @@ rotate_secret=0
 
 usage() {
   cat <<'EOF'
-Usage: ./scripts/bootstrap_studio.sh [--rotate-secret]
+Usage: ./scripts/studio/bootstrap.sh [--rotate-secret]
 
 Create or update the Mizuumi Studio OIDC client in the sovico Keycloak realm
 and write its credentials to packages/studio/.env.local.
@@ -74,13 +74,13 @@ esac
 
 [[ -f "$keycloak_ca" ]] || {
   echo "Missing Keycloak CA: $keycloak_ca" >&2
-  echo "Run ./scripts/setup_auth.sh and ./scripts/bootstrap_sovico.sh first." >&2
+  echo "Run ./scripts/auth/setup.sh and ./scripts/auth/bootstrap-sovico.sh first." >&2
   exit 1
 }
 
 [[ -f "$vault_ca" ]] || {
   echo "Missing Vault CA: $vault_ca" >&2
-  echo "Run ./scripts/setup_vault.sh first." >&2
+  echo "Run ./scripts/vault/setup.sh first." >&2
   exit 1
 }
 
@@ -123,7 +123,7 @@ for attempt in {1..60}; do
   fi
   if [[ "$attempt" -eq 60 ]]; then
     echo "Keycloak realm $realm is unavailable." >&2
-    echo "Run ./scripts/bootstrap_sovico.sh first." >&2
+    echo "Run ./scripts/auth/bootstrap-sovico.sh first." >&2
     exit 1
   fi
   sleep 1

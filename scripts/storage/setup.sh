@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 namespace=storage
 release=rustfs
 chart_version=1.0.0
@@ -20,11 +20,11 @@ case "$context" in
 esac
 
 if ! kubectl -n "$namespace" get secret rustfs-credentials >/dev/null 2>&1; then
-  echo "Missing rustfs-credentials Secret. Run ./scripts/bootstrap_storage.sh first." >&2
+  echo "Missing rustfs-credentials Secret. Run ./scripts/storage/bootstrap.sh first." >&2
   exit 1
 fi
 if ! kubectl -n "$namespace" get secret rustfs-vault-ca >/dev/null 2>&1; then
-  echo "Missing rustfs-vault-ca Secret. Run ./scripts/bootstrap_storage.sh first." >&2
+  echo "Missing rustfs-vault-ca Secret. Run ./scripts/storage/bootstrap.sh first." >&2
   exit 1
 fi
 

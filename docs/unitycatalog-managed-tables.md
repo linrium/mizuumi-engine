@@ -169,6 +169,6 @@ The current Rust implementation also does not remove object-store files when a m
 
 PostgreSQL stores staging allocations in `uc_staging_tables`, finalized table metadata in `uc_tables`, and coordinator state in `uc_delta_table_state` and `uc_delta_commits`. The actual table data belongs at the allocated object-storage URL.
 
-Run [`scripts/test_unitycatalog_table_types.sh`](../scripts/test_unitycatalog_table_types.sh) with `UNITYCATALOG_TEST_STORAGE_ROOT=s3://<bucket>/<test-prefix>` to smoke-test staging, all table types, and Delta commits. That script creates a temporary catalog and **deletes it on exit**, so its test tables will not remain visible afterward. It does not write object-store data.
+Run [`scripts/unitycatalog/test-table-types.sh`](../scripts/unitycatalog/test-table-types.sh) with `UNITYCATALOG_TEST_STORAGE_ROOT=s3://<bucket>/<test-prefix>` to smoke-test staging, all table types, and Delta commits. That script creates a temporary catalog and **deletes it on exit**, so its test tables will not remain visible afterward. It does not write object-store data.
 
 The request and response shapes are also described in [`packages/unitycatalog/openapi.yaml`](../packages/unitycatalog/openapi.yaml).

@@ -47,7 +47,7 @@ rpk topic list
 
 echo ""
 echo "Producing test message to test-events..."
-echo '{"event":"bootstrap","source":"bootstrap_redpanda.sh"}' | \
+echo '{"event":"bootstrap","source":"bootstrap.sh"}' | \
   rpk topic produce test-events --key bootstrap
 
 echo ""

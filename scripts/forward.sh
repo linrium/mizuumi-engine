@@ -70,7 +70,7 @@ if (( trust_local_ca )); then
   fi
   if [[ ! -f "$ca" ]]; then
     echo "Missing local gateway CA: $ca" >&2
-    echo "Run ./scripts/setup_auth.sh first." >&2
+    echo "Run ./scripts/auth/setup.sh first." >&2
     exit 1
   fi
   security add-trusted-cert -r trustRoot -p ssl -k "$login_keychain" "$ca"

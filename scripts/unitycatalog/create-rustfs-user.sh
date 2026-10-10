@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 namespace="${UNITYCATALOG_NAMESPACE:-tower}"
 credentials_secret="${UNITYCATALOG_CREDENTIALS_SECRET:-unitycatalog-credentials}"
 rustfs_namespace="${RUSTFS_NAMESPACE:-storage}"
@@ -25,7 +25,7 @@ trap cleanup EXIT
 
 usage() {
   cat <<'EOF'
-Usage: ./scripts/create_unitycatalog_rustfs_user.sh [--skip-vault]
+Usage: ./scripts/unitycatalog/create-rustfs-user.sh [--skip-vault]
 
 Creates a non-root RustFS IAM user for the Rust Unity Catalog server, attaches
 the configured RustFS policy, creates the Unity Catalog bucket, validates STS,

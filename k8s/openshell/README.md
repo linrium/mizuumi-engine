@@ -67,7 +67,7 @@ Additional arguments are passed to `helm upgrade --install`.
 With the gateway installed and the OpenShell CLI available, run:
 
 ```sh
-./scripts/bootstrap_studio.sh
+./scripts/studio/bootstrap.sh
 ./scripts/openshell/bootstrap.sh
 ```
 

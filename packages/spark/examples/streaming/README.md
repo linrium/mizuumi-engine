@@ -10,7 +10,7 @@ Deploy from the repository root once RustFS, Keycloak, Unity Catalog, and
 Redpanda are up:
 
 ```bash
-./scripts/setup_spark_streaming.sh
+./scripts/spark/setup-streaming.sh
 ```
 
 The script creates the `payments` catalog with a `bronze` schema and the

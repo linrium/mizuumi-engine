@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 base_url="${UNITYCATALOG_URL:-https://unitycatalog.mizuumi.test}"
 ca="${UNITYCATALOG_CA:-$repo_root/k8s/auth/tls/ca.crt}"
 expected_bucket="${UNITYCATALOG_BUCKET:-unitycatalog}"
@@ -10,7 +10,7 @@ auth_token="${UNITYCATALOG_AUTH_TOKEN:-}"
 
 usage() {
   cat <<'EOF'
-Usage: ./scripts/validate_unitycatalog_vending.sh
+Usage: ./scripts/unitycatalog/validate-vending.sh
 
 Validates the Rust Unity Catalog vending API through the local gateway by
 calling GET /api/vending/buckets and checking that the Unity Catalog bucket is

@@ -77,12 +77,12 @@ done
 }
 [[ -f "$keycloak_ca" ]] || {
   echo "Missing Keycloak CA: $keycloak_ca" >&2
-  echo "Run ./scripts/setup_auth.sh or set KEYCLOAK_CA." >&2
+  echo "Run ./scripts/auth/setup.sh or set KEYCLOAK_CA." >&2
   exit 1
 }
 [[ -n "$oidc_client_secret" ]] || {
   echo "Missing OPENSHELL_OIDC_CLIENT_SECRET." >&2
-  echo "Run ./scripts/bootstrap_studio.sh or set it in the environment." >&2
+  echo "Run ./scripts/studio/bootstrap.sh or set it in the environment." >&2
   exit 1
 }
 

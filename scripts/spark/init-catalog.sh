@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 namespace="${UNITYCATALOG_NAMESPACE:-tower}"
 release="${UNITYCATALOG_RELEASE:-unitycatalog}"
 catalog="${SPARK_UNITY_CATALOG:-unity}"
@@ -23,7 +23,7 @@ trap cleanup EXIT
 
 usage() {
   cat <<'EOF'
-Usage: ./scripts/init_spark_catalog.sh
+Usage: ./scripts/spark/init-catalog.sh
 
 Idempotently creates the catalog, RustFS storage credential and external
 location, configured schemas, and grants used by the Spark example.
@@ -56,7 +56,7 @@ deployment="$(kubectl -n "$namespace" get deployment \
   -l "app.kubernetes.io/instance=$release,app.kubernetes.io/component=server" \
   -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"
 if [[ -z "$deployment" ]]; then
-  echo "Unity Catalog is not installed. Run ./scripts/setup_unitycatalog.sh first." >&2
+  echo "Unity Catalog is not installed. Run ./scripts/unitycatalog/setup.sh first." >&2
   exit 1
 fi
 [[ -f "$unitycatalog_ca" ]] || { echo "Missing Unity Catalog CA: $unitycatalog_ca" >&2; exit 1; }

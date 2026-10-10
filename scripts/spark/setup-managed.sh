@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 case "${1:-}" in
   -h|--help)
     cat <<'EOF'
-Usage: ./scripts/setup_spark_managed.sh [application Helm options]
+Usage: ./scripts/spark/setup-managed.sh [application Helm options]
 
 Initializes the demo schema, builds the Spark image, installs the Spark
 Operator, and submits the managed-table example. Extra arguments are passed
 to the application chart's helm upgrade --install command.
 
-The SPARK_* and UNITYCATALOG_* environment overrides from setup_spark.sh apply.
+The SPARK_* and UNITYCATALOG_* environment overrides from scripts/spark/setup.sh apply.
 EOF
     exit 0
     ;;
@@ -26,7 +26,7 @@ export SPARK_APPLICATION_URL_SECRET="${SPARK_APPLICATION_URL_SECRET:-unity-catal
 export SPARK_APPLICATION_SCRIPT_CONFIGMAP=unity-catalog-managed-script
 export SPARK_APPLICATION_SCRIPT_MOUNT_PATH=/opt/spark/work-dir/examples/managed
 
-exec "$repo_root/scripts/setup_spark.sh" \
+exec "$repo_root/scripts/spark/setup.sh" \
   --set-string application.name=unity-catalog-managed \
   --values "$repo_root/k8s/spark/managed-values.yaml" \
   "$@"

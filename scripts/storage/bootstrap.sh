@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 namespace=storage
 credentials_file="$repo_root/k8s/storage/credentials.env"
 admin_password_file="$repo_root/k8s/storage/rustfs-admin-password"
@@ -16,15 +16,15 @@ case "$context" in
   kind-*|k3d-*|minikube|minikube-*|docker-desktop|rancher-desktop|orbstack|microk8s|colima|k3s) ;;
   *) echo "Refusing local bootstrap on non-local context: $context" >&2; exit 1 ;;
 esac
-[[ -f "$vault_ca" ]] || { echo "Run ./scripts/setup_vault.sh first." >&2; exit 1; }
-[[ -f "$keycloak_ca" ]] || { echo "Run ./scripts/setup_auth.sh first." >&2; exit 1; }
+[[ -f "$vault_ca" ]] || { echo "Run ./scripts/vault/setup.sh first." >&2; exit 1; }
+[[ -f "$keycloak_ca" ]] || { echo "Run ./scripts/auth/setup.sh first." >&2; exit 1; }
 keycloak_curl() { curl --cacert "$keycloak_ca" "$@"; }
 if [[ -n "${VAULT_TOKEN:-}" ]]; then
   vault_token="$VAULT_TOKEN"
 elif [[ -f "$repo_root/k8s/vault/init.json" ]]; then
   vault_token="$(jq -er '.root_token' "$repo_root/k8s/vault/init.json")"
 else
-  echo "Set VAULT_TOKEN or initialize Vault with ./scripts/init_vault.sh." >&2
+  echo "Set VAULT_TOKEN or initialize Vault with ./scripts/vault/init.sh." >&2
   exit 1
 fi
 
@@ -204,4 +204,4 @@ kubectl -n "$namespace" create secret generic rustfs-vault-ca --from-file=ca.crt
 echo "RustFS bootstrap complete: sovico OIDC client, read-only khaopad account, $admin_username console administrator, Vault Transit key and restricted token."
 echo "Credentials are in $credentials_file (mode 600); back them up securely."
 echo "The Vault KMS token has a 720-hour TTL; renew or rotate it before expiry."
-echo "Run ./scripts/setup_storage.sh."
+echo "Run ./scripts/storage/setup.sh."

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 vault_ca="$repo_root/k8s/vault/tls/ca.crt"
 keycloak_ca="$repo_root/k8s/auth/tls/ca.crt"
 rustfs_ca="$repo_root/k8s/storage/tls/ca.crt"
@@ -218,4 +218,4 @@ vault POST /v1/secret/data/unitycatalog "$vault_payload" >/dev/null
 unset admin_token vault_token oauth_client_secret spark_client_secret rustfs_root_access rustfs_root_secret s3_secret_key
 echo "Unity Catalog bootstrap complete: Keycloak API and Spark service clients, RustFS IAM/STS bucket, and Vault KV secret are ready."
 echo "Keycloak user khaopad will map to Unity Catalog user $uc_email."
-echo "Run ./scripts/setup_unitycatalog.sh."
+echo "Run ./scripts/unitycatalog/setup.sh."

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 init_file="$repo_root/k8s/vault/init.json"
 for command in kubectl jq; do
   command -v "$command" >/dev/null || { echo "Missing $command" >&2; exit 1; }
@@ -26,4 +26,4 @@ if ! jq -e '.unseal_keys_b64[0] and .root_token' "$init_file" >/dev/null; then
 fi
 chmod 600 "$init_file"
 echo "Vault initialized. CRITICAL: securely back up $init_file outside this machine; loss of the key makes Vault and RustFS SSE-KMS data inaccessible."
-"$repo_root/scripts/unseal_vault.sh"
+"$repo_root/scripts/vault/unseal.sh"

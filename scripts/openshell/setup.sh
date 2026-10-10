@@ -49,7 +49,7 @@ done
 }
 [[ -f "$keycloak_ca" ]] || {
   echo "Keycloak CA does not exist: $keycloak_ca" >&2
-  echo "Run ./scripts/setup_auth.sh before installing OpenShell." >&2
+  echo "Run ./scripts/auth/setup.sh before installing OpenShell." >&2
   exit 1
 }
 

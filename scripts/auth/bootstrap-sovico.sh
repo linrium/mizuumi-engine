@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 password_file="$repo_root/k8s/auth/sovico-user-password"
 vault_init_file="$repo_root/k8s/vault/init.json"
 vault_ca="$repo_root/k8s/vault/tls/ca.crt"
@@ -29,7 +29,7 @@ if [[ "$hostname" != "https://auth.mizuumi.test" ]]; then
   exit 1
 fi
 if ! kubectl -n auth get service keycloak-gateway >/dev/null 2>&1; then
-  echo "Run ./scripts/setup_auth.sh to install the Keycloak gateway first." >&2
+  echo "Run ./scripts/auth/setup.sh to install the Keycloak gateway first." >&2
   exit 1
 fi
 
@@ -44,11 +44,11 @@ vault_browser_origin=https://vault.mizuumi.test
 ui_callback=$vault_browser_origin/ui/vault/auth/oidc/oidc/callback
 cli_callback=http://localhost:8250/oidc/callback
 if [[ ! -f "$vault_ca" ]]; then
-  echo "Missing Vault CA $vault_ca; run ./scripts/setup_vault.sh first." >&2
+  echo "Missing Vault CA $vault_ca; run ./scripts/vault/setup.sh first." >&2
   exit 1
 fi
 if [[ ! -f "$keycloak_ca" ]]; then
-  echo "Missing Keycloak CA $keycloak_ca; run ./scripts/setup_auth.sh first." >&2
+  echo "Missing Keycloak CA $keycloak_ca; run ./scripts/auth/setup.sh first." >&2
   exit 1
 fi
 keycloak_curl() { curl --cacert "$keycloak_ca" "$@"; }
@@ -57,7 +57,7 @@ if [[ -n "${VAULT_TOKEN:-}" ]]; then
 elif [[ -f "$vault_init_file" ]]; then
   vault_token="$(jq -er '.root_token' "$vault_init_file")"
 else
-  echo "Set VAULT_TOKEN or run ./scripts/init_vault.sh first." >&2
+  echo "Set VAULT_TOKEN or run ./scripts/vault/init.sh first." >&2
   exit 1
 fi
 keycloak_pid=""

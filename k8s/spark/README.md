@@ -7,7 +7,7 @@ Spark `4.0.1`, Delta Lake `4.3.1`, and the Unity Catalog Spark connector
 `s3://unitycatalog` bucket. The operator webhook is enabled because it injects
 the Secret-backed environment into driver and executor pods.
 
-The setup runs `scripts/init_spark_catalog.sh` to create the Bronze, Silver,
+The setup runs `scripts/spark/init-catalog.sh` to create the Bronze, Silver,
 and Gold schemas through the Unity Catalog CLI and grant access to the RustFS
 external location. The driver authenticates as the dedicated
 `unitycatalog-spark` Keycloak service principal and receives short-lived
@@ -22,9 +22,9 @@ clients. Re-run setup to rotate the Spark session before its one-hour expiry.
 Bootstrap and install Unity Catalog first, then run:
 
 ```sh
-./scripts/bootstrap_unitycatalog.sh
-./scripts/setup_unitycatalog.sh
-./scripts/setup_spark.sh
+./scripts/unitycatalog/bootstrap.sh
+./scripts/unitycatalog/setup.sh
+./scripts/spark/setup.sh
 ```
 
 Spark setup reads the generated service-principal client ID and secret from
@@ -44,7 +44,7 @@ Override the image for a registry-backed cluster with:
 
 ```sh
 SPARK_IMAGE_REPOSITORY=registry.example.com/mizuumi/spark \
-SPARK_IMAGE_TAG=4.0.1 ./scripts/setup_spark.sh
+SPARK_IMAGE_TAG=4.0.1 ./scripts/spark/setup.sh
 ```
 
 Set `SPARK_BUILD_IMAGE=false` when that image is already available. Python

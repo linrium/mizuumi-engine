@@ -7,12 +7,12 @@ For the full local setup from the repository root, run `./scripts/bootstrap.sh`.
 The individual steps are:
 
 ```sh
-./scripts/setup_auth.sh
-./scripts/setup_vault.sh
-./scripts/init_vault.sh        # first Vault install only; otherwise unseal_vault.sh
-./scripts/bootstrap_sovico.sh
-./scripts/bootstrap_storage.sh
-./scripts/setup_storage.sh
+./scripts/auth/setup.sh
+./scripts/vault/setup.sh
+./scripts/vault/init.sh        # first Vault install only; otherwise scripts/vault/unseal.sh
+./scripts/auth/bootstrap-sovico.sh
+./scripts/storage/bootstrap.sh
+./scripts/storage/setup.sh
 sudo ./scripts/configure_workstation_dns.sh # once per workstation
 ./scripts/forward.sh
 ```
@@ -25,10 +25,10 @@ LoadBalancer integration; Docker Desktop does this automatically.
 
 The storage bootstrap creates the `rustfs-console` confidential Keycloak client in the `sovico` realm and a `groups` claim mapper. The initial `khaopad` account remains in the `readonly` group. A separate `rustfs-admin` account is created in the `consoleAdmin` group, which RustFS maps to its built-in administrative policy for managing buckets, objects, and IAM through the Console. Set `RUSTFS_ADMIN_USERNAME` to choose another username and `RUSTFS_ADMIN_PASSWORD` when first creating the account; otherwise interactive runs prompt for a password and noninteractive runs generate one in the ignored, mode-600 `k8s/storage/rustfs-admin-password` file. Existing account passwords are left unchanged. The bootstrap also enables Vault Transit and a KV v2 metadata mount, creates a non-exportable `rustfs` key and a restricted token, and creates the `rustfs-credentials` and `rustfs-vault-ca` Kubernetes Secrets. The Vault policy permits encrypt/decrypt for the `rustfs` key, listing and reading Transit keys, and managing RustFS's records under `secret/rustfs/kms/transit-metadata`; these records are required for the KMS settings page to populate key details. The CA Secret contains a bundle for Vault and Keycloak. The generated root access/secret keys and client/KMS secrets are held in ignored, mode-600 `k8s/storage/credentials.env`, never in Helm values. Back up these files securely. The Vault token has a 720-hour TTL; renew or rotate it before expiration.
 
-`setup_storage.sh` generates a local CA and a CA-signed server certificate in ignored `k8s/storage/tls/`, then creates the `rustfs-tls` Secret. RustFS uses TLS on both listeners. The pinned chart renders HTTP health probes, so the setup script patches the probes to HTTPS after each Helm upgrade and waits for the rollout. CoreDNS sends RustFS's requests for the canonical `https://auth.mizuumi.test` issuer to the in-cluster Keycloak gateway.
+`scripts/storage/setup.sh` generates a local CA and a CA-signed server certificate in ignored `k8s/storage/tls/`, then creates the `rustfs-tls` Secret. RustFS uses TLS on both listeners. The pinned chart renders HTTP health probes, so the setup script patches the probes to HTTPS after each Helm upgrade and waits for the rollout. CoreDNS sends RustFS's requests for the canonical `https://auth.mizuumi.test` issuer to the in-cluster Keycloak gateway.
 
-After running `forward.sh`, open the Console at `https://storage.mizuumi.test/rustfs/console/` and use `https://api.storage.mizuumi.test` as the S3 endpoint. The OIDC callback is `https://api.storage.mizuumi.test/rustfs/admin/v3/oidc/callback/default`, and the post-logout redirect is `https://storage.mizuumi.test/rustfs/console/auth/login`. Keycloak remains available at `https://auth.mizuumi.test` during login. `RUSTFS_EXTRA_CA_CERT` supplies the local Keycloak CA for OIDC discovery, and `RUSTFS_KMS_VAULT_CA_CERT` supplies Vault's CA for KMS. `SSL_CERT_FILE` points to the same bundle for other clients. Do not enable RustFS's insecure KMS override. If you change either Keycloak or Vault certificate, rerun `bootstrap_storage.sh` and `setup_storage.sh`. If you replace the RustFS certificate, rerun `setup_storage.sh`.
+After running `forward.sh`, open the Console at `https://storage.mizuumi.test/rustfs/console/` and use `https://api.storage.mizuumi.test` as the S3 endpoint. The OIDC callback is `https://api.storage.mizuumi.test/rustfs/admin/v3/oidc/callback/default`, and the post-logout redirect is `https://storage.mizuumi.test/rustfs/console/auth/login`. Keycloak remains available at `https://auth.mizuumi.test` during login. `RUSTFS_EXTRA_CA_CERT` supplies the local Keycloak CA for OIDC discovery, and `RUSTFS_KMS_VAULT_CA_CERT` supplies Vault's CA for KMS. `SSL_CERT_FILE` points to the same bundle for other clients. Do not enable RustFS's insecure KMS override. If you change either Keycloak or Vault certificate, rerun `scripts/storage/bootstrap.sh` and `scripts/storage/setup.sh`. If you replace the RustFS certificate, rerun `scripts/storage/setup.sh`.
 
 This is a local integration example, not a production RustFS topology. Its single pod and local `standard` StorageClass do not provide high availability. Use a publicly trusted certificate, durable storage, suitable replicas, backups, and operational token renewal for production.
 
-`scripts/bootstrap_unitycatalog.sh` provisions a separate long-term RustFS IAM user, attaches the built-in `readwrite` policy (which includes `sts:AssumeRole`), creates the `unitycatalog` bucket, and stores that IAM credential in Vault rather than reusing the RustFS root credential in the Unity Catalog deployment. Unity Catalog uses RustFS STS to vend short-lived, path-scoped credentials.
+`scripts/unitycatalog/bootstrap.sh` provisions a separate long-term RustFS IAM user, attaches the built-in `readwrite` policy (which includes `sts:AssumeRole`), creates the `unitycatalog` bucket, and stores that IAM credential in Vault rather than reusing the RustFS root credential in the Unity Catalog deployment. Unity Catalog uses RustFS STS to vend short-lived, path-scoped credentials.

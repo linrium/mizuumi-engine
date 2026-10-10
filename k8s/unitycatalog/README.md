@@ -5,21 +5,21 @@ This chart deploys the Rust Unity Catalog server from `packages/unitycatalog/ser
 Install or upgrade with:
 
 ```sh
-./scripts/bootstrap_unitycatalog.sh
-./scripts/setup_unitycatalog.sh
+./scripts/unitycatalog/bootstrap.sh
+./scripts/unitycatalog/setup.sh
 ```
 
-`setup_unitycatalog.sh` builds `packages/unitycatalog/server/Dockerfile` before the Helm upgrade. By default it tags the image as `mizuumi/unitycatalog-server:latest`, loads it into common local clusters (`kind`, `k3d`, and `minikube`), and restarts the server deployment so rebuilding the same tag is picked up. Override the image or skip the build with:
+`scripts/unitycatalog/setup.sh` builds `packages/unitycatalog/server/Dockerfile` before the Helm upgrade. By default it tags the image as `mizuumi/unitycatalog-server:latest`, loads it into common local clusters (`kind`, `k3d`, and `minikube`), and restarts the server deployment so rebuilding the same tag is picked up. Override the image or skip the build with:
 
 ```sh
 UNITYCATALOG_IMAGE_REPOSITORY=example/unitycatalog-server \
 UNITYCATALOG_IMAGE_TAG=dev \
-  ./scripts/setup_unitycatalog.sh
+  ./scripts/unitycatalog/setup.sh
 
-UNITYCATALOG_SKIP_IMAGE_BUILD=1 ./scripts/setup_unitycatalog.sh
+UNITYCATALOG_SKIP_IMAGE_BUILD=1 ./scripts/unitycatalog/setup.sh
 ```
 
-`bootstrap_unitycatalog.sh` creates the RustFS IAM credential, `unitycatalog` bucket, and a dedicated `unitycatalog-spark` Keycloak service principal with the writer role. It stores the S3 and Keycloak client credentials in Vault. `setup_unitycatalog.sh` copies that Vault data into the `unitycatalog-credentials` Kubernetes Secret and creates the `unitycatalog-trust` CA bundle Secret. The Unity Catalog server uses the S3 keys for temporary-credential vending; Spark setup copies only its Keycloak client credential into the Spark namespace.
+`scripts/unitycatalog/bootstrap.sh` creates the RustFS IAM credential, `unitycatalog` bucket, and a dedicated `unitycatalog-spark` Keycloak service principal with the writer role. It stores the S3 and Keycloak client credentials in Vault. `scripts/unitycatalog/setup.sh` copies that Vault data into the `unitycatalog-credentials` Kubernetes Secret and creates the `unitycatalog-trust` CA bundle Secret. The Unity Catalog server uses the S3 keys for temporary-credential vending; Spark setup copies only its Keycloak client credential into the Spark namespace.
 
 `vending.accessKeySecretKey` and `vending.secretKeySecretKey` in `values.yaml` are the names of keys inside `server.credentialsSecretName`; they are not credential values. The defaults expect:
 
@@ -34,7 +34,7 @@ vending:
 To create a non-root RustFS IAM user and populate that Secret directly, run:
 
 ```sh
-./scripts/create_unitycatalog_rustfs_user.sh
+./scripts/unitycatalog/create-rustfs-user.sh
 ```
 
 The script reads the RustFS root/admin key from `storage/rustfs-credentials` only to call RustFS admin APIs during provisioning. It creates a separate IAM user, attaches the `readwrite` policy by default, creates the `unitycatalog` bucket, validates STS with the new user key, then stores only the non-root key in `tower/unitycatalog-credentials`.
@@ -78,7 +78,7 @@ The token changes when the pod is replaced because the runtime volume is ephemer
 Run the end-to-end authentication check after bootstrapping and deploying:
 
 ```sh
-./scripts/test_unitycatalog_auth.sh
+./scripts/unitycatalog/test-auth.sh
 ```
 
 The test creates temporary human-reader and service-writer principals in Keycloak, verifies authentication, authorization, and bootstrap access, then deletes them.

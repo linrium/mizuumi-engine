@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 namespace="${UNITYCATALOG_NAMESPACE:-tower}"
 release="${UNITYCATALOG_RELEASE:-unitycatalog}"
 realm="${KEYCLOAK_REALM:-sovico}"
@@ -29,7 +29,7 @@ trap 'exit 143' TERM
 
 usage() {
   cat <<'EOF'
-Usage: UNITYCATALOG_READER_PASSWORD='...' ./scripts/setup_unitycatalog_table_reader.sh
+Usage: UNITYCATALOG_READER_PASSWORD='...' ./scripts/unitycatalog/setup-table-reader.sh
 
 Creates/updates a dedicated non-admin Keycloak reader account and grants it
 SELECT on the minimal Spark example's gold.daily_product_sales table. The

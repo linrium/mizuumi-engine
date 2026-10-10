@@ -209,7 +209,7 @@ The local platform must already have the following components running:
 - A Unity Catalog RustFS service account stored in
   `tower/unitycatalog-credentials`.
 - The `unitycatalog-spark` Keycloak service principal created by
-  `scripts/bootstrap_unitycatalog.sh`.
+  `scripts/unitycatalog/bootstrap.sh`.
 - Docker, Helm, `kubectl`, Java, `keytool`, `curl`, and `jq` on the workstation.
 
 The setup uses `https://unitycatalog.mizuumi.test` and validates it with
@@ -221,7 +221,7 @@ deploying.
 From the repository root:
 
 ```bash
-./scripts/init_spark_catalog.sh
+./scripts/spark/init-catalog.sh
 ```
 
 The initializer is idempotent. It creates or verifies:
@@ -238,7 +238,7 @@ Common overrides include:
 UNITYCATALOG_PRINCIPAL=unitycatalog-spark \
 SPARK_UNITY_CATALOG=unity \
 SPARK_UNITY_STORAGE_ROOT=s3://unitycatalog/spark \
-./scripts/init_spark_catalog.sh
+./scripts/spark/init-catalog.sh
 ```
 
 ## Deploy and run
@@ -247,9 +247,9 @@ Bootstrap and deploy Unity Catalog once so the Spark service principal is
 available, then deploy Spark:
 
 ```bash
-./scripts/bootstrap_unitycatalog.sh
-./scripts/setup_unitycatalog.sh
-./scripts/setup_spark.sh
+./scripts/unitycatalog/bootstrap.sh
+./scripts/unitycatalog/setup.sh
+./scripts/spark/setup.sh
 ```
 
 The setup script performs the complete deployment:
@@ -269,13 +269,13 @@ The setup copies the service-principal credential into
 short-lived Keycloak access token whenever the application starts:
 
 ```bash
-./scripts/setup_spark.sh
+./scripts/spark/setup.sh
 ```
 
 To use an image that is already available to the cluster:
 
 ```bash
-SPARK_BUILD_IMAGE=false ./scripts/setup_spark.sh
+SPARK_BUILD_IMAGE=false ./scripts/spark/setup.sh
 ```
 
 ## Observe and verify the run
@@ -342,7 +342,7 @@ credential variables.
 ## Configuration
 
 Default deployment values are in `k8s/spark/values.yaml`. Useful environment
-overrides for `scripts/setup_spark.sh` include:
+overrides for `scripts/spark/setup.sh` include:
 
 | Variable | Default | Description |
 | --- | --- | --- |
@@ -362,7 +362,7 @@ Additional Helm values can be passed directly to the setup script. For
 example, to run two executors:
 
 ```bash
-./scripts/setup_spark.sh --set application.executor.instances=2
+./scripts/spark/setup.sh --set application.executor.instances=2
 ```
 
 ## Troubleshooting
@@ -381,7 +381,7 @@ kubectl -n spark get events --sort-by=.lastTimestamp
 Rerun the idempotent initializer:
 
 ```bash
-./scripts/init_spark_catalog.sh
+./scripts/spark/init-catalog.sh
 ```
 
 Then confirm the resources through `https://unitycatalog.mizuumi.test`.
@@ -394,7 +394,7 @@ its RustFS service account:
 
 ```bash
 UNITYCATALOG_AUTH_TOKEN="$(kubectl -n tower exec deployment/unitycatalog-server -c server -- cat /var/run/unitycatalog/bootstrap-token)" \
-  ./scripts/validate_unitycatalog_vending.sh
+  ./scripts/unitycatalog/validate-vending.sh
 kubectl -n tower logs deployment/unitycatalog-server --tail=200
 ```
 
@@ -404,7 +404,7 @@ designed to validate.
 
 ### TLS errors when accessing RustFS
 
-Confirm `k8s/storage/tls/ca.crt` exists, then rerun `scripts/setup_spark.sh` so
+Confirm `k8s/storage/tls/ca.crt` exists, then rerun `scripts/spark/setup.sh` so
 the `spark-rustfs-trust` Secret is rebuilt.
 
 ### Rebuilding the image
@@ -420,5 +420,5 @@ Rebuild only after changing a dependency or Spark version.
 - `packages/spark/Dockerfile`: Spark runtime image.
 - `k8s/spark/values.yaml`: default application and integration settings.
 - `k8s/spark/templates/sparkapplication.yaml`: Kubeflow SparkApplication.
-- `scripts/init_spark_catalog.sh`: catalog and storage metadata initialization.
-- `scripts/setup_spark.sh`: image build, operator installation, and deployment.
+- `scripts/spark/init-catalog.sh`: catalog and storage metadata initialization.
+- `scripts/spark/setup.sh`: image build, operator installation, and deployment.

@@ -24,7 +24,7 @@ executor pods.
 Deploy the operator and example with:
 
 ```bash
-./scripts/setup_spark.sh
+./scripts/spark/setup.sh
 ```
 
 The setup initializes the `unity` catalog, the RustFS storage credential and
@@ -33,4 +33,4 @@ submits the `unity-catalog-rustfs` SparkApplication. The Spark driver exchanges
 its Keycloak service-principal credential for a short-lived catalog token.
 
 For a single managed Delta table, see `examples/managed` and deploy it with
-`./scripts/setup_spark_managed.sh`.
+`./scripts/spark/setup-managed.sh`.

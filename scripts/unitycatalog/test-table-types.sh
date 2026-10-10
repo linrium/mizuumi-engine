@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 api_url="${UNITYCATALOG_URL:-https://unitycatalog.mizuumi.test}"
 ca="${UNITYCATALOG_CA:-$repo_root/k8s/auth/tls/ca.crt}"
 namespace="${UNITYCATALOG_NAMESPACE:-tower}"
@@ -26,7 +26,7 @@ trap 'exit 143' TERM
 
 usage() {
   cat <<'EOF'
-Usage: UNITYCATALOG_TEST_STORAGE_ROOT=s3://bucket/test-root ./scripts/test_unitycatalog_table_types.sh
+Usage: UNITYCATALOG_TEST_STORAGE_ROOT=s3://bucket/test-root ./scripts/unitycatalog/test-table-types.sh
 
 Runs an API smoke test for /staging-tables, all six table_type values, and
 GET/POST /delta/preview/commits. Creates a uniquely named catalog and deletes

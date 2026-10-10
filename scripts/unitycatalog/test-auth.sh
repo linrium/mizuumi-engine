@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 namespace="${UNITYCATALOG_NAMESPACE:-tower}"
 release="${UNITYCATALOG_RELEASE:-unitycatalog}"
 keycloak_ca="${KEYCLOAK_CA:-$repo_root/k8s/auth/tls/ca.crt}"
@@ -34,7 +34,7 @@ trap 'exit 143' TERM
 
 usage() {
   cat <<'EOF'
-Usage: ./scripts/test_unitycatalog_auth.sh
+Usage: ./scripts/unitycatalog/test-auth.sh
 
 Creates temporary Keycloak human and service principals, verifies 401/403
 enforcement and principal mapping against the deployed Unity Catalog server,

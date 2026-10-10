@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 namespace=vault
 release=vault
 chart_version=0.34.1
@@ -33,7 +33,7 @@ if kubectl -n "$namespace" get statefulset "$release" -o json 2>/dev/null | \
   echo "Existing Vault is in dev mode. Its StatefulSet has no PVC, and Kubernetes cannot add one in place." >&2
   echo "Back up any dev data, then explicitly uninstall the old release and rerun this script:" >&2
   echo "  helm -n vault uninstall vault" >&2
-  echo "This destroys the current in-memory Vault state; rerun bootstrap_sovico.sh afterward." >&2
+  echo "This destroys the current in-memory Vault state; rerun scripts/auth/bootstrap-sovico.sh afterward." >&2
   exit 1
 fi
 tls_dir="$repo_root/k8s/vault/tls"
@@ -84,7 +84,7 @@ if [[ -n "$desired_revision" && "$pod_revision" != "$desired_revision" ]]; then
       sleep 2
     done
     if [[ -f "$repo_root/k8s/vault/init.json" ]]; then
-      "$repo_root/scripts/unseal_vault.sh"
+      "$repo_root/scripts/vault/unseal.sh"
     fi
     pod_revision="$(kubectl -n "$namespace" get pod "$release-0" -o jsonpath='{.metadata.labels.controller-revision-hash}')"
     if [[ "$pod_revision" != "$desired_revision" ]]; then
@@ -112,10 +112,10 @@ if [[ -n "$previous_cert" && "$previous_cert" != "$current_cert" ]]; then
     sleep 2
   done
   if [[ -f "$repo_root/k8s/vault/init.json" ]]; then
-    "$repo_root/scripts/unseal_vault.sh"
+    "$repo_root/scripts/vault/unseal.sh"
   fi
 fi
 
-echo "Vault is deployed. On first install, initialize and unseal with ./scripts/init_vault.sh."
-echo "After each restart, unseal with ./scripts/unseal_vault.sh."
+echo "Vault is deployed. On first install, initialize and unseal with ./scripts/vault/init.sh."
+echo "After each restart, unseal with ./scripts/vault/unseal.sh."
 echo "Local UI: https://vault.mizuumi.test/ui/ after running ./scripts/forward.sh."

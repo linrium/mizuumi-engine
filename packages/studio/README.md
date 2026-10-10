@@ -5,7 +5,7 @@ the local gateway and create the Studio client before starting the app:
 
 ```bash
 ./scripts/forward.sh
-./scripts/bootstrap_studio.sh
+./scripts/studio/bootstrap.sh
 cd packages/studio
 npm install
 npm run dev
@@ -35,7 +35,7 @@ TypeScript SDK to list, create, delete, and execute in sandboxes, and streams
 Pi's JSONL events to the browser while a prompt runs. By default, the SDK uses
 the active gateway and mTLS credentials from the local OpenShell configuration.
 It obtains renewable Keycloak access tokens with the Studio service account;
-`bootstrap_studio.sh` creates the required audience and role mapping.
+`scripts/studio/bootstrap.sh` creates the required audience and role mapping.
 
 First initialize the Vault KV secret, custom provider, and image as described in
 `../openshell/examples/pi-custom-openai/README.md`. Studio reads `base_url`

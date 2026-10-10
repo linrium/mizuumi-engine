@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 namespace="${UNITYCATALOG_NAMESPACE:-tower}"
 release="${UNITYCATALOG_RELEASE:-unitycatalog}"
 credentials_secret="${UNITYCATALOG_CREDENTIALS_SECRET:-unitycatalog-credentials}"
@@ -22,12 +22,12 @@ trap cleanup EXIT
 
 usage() {
   cat <<'EOF'
-Usage: ./scripts/setup_unitycatalog.sh [helm upgrade options]
+Usage: ./scripts/unitycatalog/setup.sh [helm upgrade options]
 
 Installs or upgrades the Rust Unity Catalog server in the current Kubernetes context.
 Additional arguments are forwarded to `helm upgrade --install`, for example:
-  ./scripts/setup_unitycatalog.sh --set postgresql.persistence.size=10Gi
-  ./scripts/setup_unitycatalog.sh --values /path/to/values.yaml
+  ./scripts/unitycatalog/setup.sh --set postgresql.persistence.size=10Gi
+  ./scripts/unitycatalog/setup.sh --values /path/to/values.yaml
 
 Environment overrides:
   UNITYCATALOG_NAMESPACE   Kubernetes namespace (default: tower)
@@ -120,7 +120,7 @@ done
 
 if ! kubectl -n auth get configmap keycloak-gateway -o jsonpath='{.data.Caddyfile}' 2>/dev/null | grep -q 'unitycatalog.mizuumi.test'; then
   echo "Updating the shared gateway and certificate for unitycatalog.mizuumi.test."
-  "$repo_root/scripts/setup_auth.sh"
+  "$repo_root/scripts/auth/setup.sh"
 fi
 
 if ! kubectl get namespace "$namespace" >/dev/null 2>&1; then
@@ -145,7 +145,7 @@ for attempt in {1..60}; do
 done
 vault_secret="$(curl -fsS --cacert "$repo_root/k8s/vault/tls/ca.crt" \
   -H "X-Vault-Token: $vault_token" https://127.0.0.1:18200/v1/secret/data/unitycatalog)" || {
-    echo "Missing Vault KV secret secret/unitycatalog. Run ./scripts/bootstrap_unitycatalog.sh first." >&2
+    echo "Missing Vault KV secret secret/unitycatalog. Run ./scripts/unitycatalog/bootstrap.sh first." >&2
     exit 1
   }
 unset vault_token

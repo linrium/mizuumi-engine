@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 operator_namespace="${SPARK_OPERATOR_NAMESPACE:-spark-operator}"
 job_namespace="${SPARK_NAMESPACE:-spark}"
 operator_release="${SPARK_OPERATOR_RELEASE:-spark-operator}"
@@ -40,7 +40,7 @@ trap cleanup EXIT
 
 usage() {
   cat <<'EOF'
-Usage: ./scripts/setup_spark.sh [application Helm options]
+Usage: ./scripts/spark/setup.sh [application Helm options]
 
 Builds the Spark image, installs Kubeflow Spark Operator, and submits the
 minimal medallion SparkApplication. Extra arguments are passed to the
@@ -97,7 +97,7 @@ uc_deployment="$(kubectl -n "$uc_namespace" get deployment \
   -l "app.kubernetes.io/instance=$uc_release,app.kubernetes.io/component=server" \
   -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"
 if [[ -z "$uc_deployment" ]]; then
-  echo "Unity Catalog is not installed. Run ./scripts/setup_unitycatalog.sh first." >&2
+  echo "Unity Catalog is not installed. Run ./scripts/unitycatalog/setup.sh first." >&2
   exit 1
 fi
 kubectl -n "$uc_namespace" get secret "$uc_credentials_secret" >/dev/null 2>&1 || {
@@ -109,16 +109,16 @@ keycloak_client_id="$(kubectl -n "$uc_namespace" get secret "$uc_credentials_sec
 keycloak_client_secret="$(kubectl -n "$uc_namespace" get secret "$uc_credentials_secret" \
   -o jsonpath='{.data.KEYCLOAK_CLIENT_SECRET}' | base64 --decode)"
 [[ -n "$keycloak_client_id" && -n "$keycloak_client_secret" ]] || {
-  echo "Keycloak Spark service-principal credentials are missing; rerun ./scripts/bootstrap_unitycatalog.sh and ./scripts/setup_unitycatalog.sh." >&2
+  echo "Keycloak Spark service-principal credentials are missing; rerun ./scripts/unitycatalog/bootstrap.sh and ./scripts/unitycatalog/setup.sh." >&2
   exit 1
 }
-UNITYCATALOG_PRINCIPAL="$keycloak_client_id" "$repo_root/scripts/init_spark_catalog.sh"
+UNITYCATALOG_PRINCIPAL="$keycloak_client_id" "$repo_root/scripts/spark/init-catalog.sh"
 [[ -f "$repo_root/k8s/storage/tls/ca.crt" ]] || {
-  echo "Missing RustFS CA. Run ./scripts/setup_storage.sh first." >&2
+  echo "Missing RustFS CA. Run ./scripts/storage/setup.sh first." >&2
   exit 1
 }
 [[ -f "$repo_root/k8s/auth/tls/ca.crt" ]] || {
-  echo "Missing Keycloak CA. Run ./scripts/setup_auth.sh first." >&2
+  echo "Missing Keycloak CA. Run ./scripts/auth/setup.sh first." >&2
   exit 1
 }
 
@@ -218,7 +218,7 @@ if [[ "$application_source" == rustfs ]]; then
 
   application_url="$(
     AWS_ACCESS_KEY_ID="$s3_access_key" AWS_SECRET_ACCESS_KEY="$s3_secret_key" \
-      python3 "$repo_root/scripts/presign_s3_get.py" \
+      python3 "$repo_root/scripts/storage/presign-s3-get.py" \
         --endpoint "https://$rustfs_service.$rustfs_namespace.svc.cluster.local:9000" \
         --bucket "$artifact_bucket" --key "$artifact_key" \
         --expires "$artifact_url_expiration"

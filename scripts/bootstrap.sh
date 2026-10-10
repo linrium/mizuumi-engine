@@ -20,8 +20,8 @@ run_step() {
   "$repo_root/scripts/$script"
 }
 
-run_step setup_auth.sh
-run_step setup_vault.sh
+run_step auth/setup.sh
+run_step vault/setup.sh
 
 vault_status="$(kubectl -n vault exec vault-0 -c vault -- vault status -format=json 2>/dev/null || true)"
 if ! printf '%s' "$vault_status" | jq -e '.initialized | type == "boolean"' >/dev/null 2>&1; then
@@ -29,16 +29,16 @@ if ! printf '%s' "$vault_status" | jq -e '.initialized | type == "boolean"' >/de
   exit 1
 fi
 if [[ "$(printf '%s' "$vault_status" | jq -r '.initialized')" == true ]]; then
-  run_step unseal_vault.sh
+  run_step vault/unseal.sh
 else
-  run_step init_vault.sh
+  run_step vault/init.sh
 fi
 
-run_step bootstrap_sovico.sh
-run_step bootstrap_storage.sh
-run_step setup_storage.sh
-run_step bootstrap_unitycatalog.sh
-run_step setup_unitycatalog.sh
+run_step auth/bootstrap-sovico.sh
+run_step storage/bootstrap.sh
+run_step storage/setup.sh
+run_step unitycatalog/bootstrap.sh
+run_step unitycatalog/setup.sh
 
 if [[ "$forward" == true ]]; then
   echo "==> forward.sh (verify the local gateway)"

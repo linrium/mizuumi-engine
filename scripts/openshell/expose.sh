@@ -22,7 +22,7 @@ kubectl -n "$auth_namespace" get deployment "$gateway_deployment" >/dev/null
 
 tls_dir="$repo_root/k8s/auth/tls"
 if [[ ! -f "$tls_dir/ca.crt" || ! -f "$tls_dir/ca.key" ]]; then
-  echo "Missing local gateway CA material. Run ./scripts/setup_auth.sh first." >&2
+  echo "Missing local gateway CA material. Run ./scripts/auth/setup.sh first." >&2
   exit 1
 fi
 

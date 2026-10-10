@@ -8,7 +8,7 @@ This chart installs one Keycloak replica and, by default, a PostgreSQL StatefulS
 2. Run the local setup script from any directory:
 
    ```sh
-   ./scripts/setup_auth.sh
+   ./scripts/auth/setup.sh
    ```
 
 The script uses your current Kubernetes context, creates the `auth` namespace and credentials Secret if needed, generates a local CA and CA-signed server certificate in the ignored `k8s/auth/tls/` directory, and installs or upgrades the Helm release. It leaves an existing credentials Secret unchanged, so editing `credentials.env` after the first install does not rotate the database password. If the server certificate changes, it restarts Keycloak after updating the TLS Secret.
@@ -20,11 +20,11 @@ sudo ./scripts/configure_workstation_dns.sh # once per workstation
 ./scripts/forward.sh
 ```
 
-Visit `https://auth.mizuumi.test` and sign in to the Administration Console with username `admin` and the `ADMIN_PASSWORD` Secret value. The auth chart runs the shared Caddy gateway in Kubernetes. `setup_auth.sh` maps the local `mizuumi.test` service names to the gateway's ClusterIP in CoreDNS, while `configure_workstation_dns.sh` maps them to `127.0.0.1` on the workstation. The gateway's LoadBalancer Service exposes every endpoint on port 443 without host-side proxies or persistent port-forwards. One gateway certificate covers all local service names, and Caddy verifies each HTTPS backend with its local CA. OpenShell is available at `https://openshell.mizuumi.test` after its setup script runs; that route requires the chart-generated client certificate. On macOS, run `./scripts/forward.sh --trust --open` once to trust the gateway CA and open the browser UIs; later runs only need `--open`.
+Visit `https://auth.mizuumi.test` and sign in to the Administration Console with username `admin` and the `ADMIN_PASSWORD` Secret value. The auth chart runs the shared Caddy gateway in Kubernetes. `scripts/auth/setup.sh` maps the local `mizuumi.test` service names to the gateway's ClusterIP in CoreDNS, while `configure_workstation_dns.sh` maps them to `127.0.0.1` on the workstation. The gateway's LoadBalancer Service exposes every endpoint on port 443 without host-side proxies or persistent port-forwards. One gateway certificate covers all local service names, and Caddy verifies each HTTPS backend with its local CA. OpenShell is available at `https://openshell.mizuumi.test` after its setup script runs; that route requires the chart-generated client certificate. On macOS, run `./scripts/forward.sh --trust --open` once to trust the gateway CA and open the browser UIs; later runs only need `--open`.
 
 ## Vault login through Keycloak
 
-After installing Keycloak and initializing/unsealing Vault, run `./scripts/bootstrap_sovico.sh`. It creates the `sovico` realm, a confidential `vault` OIDC client, and an initial `khaopad` account. The script prompts for the account password when run interactively. In noninteractive runs it generates a password in the ignored, mode-600 file `k8s/auth/sovico-user-password`; you can instead set `SOVICO_USER_PASSWORD` in its environment. Existing user passwords are left unchanged. It then configures Vault's `oidc` auth method and `sovico` role. Run `./scripts/forward.sh` before signing in to Vault at `https://vault.mizuumi.test/ui/`.
+After installing Keycloak and initializing/unsealing Vault, run `./scripts/auth/bootstrap-sovico.sh`. It creates the `sovico` realm, a confidential `vault` OIDC client, and an initial `khaopad` account. The script prompts for the account password when run interactively. In noninteractive runs it generates a password in the ignored, mode-600 file `k8s/auth/sovico-user-password`; you can instead set `SOVICO_USER_PASSWORD` in its environment. Existing user passwords are left unchanged. It then configures Vault's `oidc` auth method and `sovico` role. Run `./scripts/forward.sh` before signing in to Vault at `https://vault.mizuumi.test/ui/`.
 
 ## Public HTTPS ingress
 
