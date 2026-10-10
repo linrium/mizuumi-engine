@@ -68,6 +68,22 @@ spec:
               value: /etc/unitycatalog/trust/rustfs-ca.crt
             - name: SSL_CERT_FILE
               value: /etc/unitycatalog/trust/rustfs-ca.crt
+            - name: UNITYCATALOG__TELEMETRY__ENABLED
+              value: {{ .Values.telemetry.enabled | quote }}
+            - name: UNITYCATALOG__TELEMETRY__OTLP_ENDPOINT
+              value: {{ .Values.telemetry.otlpEndpoint | quote }}
+            - name: UNITYCATALOG__TELEMETRY__SERVICE_NAME
+              value: {{ .Values.telemetry.serviceName | quote }}
+            - name: UNITYCATALOG__TELEMETRY__SERVICE_NAMESPACE
+              value: {{ .Values.telemetry.serviceNamespace | quote }}
+            - name: UNITYCATALOG__TELEMETRY__DEPLOYMENT_ENVIRONMENT
+              value: {{ .Values.telemetry.deploymentEnvironment | quote }}
+            - name: UNITYCATALOG__CHRONICLE__ENABLED
+              value: {{ .Values.chronicle.enabled | quote }}
+            - name: UNITYCATALOG__CHRONICLE__ENDPOINT
+              value: {{ .Values.chronicle.endpoint | quote }}
+            - name: UNITYCATALOG__CHRONICLE__TIMEOUT_MS
+              value: {{ .Values.chronicle.timeoutMs | quote }}
           volumeMounts:
             - name: config
               mountPath: {{ dir .Values.server.configPath }}

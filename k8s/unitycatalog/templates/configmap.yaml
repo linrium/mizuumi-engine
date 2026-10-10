@@ -37,3 +37,15 @@ data:
     reader_role = {{ .Values.auth.readerRole | quote }}
     writer_role = {{ .Values.auth.writerRole | quote }}
     admin_role = {{ .Values.auth.adminRole | quote }}
+
+    [telemetry]
+    enabled = {{ .Values.telemetry.enabled }}
+    otlp_endpoint = {{ .Values.telemetry.otlpEndpoint | quote }}
+    service_name = {{ .Values.telemetry.serviceName | quote }}
+    service_namespace = {{ .Values.telemetry.serviceNamespace | quote }}
+    deployment_environment = {{ .Values.telemetry.deploymentEnvironment | quote }}
+
+    [chronicle]
+    enabled = {{ .Values.chronicle.enabled }}
+    endpoint = {{ .Values.chronicle.endpoint | quote }}
+    timeout_ms = {{ .Values.chronicle.timeoutMs }}

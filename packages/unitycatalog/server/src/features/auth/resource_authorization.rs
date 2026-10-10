@@ -5,6 +5,11 @@ use crate::features::grants::{Privilege, SecurableType};
 
 const METASTORE_NAME: &str = "metastore";
 
+#[tracing::instrument(
+    name = "auth.can_read_catalog",
+    skip(state, principal),
+    fields(principal.id = %principal.id, catalog = %catalog),
+)]
 pub async fn can_read_catalog(
     state: &AppState,
     principal: &AuthenticatedPrincipal,
@@ -32,6 +37,11 @@ pub async fn can_read_catalog(
     .await
 }
 
+#[tracing::instrument(
+    name = "auth.can_read_schema",
+    skip(state, principal),
+    fields(principal.id = %principal.id, catalog = %catalog, schema = %schema),
+)]
 pub async fn can_read_schema(
     state: &AppState,
     principal: &AuthenticatedPrincipal,
@@ -79,6 +89,11 @@ pub async fn can_read_schema(
     .await
 }
 
+#[tracing::instrument(
+    name = "auth.can_read_table",
+    skip(state, principal),
+    fields(principal.id = %principal.id, catalog = %catalog, schema = %schema, table = %table),
+)]
 pub async fn can_read_table(
     state: &AppState,
     principal: &AuthenticatedPrincipal,
@@ -152,6 +167,11 @@ pub async fn can_read_table(
     .await
 }
 
+#[tracing::instrument(
+    name = "auth.can_delete_catalog",
+    skip(state, principal),
+    fields(principal.id = %principal.id, catalog = %catalog),
+)]
 pub async fn can_delete_catalog(
     state: &AppState,
     principal: &AuthenticatedPrincipal,
@@ -178,6 +198,11 @@ pub async fn can_delete_catalog(
         .await?)
 }
 
+#[tracing::instrument(
+    name = "auth.can_delete_schema",
+    skip(state, principal),
+    fields(principal.id = %principal.id, catalog = %catalog, schema = %schema),
+)]
 pub async fn can_delete_schema(
     state: &AppState,
     principal: &AuthenticatedPrincipal,
@@ -214,6 +239,11 @@ pub async fn can_delete_schema(
         .await?)
 }
 
+#[tracing::instrument(
+    name = "auth.can_delete_table",
+    skip(state, principal),
+    fields(principal.id = %principal.id, catalog = %catalog, schema = %schema, table = %table),
+)]
 pub async fn can_delete_table(
     state: &AppState,
     principal: &AuthenticatedPrincipal,
@@ -285,6 +315,11 @@ pub async fn require_allowed(allowed: bool, action: &str) -> Result<(), AppError
     }
 }
 
+#[tracing::instrument(
+    name = "auth.can_vend_table_credentials",
+    skip(state, principal),
+    fields(principal.id = %principal.id, table.id = %table_id, read_write),
+)]
 pub async fn can_vend_table_credentials(
     state: &AppState,
     principal: &AuthenticatedPrincipal,
@@ -307,6 +342,11 @@ pub async fn can_vend_table_credentials(
         .await
 }
 
+#[tracing::instrument(
+    name = "auth.can_vend_path_credentials",
+    skip(state, principal),
+    fields(principal.id = %principal.id, path = %path, read_write),
+)]
 pub async fn can_vend_path_credentials(
     state: &AppState,
     principal: &AuthenticatedPrincipal,

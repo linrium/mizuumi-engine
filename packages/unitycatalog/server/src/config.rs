@@ -13,6 +13,10 @@ pub struct Settings {
     pub vending: VendingSettings,
     #[serde(default)]
     pub auth: AuthSettings,
+    #[serde(default)]
+    pub telemetry: TelemetrySettings,
+    #[serde(default)]
+    pub chronicle: ChronicleSettings,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -78,6 +82,84 @@ pub struct AuthSettings {
     pub writer_role: String,
     #[serde(default = "default_admin_role")]
     pub admin_role: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct TelemetrySettings {
+    #[serde(default = "default_telemetry_enabled")]
+    pub enabled: bool,
+    #[serde(default = "default_otlp_endpoint")]
+    pub otlp_endpoint: String,
+    #[serde(default = "default_service_name")]
+    pub service_name: String,
+    #[serde(default = "default_service_namespace")]
+    pub service_namespace: String,
+    #[serde(default = "default_deployment_environment")]
+    pub deployment_environment: String,
+}
+
+impl Default for TelemetrySettings {
+    fn default() -> Self {
+        Self {
+            enabled: default_telemetry_enabled(),
+            otlp_endpoint: default_otlp_endpoint(),
+            service_name: default_service_name(),
+            service_namespace: default_service_namespace(),
+            deployment_environment: default_deployment_environment(),
+        }
+    }
+}
+
+fn default_telemetry_enabled() -> bool {
+    false
+}
+
+fn default_otlp_endpoint() -> String {
+    "http://signoz-otel-collector.signoz.svc.cluster.local:4318".to_owned()
+}
+
+fn default_service_name() -> String {
+    "unitycatalog-server".to_owned()
+}
+
+fn default_service_namespace() -> String {
+    "unitycatalog".to_owned()
+}
+
+fn default_deployment_environment() -> String {
+    "local".to_owned()
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ChronicleSettings {
+    #[serde(default = "default_chronicle_enabled")]
+    pub enabled: bool,
+    #[serde(default = "default_chronicle_endpoint")]
+    pub endpoint: String,
+    #[serde(default = "default_chronicle_timeout_ms")]
+    pub timeout_ms: u64,
+}
+
+impl Default for ChronicleSettings {
+    fn default() -> Self {
+        Self {
+            enabled: default_chronicle_enabled(),
+            endpoint: default_chronicle_endpoint(),
+            timeout_ms: default_chronicle_timeout_ms(),
+        }
+    }
+}
+
+fn default_chronicle_enabled() -> bool {
+    false
+}
+
+fn default_chronicle_endpoint() -> String {
+    "http://chronicle.chronicle.svc.cluster.local".to_owned()
+}
+
+fn default_chronicle_timeout_ms() -> u64 {
+    2000
 }
 
 impl Settings {

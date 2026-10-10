@@ -11,7 +11,6 @@ use axum::{Router, body::Body, http::Request, middleware};
 use tokio::net::TcpListener;
 use tower_http::trace::{DefaultOnFailure, DefaultOnRequest, DefaultOnResponse, TraceLayer};
 use tracing::Level;
-use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::{
     app_state::AppState,
@@ -30,15 +29,33 @@ use crate::{
         temporary_credentials::{DefaultTemporaryCredentialsService, temporary_credentials_router},
         vending::{DefaultVendingService, vending_router},
     },
-    infrastructure::postgres::{create_pool, run_migrations},
+    infrastructure::{
+        chronicle,
+        postgres::{create_pool, run_migrations},
+        telemetry,
+    },
 };
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    init_tracing();
-
-    tracing::trace!("loading server configuration");
     let settings = Settings::load().context("failed to load configuration")?;
+    let telemetry_guard =
+        telemetry::init(&settings.telemetry).context("failed to initialize telemetry")?;
+
+    chronicle::init(&settings.chronicle, &settings.telemetry)
+        .context("failed to initialize chronicle audit client")?;
+    tracing::debug!(
+        chronicle.enabled = settings.chronicle.enabled,
+        chronicle.endpoint = %settings.chronicle.endpoint,
+        "chronicle audit initialized"
+    );
+
+    tracing::debug!(
+        telemetry.enabled = settings.telemetry.enabled,
+        telemetry.otlp_endpoint = %settings.telemetry.otlp_endpoint,
+        telemetry.service_name = %settings.telemetry.service_name,
+        "telemetry initialized"
+    );
     tracing::debug!(
         server.host = %settings.server.host,
         server.port = settings.server.port,
@@ -99,6 +116,7 @@ async fn main() -> anyhow::Result<()> {
         .merge(table_router())
         .merge(temporary_credentials_router())
         .layer(middleware::from_fn_with_state(auth, authorize))
+        .layer(middleware::from_fn(telemetry::http_metrics))
         .layer(
             TraceLayer::new_for_http()
                 .make_span_with(|request: &Request<Body>| {
@@ -133,14 +151,9 @@ async fn main() -> anyhow::Result<()> {
         .context("server failed")?;
     tracing::info!("server stopped");
 
-    Ok(())
-}
+    telemetry_guard.shutdown();
 
-fn init_tracing() {
-    tracing_subscriber::registry()
-        .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("debug")))
-        .with(tracing_subscriber::fmt::layer())
-        .init();
+    Ok(())
 }
 
 async fn shutdown_signal() {

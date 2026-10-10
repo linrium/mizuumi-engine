@@ -159,15 +159,34 @@ impl AuthService {
         })
     }
 
+    #[tracing::instrument(
+        name = "auth.authenticate",
+        skip_all,
+        fields(
+            auth.method = tracing::field::Empty,
+            principal.id = tracing::field::Empty,
+            principal.kind = tracing::field::Empty,
+        ),
+    )]
     async fn authenticate(&self, token: &str) -> Result<AuthenticatedPrincipal, AppError> {
+        let span = tracing::Span::current();
         if !self.inner.enabled {
-            return Ok(self.disabled_principal());
+            span.record("auth.method", "disabled");
+            let principal = self.disabled_principal();
+            span.record("principal.id", principal.id.as_str());
+            return Ok(principal);
         }
 
         if self.is_bootstrap_token(token) {
-            return Ok(self.bootstrap_principal());
+            span.record("auth.method", "bootstrap");
+            let principal = self.bootstrap_principal();
+            span.record("principal.id", principal.id.as_str());
+            span.record("principal.kind", "bootstrap");
+            tracing::info!("authenticated bootstrap principal");
+            return Ok(principal);
         }
 
+        span.record("auth.method", "jwt");
         let header = decode_header(token).map_err(|error| {
             tracing::debug!(%error, "bearer token header is invalid");
             AppError::Unauthorized("invalid bearer token".to_owned())
@@ -195,9 +214,18 @@ impl AuthService {
             })?
             .claims;
 
-        Ok(self.principal_from_claims(claims))
+        let principal = self.principal_from_claims(claims);
+        span.record("principal.id", principal.id.as_str());
+        span.record("principal.kind", tracing::field::debug(&principal.kind));
+        tracing::info!(
+            principal.subject = %principal.subject,
+            principal.roles = ?principal.roles,
+            "authenticated jwt principal"
+        );
+        Ok(principal)
     }
 
+    #[tracing::instrument(name = "auth.decoding_key", skip(self), fields(auth.kid = %kid))]
     async fn decoding_key(&self, kid: &str) -> Result<DecodingKey, AppError> {
         if let Some(key) = self.inner.keys.read().await.get(kid).cloned() {
             return Ok(key);
@@ -215,6 +243,11 @@ impl AuthService {
             })
     }
 
+    #[tracing::instrument(
+        name = "auth.refresh_keys",
+        skip(self),
+        fields(auth.jwks_url = %self.inner.jwks_url, auth.keys_loaded = tracing::field::Empty),
+    )]
     async fn refresh_keys(&self) -> Result<(), AppError> {
         let response = self
             .inner
@@ -249,6 +282,9 @@ impl AuthService {
             tracing::error!("Keycloak JWKS contains no usable RS256 keys");
             return Err(AppError::AuthProviderUnavailable);
         }
+        let loaded = keys.len();
+        tracing::Span::current().record("auth.keys_loaded", loaded);
+        tracing::info!(auth.keys_loaded = loaded, "refreshed Keycloak signing keys");
         *self.inner.keys.write().await = keys;
         Ok(())
     }
@@ -288,6 +324,21 @@ impl AuthService {
         }
     }
 
+    #[tracing::instrument(
+        name = "auth.authorize_role",
+        skip(self, principal),
+        fields(
+            principal.id = %principal.id,
+            principal.is_admin = principal.is_admin,
+            http.method = %method,
+            http.path = %path,
+        ),
+    )]
+    #[chronicle_audit::audit(
+        action = "auth.authorize_role",
+        principal = &principal.id,
+        fields(method = method, path = path, is_admin = principal.is_admin),
+    )]
     fn authorize(
         &self,
         principal: &AuthenticatedPrincipal,
@@ -298,6 +349,7 @@ impl AuthService {
             return Ok(());
         }
         if path.starts_with("/api/2.1/unity-catalog/permissions/") {
+            tracing::warn!("denied: permission management requires admin role");
             return Err(AppError::Forbidden(
                 "permission management requires the Unity Catalog admin role".to_owned(),
             ));
@@ -310,6 +362,10 @@ impl AuthService {
         if allowed {
             Ok(())
         } else {
+            tracing::warn!(
+                principal.roles = ?principal.roles,
+                "denied: principal lacks required Unity Catalog role"
+            );
             Err(AppError::Forbidden(
                 "principal does not have the required Unity Catalog role".to_owned(),
             ))
@@ -347,6 +403,15 @@ impl AuthService {
     }
 }
 
+#[tracing::instrument(
+    name = "auth.middleware",
+    skip_all,
+    fields(
+        http.method = %request.method(),
+        http.path = %request.uri().path(),
+        principal.id = tracing::field::Empty,
+    ),
+)]
 pub async fn authorize(
     State(auth): State<AuthService>,
     mut request: Request<Body>,
@@ -357,8 +422,12 @@ pub async fn authorize(
             .headers()
             .get(header::AUTHORIZATION)
             .and_then(|value| value.to_str().ok())
-            .ok_or_else(|| AppError::Unauthorized("missing bearer token".to_owned()))?;
+            .ok_or_else(|| {
+                tracing::info!("rejected: missing bearer token");
+                AppError::Unauthorized("missing bearer token".to_owned())
+            })?;
         let token = header.strip_prefix("Bearer ").ok_or_else(|| {
+            tracing::info!("rejected: authorization not using Bearer scheme");
             AppError::Unauthorized("authorization must use the Bearer scheme".to_owned())
         })?;
         auth.authenticate(token).await?
@@ -367,7 +436,9 @@ pub async fn authorize(
     };
 
     auth.authorize(&principal, request.method(), request.uri().path())?;
-    tracing::Span::current().record("principal", &principal.id);
+    let span = tracing::Span::current();
+    span.record("principal.id", principal.id.as_str());
+    span.record("principal", principal.id.as_str());
     request.extensions_mut().insert(principal);
     Ok(next.run(request).await)
 }

@@ -30,7 +30,14 @@ tokio-postgres = "0.7"
 tower-http = { version = "0.6", features = ["trace"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+opentelemetry = { version = "0.33", features = ["trace", "metrics", "logs"] }
+opentelemetry_sdk = { version = "0.33", features = ["rt-tokio", "trace", "metrics", "logs"] }
+opentelemetry-otlp = { version = "0.33", default-features = false, features = ["http-proto", "reqwest-blocking-client", "reqwest-rustls", "trace", "metrics", "logs"] }
+opentelemetry-semantic-conventions = { version = "0.33", features = ["semconv_experimental"] }
+opentelemetry-appender-tracing = "0.33"
+tracing-opentelemetry = "0.34"
 unitycatalog_queries = { path = "cornucopia" }
+chronicle-audit = { path = "chronicle-audit" }
 url = "2.5"
 uuid = { version = "1.18", features = ["v4"] }
 validator = { version = "0.20", features = ["derive"] }

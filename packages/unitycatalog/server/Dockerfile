@@ -5,6 +5,8 @@ WORKDIR /app
 
 COPY Cargo.toml Cargo.lock ./
 COPY cornucopia ./cornucopia
+COPY chronicle-audit ./chronicle-audit
+COPY chronicle-audit-macros ./chronicle-audit-macros
 COPY src ./src
 COPY queries ./queries
 COPY schema.sql cornucopia.toml config.toml ./

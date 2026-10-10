@@ -70,6 +70,18 @@ vending:
   accessKeySecretKey: S3_ACCESS_KEY
   secretKeySecretKey: S3_SECRET_KEY
 
+telemetry:
+  enabled: true
+  otlpEndpoint: http://signoz-otel-collector.signoz.svc.cluster.local:4318
+  serviceName: unitycatalog-server
+  serviceNamespace: unitycatalog
+  deploymentEnvironment: local
+
+chronicle:
+  enabled: true
+  endpoint: http://chronicle.chronicle.svc.cluster.local
+  timeoutMs: 2000
+
 serviceAccount:
   create: true
   name: ""
