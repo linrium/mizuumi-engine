@@ -1,0 +1,55 @@
+# Collect telemetry from the local Docker Desktop/kind cluster and send it to
+# the self-hosted SigNoz collector over the cluster network.
+global:
+  cloud: other
+  clusterName: docker-desktop
+  deploymentEnvironment: local
+
+otelCollectorEndpoint: http://signoz-otel-collector.signoz.svc.cluster.local:4318
+otelInsecure: true
+
+presets:
+  otlphttpExporter:
+    enabled: true
+  hostMetrics:
+    enabled: true
+    collectionInterval: 60s
+  logsCollection:
+    enabled: true
+    startAt: end
+    blacklist:
+      enabled: true
+      signozLogs: true
+      namespaces:
+        - kube-system
+        - signoz
+        - signoz-infra
+  kubeletMetrics:
+    enabled: true
+    collectionInterval: 60s
+    authType: serviceAccount
+    endpoint: ${env:K8S_HOST_IP}:10250
+    insecureSkipVerify: true
+  kubernetesAttributes:
+    enabled: true
+  clusterMetrics:
+    enabled: true
+    collectionInterval: 60s
+  k8sEvents:
+    enabled: true
+
+otelAgent:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 100Mi
+    limits:
+      memory: 512Mi
+
+otelDeployment:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 100Mi
+    limits:
+      memory: 512Mi

@@ -47,3 +47,26 @@ sudo ./scripts/configure_workstation_dns.sh
 
 Workloads inside the cluster can send directly to
 `signoz-otel-collector.signoz.svc.cluster.local` on the same ports.
+
+## Kubernetes infrastructure monitoring
+
+Install the official SigNoz `k8s-infra` Helm chart after the core SigNoz chart:
+
+```sh
+./scripts/signoz/setup-k8s-infra.sh
+./scripts/signoz/verify-k8s-infra.sh
+```
+
+The chart runs an OpenTelemetry agent on each node and a cluster-level
+collector in the `signoz-infra` namespace. It sends data directly to the
+self-hosted collector at
+`http://signoz-otel-collector.signoz.svc.cluster.local:4318`; traffic stays
+inside Kubernetes and does not use the public gateway. The local configuration
+collects host and kubelet metrics, cluster metrics, Kubernetes metadata and
+events, and pod logs. It excludes `kube-system` and SigNoz's own logs to reduce
+development noise, and starts reading new log records rather than replaying all
+existing container logs.
+
+On a fresh SigNoz installation, complete initial console onboarding before
+expecting infrastructure data to appear. The collectors safely retry exports
+while the SigNoz tenant pipelines are not yet active.
