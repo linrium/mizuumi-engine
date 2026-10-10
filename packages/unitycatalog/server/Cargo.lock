@@ -771,12 +771,15 @@ name = "chronicle-audit"
 version = "0.1.0"
 dependencies = [
  "chronicle-audit-macros",
+ "opentelemetry",
+ "opentelemetry-http",
  "reqwest 0.12.28",
  "serde",
  "serde_json",
  "time",
  "tokio",
  "tracing",
+ "tracing-opentelemetry",
 ]
 
 [[package]]

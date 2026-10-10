@@ -4,8 +4,14 @@ use std::{
     time::{Duration, SystemTime},
 };
 
+use opentelemetry::{
+    Context, global,
+    trace::{SpanKind, Status, TraceContextExt, Tracer},
+};
+use opentelemetry_http::HeaderInjector;
 use serde::Serialize;
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
+use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 pub use chronicle_audit_macros::audit;
 
@@ -80,30 +86,73 @@ pub fn record(event: AuditEvent) {
         "chronicle audit event"
     );
 
+    let parent_cx = tracing::Span::current().context();
     tokio::spawn(async move {
-        send(client, event).await;
+        send(client, event, parent_cx).await;
     });
 }
 
-async fn send(client: ChronicleClient, event: AuditEvent) {
-    let mut envelope: BTreeMap<&str, serde_json::Value> = BTreeMap::new();
-    envelope.insert(
-        "service",
-        serde_json::Value::String(client.service_name.clone()),
-    );
-    envelope.insert(
-        "event",
-        serde_json::to_value(&event).unwrap_or(serde_json::Value::Null),
-    );
+async fn send(client: ChronicleClient, event: AuditEvent, parent_cx: Context) {
+    let tracer = global::tracer("chronicle-audit");
+    let span = tracer
+        .span_builder("chronicle.audit.send")
+        .with_kind(SpanKind::Client)
+        .with_attributes([
+            opentelemetry::KeyValue::new("audit.action", event.action.clone()),
+            opentelemetry::KeyValue::new("audit.status", event.status.clone()),
+            opentelemetry::KeyValue::new(
+                "server.address",
+                client.endpoint.clone(),
+            ),
+        ])
+        .start_with_context(&tracer, &parent_cx);
+    let cx = parent_cx.with_span(span);
+
+    let envelope = {
+        let mut map: BTreeMap<&str, serde_json::Value> = BTreeMap::new();
+        map.insert(
+            "service",
+            serde_json::Value::String(client.service_name.clone()),
+        );
+        map.insert(
+            "event",
+            serde_json::to_value(&event).unwrap_or(serde_json::Value::Null),
+        );
+        map
+    };
 
     let url = format!("{}/entries", client.endpoint);
-    let response = client.http.post(&url).json(&envelope).send().await;
+    let mut request = match client.http.post(&url).json(&envelope).build() {
+        Ok(r) => r,
+        Err(error) => {
+            cx.span().set_status(Status::error(error.to_string()));
+            tracing::warn!(action = %event.action, %error, "failed to build chronicle request");
+            return;
+        }
+    };
 
+    global::get_text_map_propagator(|propagator| {
+        propagator.inject_context(&cx, &mut HeaderInjector(request.headers_mut()));
+    });
+
+    let response = client.http.execute(request).await;
     match response {
         Ok(resp) if resp.status().is_success() => {
+            cx.span()
+                .set_attribute(opentelemetry::KeyValue::new(
+                    "http.response.status_code",
+                    resp.status().as_u16() as i64,
+                ));
             tracing::trace!(action = %event.action, status = %resp.status(), "chronicle entry appended");
         }
         Ok(resp) => {
+            cx.span()
+                .set_attribute(opentelemetry::KeyValue::new(
+                    "http.response.status_code",
+                    resp.status().as_u16() as i64,
+                ));
+            cx.span()
+                .set_status(Status::error(format!("http {}", resp.status())));
             tracing::warn!(
                 action = %event.action,
                 status = %resp.status(),
@@ -111,9 +160,11 @@ async fn send(client: ChronicleClient, event: AuditEvent) {
             );
         }
         Err(error) => {
+            cx.span().set_status(Status::error(error.to_string()));
             tracing::warn!(action = %event.action, %error, "chronicle entry delivery failed");
         }
     }
+    cx.span().end();
 }
 
 #[doc(hidden)]

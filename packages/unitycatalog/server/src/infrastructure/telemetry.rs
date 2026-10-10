@@ -16,7 +16,8 @@ use opentelemetry::{
 use opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge;
 use opentelemetry_otlp::{Protocol, WithExportConfig};
 use opentelemetry_sdk::{
-    Resource, logs::SdkLoggerProvider, metrics::SdkMeterProvider, trace::SdkTracerProvider,
+    Resource, logs::SdkLoggerProvider, metrics::SdkMeterProvider,
+    propagation::TraceContextPropagator, trace::SdkTracerProvider,
 };
 use opentelemetry_semantic_conventions::{
     attribute::{
@@ -75,6 +76,8 @@ pub fn init(settings: &TelemetrySettings) -> anyhow::Result<TelemetryGuard> {
             logger_provider: None,
         });
     }
+
+    global::set_text_map_propagator(TraceContextPropagator::new());
 
     let resource = Resource::builder()
         .with_attributes([
