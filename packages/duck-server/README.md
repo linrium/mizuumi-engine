@@ -35,8 +35,8 @@ The local gateway CA must already exist at `k8s/auth/tls/ca.crt`.
 
 `./scripts/duck-server/bootstrap.sh` copies the existing Unity Catalog
 service-principal credentials into the Duck server secret. The server exchanges
-them for a principal access token when the pod starts; no access token is stored
-in Kubernetes.
+them for a principal access token when the pod starts and refreshes/re-attaches
+the catalog before that token expires; no access token is stored in Kubernetes.
 
 The explicit port is required because Quack URIs otherwise default to port
 9494, even when a non-local hostname makes the client select HTTPS.

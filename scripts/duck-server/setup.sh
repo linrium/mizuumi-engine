@@ -62,7 +62,14 @@ if ! kubectl -n "$namespace" get secret "$credentials_secret" >/dev/null 2>&1; t
   echo "Missing $namespace/$credentials_secret. Run ./scripts/duck-server/bootstrap.sh first." >&2
   exit 1
 fi
+uc_principal="$(kubectl -n "$namespace" get secret "$credentials_secret" \
+  -o jsonpath='{.data.KEYCLOAK_CLIENT_ID}' | base64 --decode)"
+[[ -n "$uc_principal" ]] || {
+  echo "Missing KEYCLOAK_CLIENT_ID in $namespace/$credentials_secret; rerun bootstrap." >&2
+  exit 1
+}
 SPARK_UNITY_CATALOG="$uc_catalog" SPARK_UNITY_SCHEMAS="$uc_schema" \
+  UNITYCATALOG_PRINCIPAL="$uc_principal" \
   "$repo_root/scripts/spark/init-catalog.sh"
 for ca in "$repo_root/k8s/storage/tls/ca.crt" "$repo_root/k8s/auth/tls/ca.crt"; do
   [[ -f "$ca" ]] || { echo "Missing local CA: $ca" >&2; exit 1; }

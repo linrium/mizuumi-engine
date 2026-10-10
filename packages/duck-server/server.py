@@ -25,7 +25,7 @@ def sql_string(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
 
 
-def service_principal_token() -> str:
+def service_principal_token() -> tuple[str, int]:
     token_url = required_env("KEYCLOAK_TOKEN_URL")
     if not token_url.startswith("https://"):
         raise RuntimeError("KEYCLOAK_TOKEN_URL must use https://")
@@ -65,7 +65,10 @@ def service_principal_token() -> str:
     token = token_response.get("access_token")
     if not isinstance(token, str) or not token:
         raise RuntimeError("Keycloak token response did not contain an access_token")
-    return token
+    expires_in = token_response.get("expires_in", 300)
+    if not isinstance(expires_in, int) or expires_in <= 0:
+        raise RuntimeError("Keycloak token response contained an invalid expires_in")
+    return token, expires_in
 
 
 def configure_rustfs(connection: duckdb.DuckDBPyConnection) -> str:
@@ -100,7 +103,9 @@ def configure_rustfs(connection: duckdb.DuckDBPyConnection) -> str:
     return bucket
 
 
-def configure_unity_catalog(connection: duckdb.DuckDBPyConnection) -> str:
+def configure_unity_catalog(
+    connection: duckdb.DuckDBPyConnection, *, replace: bool = False
+) -> tuple[str, int]:
     extension_dir = os.environ.get("DUCKDB_EXTENSION_DIR", "/opt/duckdb/extensions")
     catalog = os.environ.get("UNITY_CATALOG_NAME", "unity")
     default_schema = os.environ.get("UNITY_CATALOG_DEFAULT_SCHEMA", "demo")
@@ -108,17 +113,19 @@ def configure_unity_catalog(connection: duckdb.DuckDBPyConnection) -> str:
     s3_endpoint = required_env("S3_ENDPOINT")
     region = os.environ.get("S3_REGION", "us-east-1")
 
-    connection.execute(
-        f"LOAD {sql_string(os.path.join(extension_dir, 'delta.duckdb_extension'))}"
-    )
-    connection.execute(
-        f"LOAD {sql_string(os.path.join(extension_dir, 'unity_catalog.duckdb_extension'))}"
-    )
+    if not replace:
+        connection.execute(
+            f"LOAD {sql_string(os.path.join(extension_dir, 'delta.duckdb_extension'))}"
+        )
+        connection.execute(
+            f"LOAD {sql_string(os.path.join(extension_dir, 'unity_catalog.duckdb_extension'))}"
+        )
+    token, expires_in = service_principal_token()
     connection.execute(
         f"""
         CREATE OR REPLACE TEMPORARY SECRET unity_catalog_auth (
           TYPE unity_catalog,
-          TOKEN {sql_string(service_principal_token())},
+          TOKEN {sql_string(token)},
           ENDPOINT {sql_string(endpoint)},
           AWS_REGION {sql_string(region)},
           S3_ENDPOINT {sql_string(s3_endpoint)},
@@ -127,6 +134,11 @@ def configure_unity_catalog(connection: duckdb.DuckDBPyConnection) -> str:
         )
         """
     )
+    unity_is_attached = connection.execute(
+        "SELECT count(*) FROM duckdb_databases() WHERE database_name = 'unity'"
+    ).fetchone()[0]
+    if replace and unity_is_attached:
+        connection.execute("DETACH unity")
     connection.execute(
         f"""
         ATTACH {sql_string(catalog)} AS unity (
@@ -136,7 +148,7 @@ def configure_unity_catalog(connection: duckdb.DuckDBPyConnection) -> str:
         )
         """
     )
-    return catalog
+    return catalog, expires_in
 
 
 def seed_example(connection: duckdb.DuckDBPyConnection, bucket: str) -> None:
@@ -193,7 +205,7 @@ def main() -> int:
         database_path, config={"allow_unsigned_extensions": "true"}
     )
     bucket = configure_rustfs(connection)
-    unity_catalog = configure_unity_catalog(connection)
+    unity_catalog, token_expires_in = configure_unity_catalog(connection)
     seed_example(connection, bucket)
     connection.execute("LOAD quack")
     result = connection.execute(
@@ -237,12 +249,35 @@ def main() -> int:
 
     stopped = threading.Event()
 
+    def refresh_unity_catalog() -> None:
+        refresh_after = max(30, token_expires_in - 60)
+        while not stopped.wait(refresh_after):
+            try:
+                _, expires_in = configure_unity_catalog(connection, replace=True)
+                refresh_after = max(30, expires_in - 60)
+                print("Unity Catalog principal token refreshed")
+            except Exception as refresh_error:
+                print(
+                    f"Unity Catalog token refresh failed; retrying in 10s: "
+                    f"{refresh_error}",
+                    file=sys.stderr,
+                )
+                refresh_after = 10
+
+    refresh_thread = threading.Thread(
+        target=refresh_unity_catalog,
+        name="unity-catalog-token-refresh",
+        daemon=True,
+    )
+    refresh_thread.start()
+
     def stop(_signum: int, _frame: object) -> None:
         stopped.set()
 
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
     stopped.wait()
+    refresh_thread.join(timeout=15)
     connection.execute(f"CALL quack_stop({sql_string(listen_uri)})")
     connection.close()
     return 0
