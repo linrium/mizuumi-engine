@@ -1,0 +1,11 @@
+{{- if .Values.witness.enabled -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "chronicle.name" . }}-witness-policy
+  labels:
+    {{- include "chronicle.labels" . | nindent 4 }}
+data:
+  policy: |
+{{ .Values.witness.policy | indent 4 }}
+{{- end }}

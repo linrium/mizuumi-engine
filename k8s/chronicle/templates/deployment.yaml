@@ -1,0 +1,172 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "chronicle.name" . }}
+  labels:
+    {{- include "chronicle.labels" . | nindent 4 }}
+    app.kubernetes.io/component: chronicle
+spec:
+  replicas: {{ .Values.chronicle.replicas }}
+  selector:
+    matchLabels:
+      {{- include "chronicle.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: chronicle
+  template:
+    metadata:
+      labels:
+        {{- include "chronicle.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: chronicle
+    spec:
+      serviceAccountName: {{ include "chronicle.serviceAccountName" . }}
+      automountServiceAccountToken: {{ .Values.serviceAccount.automount }}
+      securityContext:
+        fsGroup: 65532
+      containers:
+        - name: chronicle
+          image: "{{ .Values.chronicle.image.repository }}:{{ .Values.chronicle.image.tag }}"
+          imagePullPolicy: {{ .Values.chronicle.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.chronicle.port }}
+          env:
+            - name: CHRONICLE_ADDR
+              value: ":{{ .Values.chronicle.port }}"
+            - name: CHRONICLE_LOG_DIR
+              value: {{ .Values.storage.logDir | quote }}
+            - name: CHRONICLE_SIGNER_KEY_FILE
+              value: /etc/chronicle/keys/signer.key
+            - name: CHRONICLE_STORAGE_BACKEND
+              value: {{ .Values.storage.backend | quote }}
+            {{- if eq .Values.storage.backend "aws-s3" }}
+            - name: CHRONICLE_AWS_S3_ENDPOINT
+              value: {{ .Values.storage.s3.endpoint | quote }}
+            - name: CHRONICLE_AWS_S3_BUCKET
+              value: {{ .Values.storage.s3.bucket | quote }}
+            {{- with .Values.storage.s3.bucketPrefix }}
+            - name: CHRONICLE_AWS_S3_BUCKET_PREFIX
+              value: {{ . | quote }}
+            {{- end }}
+            - name: CHRONICLE_AWS_S3_REGION
+              value: {{ .Values.storage.s3.region | quote }}
+            - name: CHRONICLE_AWS_S3_USE_PATH_STYLE
+              value: {{ .Values.storage.s3.usePathStyle | quote }}
+            - name: CHRONICLE_AWS_S3_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.chronicle.credentialsSecretName | quote }}
+                  key: S3_ACCESS_KEY
+            - name: CHRONICLE_AWS_S3_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.chronicle.credentialsSecretName | quote }}
+                  key: S3_SECRET_KEY
+            {{- with .Values.storage.s3.caCertPath }}
+            - name: AWS_CA_BUNDLE
+              value: {{ . | quote }}
+            - name: SSL_CERT_FILE
+              value: {{ . | quote }}
+            {{- end }}
+            - name: CHRONICLE_AWS_MYSQL_HOST
+              value: {{ include "chronicle.mysqlHost" . | quote }}
+            - name: CHRONICLE_AWS_MYSQL_PORT
+              value: {{ include "chronicle.mysqlPort" . | quote }}
+            - name: CHRONICLE_AWS_MYSQL_DATABASE
+              value: {{ include "chronicle.mysqlDatabase" . | quote }}
+            - name: CHRONICLE_AWS_MYSQL_USER
+              value: {{ include "chronicle.mysqlUsername" . | quote }}
+            - name: CHRONICLE_AWS_MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "chronicle.mysqlSecretName" . }}
+                  key: {{ include "chronicle.mysqlPasswordKey" . | quote }}
+            {{- end }}
+            {{- if .Values.witness.enabled }}
+            - name: CHRONICLE_WITNESS_POLICY_FILE
+              value: /etc/chronicle/witness/policy
+            - name: CHRONICLE_WITNESS_FAIL_OPEN
+              value: {{ .Values.witness.failOpen | quote }}
+            - name: CHRONICLE_WITNESS_TIMEOUT
+              value: {{ .Values.witness.timeout | quote }}
+            {{- end }}
+            {{- if .Values.telemetry.enabled }}
+            - name: OTEL_SERVICE_NAME
+              value: {{ .Values.telemetry.serviceName | quote }}
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: {{ .Values.telemetry.otlpEndpoint | quote }}
+            - name: OTEL_EXPORTER_OTLP_PROTOCOL
+              value: http/protobuf
+            - name: OTEL_EXPORTER_OTLP_INSECURE
+              value: {{ .Values.telemetry.insecure | quote }}
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: {{ printf "service.name=%s,%s" .Values.telemetry.serviceName .Values.telemetry.resourceAttributes | quote }}
+            - name: OTEL_TRACES_SAMPLER
+              value: parentbased_traceidratio
+            - name: OTEL_TRACES_SAMPLER_ARG
+              value: {{ .Values.telemetry.samplerArg | quote }}
+            - name: CHRONICLE_OTEL_ENABLED
+              value: "true"
+            {{- end }}
+          volumeMounts:
+            {{- if eq .Values.storage.backend "posix" }}
+            - name: data
+              mountPath: /var/lib/chronicle
+            {{- end }}
+            - name: signer-keys
+              mountPath: /etc/chronicle/keys
+              readOnly: true
+            {{- if .Values.witness.enabled }}
+            - name: witness-policy
+              mountPath: /etc/chronicle/witness
+              readOnly: true
+            {{- end }}
+            - name: trust
+              mountPath: /etc/chronicle/trust
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 2
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.chronicle.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            capabilities:
+              drop:
+                - ALL
+      volumes:
+        {{- if eq .Values.storage.backend "posix" }}
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "chronicle.name" . }}-data
+        {{- end }}
+        - name: signer-keys
+          secret:
+            secretName: {{ .Values.chronicle.signerSecretName | quote }}
+            items:
+              - key: chronicle-signer.key
+                path: signer.key
+              - key: chronicle-signer.key.pub
+                path: signer.key.pub
+        {{- if .Values.witness.enabled }}
+        - name: witness-policy
+          configMap:
+            name: {{ include "chronicle.name" . }}-witness-policy
+            items:
+              - key: policy
+                path: policy
+        {{- end }}
+        - name: trust
+          secret:
+            secretName: {{ .Values.chronicle.trustSecretName | quote }}
+            optional: true

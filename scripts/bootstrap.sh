@@ -57,6 +57,8 @@ run_step storage/bootstrap.sh
 run_step storage/setup.sh
 run_step unitycatalog/bootstrap.sh
 run_step unitycatalog/setup.sh
+run_step chronicle/bootstrap.sh
+run_step chronicle/setup.sh
 
 if [[ "$forward" == true ]]; then
   echo "==> forward.sh (verify the local gateway)"

@@ -1,0 +1,107 @@
+chronicle:
+  image:
+    repository: mizuumi/chronicle
+    tag: latest
+    pullPolicy: IfNotPresent
+  replicas: 1
+  port: 3000
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+  # Mounted at /etc/chronicle/keys. Must contain signer.key and signer.key.pub.
+  signerSecretName: chronicle-signer
+  # Credentials for the RustFS S3 backend. Must contain S3_ACCESS_KEY and S3_SECRET_KEY.
+  credentialsSecretName: chronicle-credentials
+  # CA bundle for RustFS (and any other TLS peers). Must contain rustfs-ca.crt.
+  trustSecretName: chronicle-trust
+
+storage:
+  # posix | aws-s3
+  backend: aws-s3
+  logDir: /var/lib/chronicle/tessera
+  persistence:
+    size: 2Gi
+    storageClassName: ""
+  s3:
+    endpoint: https://rustfs-svc.storage.svc.cluster.local:9000
+    bucket: chronicle
+    bucketPrefix: ""
+    region: us-east-1
+    usePathStyle: true
+    # When the endpoint uses TLS, mount a CA bundle to make the AWS SDK trust it.
+    caCertPath: /etc/chronicle/trust/rustfs-ca.crt
+
+mysql:
+  enabled: true
+  image:
+    repository: mysql
+    tag: "8.4"
+    pullPolicy: IfNotPresent
+  database: tessera
+  username: tessera
+  password: tessera
+  rootPassword: tessera-root
+  existingSecretName: ""
+  persistence:
+    size: 2Gi
+    storageClassName: ""
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+externalMysql:
+  host: ""
+  port: 3306
+  database: tessera
+  username: tessera
+  existingSecretName: ""
+  passwordKey: MYSQL_PASSWORD
+
+witness:
+  enabled: true
+  failOpen: false
+  timeout: 5s
+  # Policy rendered into a ConfigMap and mounted at /etc/chronicle/witness/policy.
+  policy: |
+    log chronicle+b59447d9+AQrolSg0fHgLthI/SMPGLWKSxjh68AD1nFC1lfuFRJci
+    witness witness-a chronicle-witness-a+d20bc03f+BEq/8C02KWBHKydd2B/VxZngcySa7tf2iMvnFAZBZYM1 http://chronicle-witness-a.chronicle.svc.cluster.local
+    witness witness-b chronicle-witness-b+c43965fa+BDo+DdwgdqA72U9FKS6M1zXceB7WWQgd4T4EiwNayB8N http://chronicle-witness-b.chronicle.svc.cluster.local
+    group simulated-external-witnesses all witness-a witness-b
+    quorum simulated-external-witnesses
+  # Secret containing demo witness keys (chronicle-signer.key, witness-a.key, witness-b.key, ...).
+  # Created by scripts/chronicle/bootstrap.sh for local development.
+  demoKeysSecretName: chronicle-witness-demo-keys
+  witnesses:
+    - name: witness-a
+      keyItem: witness-a.key
+    - name: witness-b
+      keyItem: witness-b.key
+
+telemetry:
+  enabled: true
+  serviceName: chronicle
+  # SigNoz OTel Collector endpoint. Chronicle uses OTLP/HTTP; the OTel SDK
+  # expects a base URL (NOT the /v1/traces path).
+  otlpEndpoint: http://signoz-otel-collector.signoz.svc.cluster.local:4318
+  # insecure=true -> OTLP/HTTP; set to false to use HTTPS and provide a CA via
+  # chronicle.trustSecretName if the collector terminates TLS itself.
+  insecure: true
+  resourceAttributes: deployment.environment=local
+  samplerArg: "1.0"
+
+service:
+  type: ClusterIP
+  port: 80
+
+serviceAccount:
+  create: true
+  name: ""
+  automount: false

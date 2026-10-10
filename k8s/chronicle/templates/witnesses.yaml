@@ -1,0 +1,112 @@
+{{- if .Values.witness.enabled -}}
+{{- range $i, $w := .Values.witness.witnesses }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chronicle-{{ $w.name }}
+  labels:
+    {{- include "chronicle.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: witness
+    chronicle.mizuumi/witness: {{ $w.name | quote }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "chronicle.selectorLabels" $ | nindent 6 }}
+      app.kubernetes.io/component: witness
+      chronicle.mizuumi/witness: {{ $w.name | quote }}
+  template:
+    metadata:
+      labels:
+        {{- include "chronicle.selectorLabels" $ | nindent 8 }}
+        app.kubernetes.io/component: witness
+        chronicle.mizuumi/witness: {{ $w.name | quote }}
+    spec:
+      securityContext:
+        fsGroup: 65532
+      containers:
+        - name: witness
+          image: "{{ $.Values.chronicle.image.repository }}:{{ $.Values.chronicle.image.tag }}"
+          imagePullPolicy: {{ $.Values.chronicle.image.pullPolicy }}
+          command:
+            - /app/chronicle-witness
+          ports:
+            - name: http
+              containerPort: 3010
+          env:
+            - name: CHRONICLE_WITNESS_ADDR
+              value: ":3010"
+            - name: CHRONICLE_WITNESS_LOG_ORIGIN
+              value: chronicle
+            - name: CHRONICLE_WITNESS_SIGNER_KEY_FILE
+              value: /etc/chronicle/witness/witness.key
+            - name: CHRONICLE_WITNESS_LOG_VERIFIER_KEY_FILE
+              value: /etc/chronicle/witness/chronicle.pub
+            - name: CHRONICLE_WITNESS_STATE_DIR
+              value: /var/lib/chronicle-witness
+          volumeMounts:
+            - name: keys
+              mountPath: /etc/chronicle/witness
+              readOnly: true
+            - name: state
+              mountPath: /var/lib/chronicle-witness
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 2
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            capabilities:
+              drop:
+                - ALL
+      volumes:
+        - name: keys
+          secret:
+            secretName: {{ $.Values.witness.demoKeysSecretName | quote }}
+            items:
+              - key: {{ $w.keyItem | quote }}
+                path: witness.key
+              - key: chronicle-signer.key.pub
+                path: chronicle.pub
+        - name: state
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: chronicle-{{ $w.name }}
+  labels:
+    {{- include "chronicle.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: witness
+    chronicle.mizuumi/witness: {{ $w.name | quote }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "chronicle.selectorLabels" $ | nindent 4 }}
+    app.kubernetes.io/component: witness
+    chronicle.mizuumi/witness: {{ $w.name | quote }}
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+{{- end }}
+{{- end }}

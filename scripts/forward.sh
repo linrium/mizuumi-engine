@@ -47,7 +47,7 @@ for command in kubectl curl; do
   command -v "$command" >/dev/null || { echo "Missing required command: $command" >&2; exit 1; }
 done
 
-public_hosts=(auth.mizuumi.test vault.mizuumi.test storage.mizuumi.test api.storage.mizuumi.test unitycatalog.mizuumi.test openshell.mizuumi.test api.redpanda.mizuumi.test console.redpanda.mizuumi.test redpanda-0.api.redpanda.mizuumi.test console.signoz.mizuumi.test otlp.signoz.mizuumi.test)
+public_hosts=(auth.mizuumi.test vault.mizuumi.test storage.mizuumi.test api.storage.mizuumi.test unitycatalog.mizuumi.test openshell.mizuumi.test api.redpanda.mizuumi.test console.redpanda.mizuumi.test redpanda-0.api.redpanda.mizuumi.test console.signoz.mizuumi.test otlp.signoz.mizuumi.test api.chronicle.mizuumi.test)
 for hostname in "${public_hosts[@]}"; do
   if ! awk -v hostname="$hostname" '$1 == "127.0.0.1" { for (i = 2; i <= NF; i++) if ($i == hostname) found = 1 } END { exit !found }' /etc/hosts; then
     echo "$hostname is not mapped to 127.0.0.1." >&2
@@ -107,6 +107,7 @@ echo "Unity Catalog API: https://unitycatalog.mizuumi.test"
 echo "OpenShell gateway: https://openshell.mizuumi.test"
 echo "SigNoz Console:    https://console.signoz.mizuumi.test"
 echo "SigNoz OTLP:       https://otlp.signoz.mizuumi.test"
+echo "Chronicle API:     https://api.chronicle.mizuumi.test"
 
 if (( open_browser )); then
   if [[ "$(uname -s)" != Darwin ]]; then

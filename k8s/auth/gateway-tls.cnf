@@ -23,5 +23,6 @@ DNS.7 = api.redpanda.mizuumi.test
 DNS.8 = console.redpanda.mizuumi.test
 DNS.9 = console.signoz.mizuumi.test
 DNS.10 = otlp.signoz.mizuumi.test
-DNS.11 = localhost
+DNS.11 = api.chronicle.mizuumi.test
+DNS.12 = localhost
 IP.1 = 127.0.0.1

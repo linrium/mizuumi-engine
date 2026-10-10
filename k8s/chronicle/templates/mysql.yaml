@@ -1,0 +1,107 @@
+{{- if .Values.mysql.enabled -}}
+{{- if not .Values.mysql.existingSecretName }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ include "chronicle.mysqlName" . }}
+  labels:
+    {{- include "chronicle.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mysql
+type: Opaque
+stringData:
+  MYSQL_DATABASE: {{ .Values.mysql.database | quote }}
+  MYSQL_USER: {{ .Values.mysql.username | quote }}
+  MYSQL_PASSWORD: {{ .Values.mysql.password | quote }}
+  MYSQL_ROOT_PASSWORD: {{ .Values.mysql.rootPassword | quote }}
+---
+{{- end }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "chronicle.mysqlName" . }}
+  labels:
+    {{- include "chronicle.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mysql
+spec:
+  accessModes:
+    - ReadWriteOnce
+  {{- with .Values.mysql.persistence.storageClassName }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.mysql.persistence.size | quote }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "chronicle.mysqlName" . }}
+  labels:
+    {{- include "chronicle.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mysql
+spec:
+  selector:
+    {{- include "chronicle.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: mysql
+  ports:
+    - name: mysql
+      port: 3306
+      targetPort: mysql
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "chronicle.mysqlName" . }}
+  labels:
+    {{- include "chronicle.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mysql
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "chronicle.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: mysql
+  template:
+    metadata:
+      labels:
+        {{- include "chronicle.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: mysql
+    spec:
+      containers:
+        - name: mysql
+          image: "{{ .Values.mysql.image.repository }}:{{ .Values.mysql.image.tag }}"
+          imagePullPolicy: {{ .Values.mysql.image.pullPolicy }}
+          ports:
+            - name: mysql
+              containerPort: 3306
+          envFrom:
+            - secretRef:
+                name: {{ include "chronicle.mysqlSecretName" . }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/mysql
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -ec
+                - mysqladmin ping -h 127.0.0.1 -u"$MYSQL_USER" -p"$MYSQL_PASSWORD"
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -ec
+                - mysqladmin ping -h 127.0.0.1 -uroot -p"$MYSQL_ROOT_PASSWORD"
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.mysql.resources | nindent 12 }}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "chronicle.mysqlName" . }}
+{{- end }}

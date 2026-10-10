@@ -1,0 +1,92 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chronicle
+  namespace: chronicle
+  labels:
+    app.kubernetes.io/name: chronicle
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: chronicle
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: chronicle
+    spec:
+      securityContext:
+        fsGroup: 65532
+      containers:
+        - name: chronicle
+          image: chronicle:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 3000
+          env:
+            - name: CHRONICLE_ADDR
+              value: ":3000"
+            - name: CHRONICLE_LOG_DIR
+              value: /var/lib/chronicle/tessera
+            - name: CHRONICLE_SIGNER_KEY_FILE
+              value: /etc/chronicle/keys/signer.key
+            - name: CHRONICLE_STORAGE_BACKEND
+              value: posix
+            - name: CHRONICLE_WITNESS_POLICY_FILE
+              value: /etc/chronicle/witness/policy
+            - name: CHRONICLE_WITNESS_FAIL_OPEN
+              value: "false"
+            - name: CHRONICLE_WITNESS_TIMEOUT
+              value: 5s
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/chronicle
+            - name: chronicle-keys
+              mountPath: /etc/chronicle/keys
+              readOnly: true
+            - name: witness-policy
+              mountPath: /etc/chronicle/witness
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 2
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            capabilities:
+              drop:
+                - ALL
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: chronicle-data
+        - name: chronicle-keys
+          secret:
+            secretName: chronicle-witness-demo-keys
+            items:
+              - key: chronicle-signer.key
+                path: signer.key
+              - key: chronicle-signer.key.pub
+                path: signer.key.pub
+        - name: witness-policy
+          configMap:
+            name: chronicle-witness-policy

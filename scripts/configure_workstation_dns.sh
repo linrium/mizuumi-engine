@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-hostnames=(auth.mizuumi.test vault.mizuumi.test storage.mizuumi.test api.storage.mizuumi.test unitycatalog.mizuumi.test openshell.mizuumi.test api.redpanda.mizuumi.test console.redpanda.mizuumi.test redpanda-0.api.redpanda.mizuumi.test console.signoz.mizuumi.test otlp.signoz.mizuumi.test)
+hostnames=(auth.mizuumi.test vault.mizuumi.test storage.mizuumi.test api.storage.mizuumi.test unitycatalog.mizuumi.test openshell.mizuumi.test api.redpanda.mizuumi.test console.redpanda.mizuumi.test redpanda-0.api.redpanda.mizuumi.test console.signoz.mizuumi.test otlp.signoz.mizuumi.test api.chronicle.mizuumi.test)
 hostnames_joined="${hostnames[*]}"
 address=127.0.0.1
 hosts_file=/etc/hosts

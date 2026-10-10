@@ -1,0 +1,17 @@
+{{- if eq .Values.storage.backend "posix" -}}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "chronicle.name" . }}-data
+  labels:
+    {{- include "chronicle.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  {{- with .Values.storage.persistence.storageClassName }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.storage.persistence.size | quote }}
+{{- end }}

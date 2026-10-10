@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "chronicle.name" . }}
+  labels:
+    {{- include "chronicle.labels" . | nindent 4 }}
+    app.kubernetes.io/component: chronicle
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    {{- include "chronicle.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: chronicle
+  ports:
+    - name: http
+      port: {{ .Values.service.port }}
+      targetPort: http
