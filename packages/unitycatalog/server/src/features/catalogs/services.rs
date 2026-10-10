@@ -47,11 +47,18 @@ impl DefaultCatalogService {
     pub fn new(pool: Pool) -> Self {
         Self { pool }
     }
-}
 
-#[async_trait]
-impl CatalogService for DefaultCatalogService {
-    async fn create_catalog(&self, request: CreateCatalogRequest) -> Result<CatalogInfo, AppError> {
+    #[chronicle_audit::audit(
+        action = "catalog.create",
+        fields(
+            name = request.name,
+            has_storage_root = request.storage_root.is_some(),
+        ),
+    )]
+    async fn audited_create_catalog(
+        &self,
+        request: CreateCatalogRequest,
+    ) -> Result<CatalogInfo, AppError> {
         let client = self.pool.get().await?;
         let properties = serde_json::to_value(request.properties.unwrap_or_default())?;
         let comment = request.comment.unwrap_or_default();
@@ -67,7 +74,14 @@ impl CatalogService for DefaultCatalogService {
         Ok(row_to_catalog(row)?.into())
     }
 
-    async fn list_catalogs(
+    #[chronicle_audit::audit(
+        action = "catalog.list",
+        fields(
+            max_results = request.max_results.unwrap_or(0),
+            has_page_token = request.page_token.is_some(),
+        ),
+    )]
+    async fn audited_list_catalogs(
         &self,
         request: ListCatalogsRequest,
     ) -> Result<ListCatalogsResponse, AppError> {
@@ -96,7 +110,11 @@ impl CatalogService for DefaultCatalogService {
         })
     }
 
-    async fn get_catalog(&self, name: String) -> Result<CatalogInfo, AppError> {
+    #[chronicle_audit::audit(
+        action = "catalog.get",
+        fields(name = name),
+    )]
+    async fn audited_get_catalog(&self, name: String) -> Result<CatalogInfo, AppError> {
         ensure_name(&name)?;
         let client = self.pool.get().await?;
         let row = queries::get_catalog()
@@ -108,7 +126,19 @@ impl CatalogService for DefaultCatalogService {
         Ok(row_to_catalog(row)?.into())
     }
 
-    async fn update_catalog(
+    #[chronicle_audit::audit(
+        action = "catalog.update",
+        fields(
+            name = name,
+            new_name = request.new_name.as_deref().unwrap_or(""),
+            comment_changed = request.comment.is_some(),
+            properties_changed = request
+                .properties
+                .as_ref()
+                .is_some_and(|p| !p.is_empty()),
+        ),
+    )]
+    async fn audited_update_catalog(
         &self,
         name: String,
         request: UpdateCatalogRequest,
@@ -146,7 +176,14 @@ impl CatalogService for DefaultCatalogService {
         Ok(row_to_catalog(row)?.into())
     }
 
-    async fn delete_catalog(
+    #[chronicle_audit::audit(
+        action = "catalog.delete",
+        fields(
+            name = name,
+            force = request.force.unwrap_or(false),
+        ),
+    )]
+    async fn audited_delete_catalog(
         &self,
         name: String,
         request: DeleteCatalogRequest,
@@ -171,6 +208,40 @@ impl CatalogService for DefaultCatalogService {
             .ok_or_else(|| AppError::NotFound(format!("catalog {name}")))?;
 
         Ok(())
+    }
+}
+
+#[async_trait]
+impl CatalogService for DefaultCatalogService {
+    async fn create_catalog(&self, request: CreateCatalogRequest) -> Result<CatalogInfo, AppError> {
+        self.audited_create_catalog(request).await
+    }
+
+    async fn list_catalogs(
+        &self,
+        request: ListCatalogsRequest,
+    ) -> Result<ListCatalogsResponse, AppError> {
+        self.audited_list_catalogs(request).await
+    }
+
+    async fn get_catalog(&self, name: String) -> Result<CatalogInfo, AppError> {
+        self.audited_get_catalog(name).await
+    }
+
+    async fn update_catalog(
+        &self,
+        name: String,
+        request: UpdateCatalogRequest,
+    ) -> Result<CatalogInfo, AppError> {
+        self.audited_update_catalog(name, request).await
+    }
+
+    async fn delete_catalog(
+        &self,
+        name: String,
+        request: DeleteCatalogRequest,
+    ) -> Result<(), AppError> {
+        self.audited_delete_catalog(name, request).await
     }
 }
 

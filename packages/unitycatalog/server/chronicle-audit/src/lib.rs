@@ -111,7 +111,7 @@ async fn send(client: ChronicleClient, event: AuditEvent, parent_cx: Context) {
     let envelope = {
         let mut map: BTreeMap<&str, serde_json::Value> = BTreeMap::new();
         map.insert(
-            "service",
+            "source",
             serde_json::Value::String(client.service_name.clone()),
         );
         map.insert(
