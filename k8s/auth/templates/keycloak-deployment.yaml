@@ -68,6 +68,42 @@ spec:
               value: http
             - name: KC_HEALTH_ENABLED
               value: "true"
+{{- if .Values.keycloak.telemetry.enabled }}
+            - name: K8S_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: K8S_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: KC_FEATURES
+              value: opentelemetry-logs,opentelemetry-metrics
+            - name: KC_TELEMETRY_ENDPOINT
+              value: {{ .Values.keycloak.telemetry.endpoint | quote }}
+            - name: KC_TELEMETRY_PROTOCOL
+              value: {{ .Values.keycloak.telemetry.protocol | quote }}
+            - name: KC_TELEMETRY_SERVICE_NAME
+              value: {{ .Values.keycloak.telemetry.serviceName | quote }}
+            - name: KC_TELEMETRY_RESOURCE_ATTRIBUTES
+              value: {{ printf "%s,k8s.namespace.name=$(K8S_NAMESPACE),k8s.pod.name=$(K8S_POD_NAME)" .Values.keycloak.telemetry.resourceAttributes | quote }}
+            - name: KC_TRACING_ENABLED
+              value: {{ .Values.keycloak.telemetry.tracing.enabled | quote }}
+            - name: KC_TRACING_SAMPLER_TYPE
+              value: {{ .Values.keycloak.telemetry.tracing.samplerType | quote }}
+            - name: KC_TRACING_SAMPLER_RATIO
+              value: {{ .Values.keycloak.telemetry.tracing.samplerRatio | quote }}
+            - name: KC_METRICS_ENABLED
+              value: {{ .Values.keycloak.telemetry.metrics.enabled | quote }}
+            - name: KC_TELEMETRY_METRICS_ENABLED
+              value: {{ .Values.keycloak.telemetry.metrics.enabled | quote }}
+            - name: KC_TELEMETRY_METRICS_INTERVAL
+              value: {{ .Values.keycloak.telemetry.metrics.interval | quote }}
+            - name: KC_TELEMETRY_LOGS_ENABLED
+              value: {{ .Values.keycloak.telemetry.logs.enabled | quote }}
+            - name: KC_TELEMETRY_LOGS_LEVEL
+              value: {{ .Values.keycloak.telemetry.logs.level | quote }}
+{{- end }}
           startupProbe:
             httpGet:
               path: /health/started

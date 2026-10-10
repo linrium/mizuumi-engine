@@ -8,6 +8,22 @@ keycloak:
   hostname: https://auth.mizuumi.test
   tlsSecretName: keycloak-tls
   bootstrapAdminUsername: admin
+  telemetry:
+    enabled: true
+    endpoint: http://signoz-k8s-infra-otel-agent.signoz-infra.svc.cluster.local:4318
+    protocol: http/protobuf
+    serviceName: keycloak
+    resourceAttributes: service.namespace=auth,deployment.environment=local,k8s.cluster.name=docker-desktop
+    tracing:
+      enabled: true
+      samplerType: traceidratio
+      samplerRatio: "1.0"
+    metrics:
+      enabled: true
+      interval: 60s
+    logs:
+      enabled: true
+      level: INFO
   resources:
     requests:
       cpu: 500m

@@ -2,6 +2,18 @@
 
 This installs the [official RustFS Helm chart](https://docs.rustfs.com/en/installation/cloud-native) (`rustfs/rustfs` 1.0.0, RustFS 1.0.0) in the `storage` namespace as one standalone instance with 8 Gi data and 1 Gi log PVCs. It exposes no Ingress of its own. The shared in-cluster Caddy gateway serves the Console at `https://storage.mizuumi.test/rustfs/console/` and the S3 API at `https://api.storage.mizuumi.test`. On the Console origin, `/rustfs/console/*` goes to the console listener while all other paths—including `/`—go directly to the API listener; this preserves the host used by the Console's signed Admin and S3 requests.
 
+## SigNoz telemetry
+
+RustFS exports native metrics, traces, and logs over OTLP/HTTP to the `signoz-k8s-infra` agent at `http://signoz-k8s-infra-otel-agent.signoz-infra.svc.cluster.local:4318`. The service name is `rustfs`, the environment is `development`, trace sampling is `100%` for local debugging, and metrics are exported every 60 seconds. Kubernetes resource attributes identify the Docker Desktop cluster, namespace, and pod. RustFS also keeps writing logs to stdout for `kubectl logs`; the infrastructure collector excludes the `rustfs` container from file-log collection so those records are not ingested twice.
+
+Install SigNoz and its Kubernetes collector before RustFS when setting up the services individually:
+
+```sh
+./scripts/signoz/setup.sh
+./scripts/signoz/setup-k8s-infra.sh
+./scripts/storage/setup.sh
+```
+
 For the full local setup from the repository root, run `./scripts/bootstrap.sh`. It runs the steps below and verifies the gateway. Use `./scripts/bootstrap.sh --no-forward` to skip that final check.
 
 The individual steps are:

@@ -34,6 +34,8 @@ data:
 
     https://vault.mizuumi.test:8443 {
       tls /etc/caddy/gateway-tls/tls.crt /etc/caddy/gateway-tls/tls.key
+      @vault_metrics path /v1/sys/metrics
+      respond @vault_metrics 404
       reverse_proxy https://vault.vault.svc.cluster.local:8200 {
         header_up -Forwarded
         header_up X-Forwarded-For {http.request.remote.host}

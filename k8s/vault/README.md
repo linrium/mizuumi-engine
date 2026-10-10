@@ -2,6 +2,21 @@
 
 This uses the official HashiCorp Vault Helm chart 0.34.1 in standalone server mode, not dev mode. Vault uses a 10 Gi PVC, TLS, and manual unseal. It is a single-node local setup, not an HA production deployment. The generated certificate is self-signed and only suitable for this local cluster.
 
+## SigNoz telemetry
+
+Vault exposes Prometheus metrics at its internal TLS endpoint, and the cluster-level `signoz-k8s-infra` OpenTelemetry Collector scrapes them every 30 seconds before exporting them to SigNoz. The collector assigns `service.name=vault`, the `vault` service and Kubernetes namespaces, the `local` deployment environment, and the `docker-desktop` cluster name. The shared Kubernetes log collector also sends Vault's structured operational logs to SigNoz. Vault does not natively emit OpenTelemetry traces, so this integration provides metrics and logs rather than synthetic traces.
+
+The metrics API is unauthenticated so the in-cluster collector can scrape it without storing a Vault token. The public Caddy gateway returns `404` for `/v1/sys/metrics`; the endpoint remains available only through the internal `vault.vault.svc.cluster.local` service. This is a local development arrangement. Use authenticated scraping and a trusted metrics client CA for production.
+
+Install or upgrade the components individually in this order:
+
+```sh
+./scripts/signoz/setup.sh
+./scripts/vault/setup.sh
+./scripts/vault/unseal.sh     # existing initialized Vault only
+./scripts/signoz/setup-k8s-infra.sh
+```
+
 From the repository root, run `./scripts/bootstrap.sh` for the full Keycloak → Vault → RustFS setup (or `./scripts/bootstrap.sh --no-forward` to skip the final gateway check). Use `./scripts/bootstrap.sh --fresh-vault` only when intentionally replacing a local Vault volume; it backs up the old `init.json` before initializing the new empty Vault. To run Vault's steps individually:
 
 ```sh

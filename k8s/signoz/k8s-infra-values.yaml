@@ -24,6 +24,9 @@ presets:
         - kube-system
         - signoz
         - signoz-infra
+      containers:
+        - keycloak
+        - rustfs
   kubeletMetrics:
     enabled: true
     collectionInterval: 60s
@@ -45,6 +48,36 @@ otelAgent:
       memory: 100Mi
     limits:
       memory: 512Mi
+  config:
+    processors:
+      transform/vault-logs:
+        error_mode: ignore
+        log_statements:
+          - context: resource
+            statements:
+              - set(attributes["service.name"], "vault") where attributes["k8s.container.name"] == "vault"
+              - set(attributes["service.namespace"], "vault") where attributes["k8s.container.name"] == "vault"
+      transform/redpanda-logs:
+        error_mode: ignore
+        log_statements:
+          - context: resource
+            statements:
+              - set(attributes["service.name"], "redpanda") where attributes["k8s.container.name"] == "redpanda"
+              - set(attributes["service.namespace"], "redpanda") where attributes["k8s.container.name"] == "redpanda"
+              - set(attributes["service.name"], "redpanda-console") where attributes["k8s.container.name"] == "console" and attributes["k8s.namespace.name"] == "redpanda"
+              - set(attributes["service.namespace"], "redpanda") where attributes["k8s.container.name"] == "console" and attributes["k8s.namespace.name"] == "redpanda"
+              - set(attributes["service.name"], "redpanda-config-watcher") where attributes["k8s.container.name"] == "config-watcher"
+              - set(attributes["service.namespace"], "redpanda") where attributes["k8s.container.name"] == "config-watcher"
+    service:
+      pipelines:
+        logs:
+          processors:
+            - resource/deployenv
+            - resourcedetection
+            - k8sattributes
+            - transform/vault-logs
+            - transform/redpanda-logs
+            - batch
 
 otelDeployment:
   resources:
@@ -53,3 +86,82 @@ otelDeployment:
       memory: 100Mi
     limits:
       memory: 512Mi
+  config:
+    receivers:
+      prometheus/vault:
+        config:
+          scrape_configs:
+            - job_name: vault
+              scrape_interval: 30s
+              scrape_timeout: 10s
+              metrics_path: /v1/sys/metrics
+              scheme: https
+              tls_config:
+                # Local-only CA; the public gateway blocks this endpoint.
+                insecure_skip_verify: true
+              static_configs:
+                - targets:
+                    - vault.vault.svc.cluster.local:8200
+      prometheus/redpanda:
+        config:
+          scrape_configs:
+            - job_name: redpanda
+              scrape_interval: 30s
+              scrape_timeout: 10s
+              metrics_path: /public_metrics
+              static_configs:
+                - targets:
+                    - redpanda.redpanda.svc.cluster.local:9644
+    processors:
+      resource/vault:
+        attributes:
+          - key: service.name
+            action: upsert
+            value: vault
+          - key: service.namespace
+            action: upsert
+            value: vault
+          - key: deployment.environment
+            action: upsert
+            value: local
+          - key: k8s.cluster.name
+            action: upsert
+            value: docker-desktop
+          - key: k8s.namespace.name
+            action: upsert
+            value: vault
+      resource/redpanda:
+        attributes:
+          - key: service.name
+            action: upsert
+            value: redpanda
+          - key: service.namespace
+            action: upsert
+            value: redpanda
+          - key: deployment.environment
+            action: upsert
+            value: local
+          - key: k8s.cluster.name
+            action: upsert
+            value: docker-desktop
+          - key: k8s.namespace.name
+            action: upsert
+            value: redpanda
+    service:
+      pipelines:
+        metrics/vault:
+          receivers:
+            - prometheus/vault
+          processors:
+            - resource/vault
+            - batch
+          exporters:
+            - otlphttp
+        metrics/redpanda:
+          receivers:
+            - prometheus/redpanda
+          processors:
+            - resource/redpanda
+            - batch
+          exporters:
+            - otlphttp

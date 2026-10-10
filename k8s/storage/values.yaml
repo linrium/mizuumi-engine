@@ -37,7 +37,23 @@ serviceAccount:
 
 config:
   rustfs:
-    obs_environment: production
+    obs_environment: development
+    obs_endpoint:
+      enabled: true
+      base_endpoint: http://signoz-k8s-infra-otel-agent.signoz-infra.svc.cluster.local:4318
+      use_stdout: false
+      metrics:
+        enabled: true
+        endpoint: ""
+      trace:
+        enabled: true
+        endpoint: ""
+      logs:
+        enabled: true
+        endpoint: ""
+      profiling:
+        enabled: false
+        endpoint: ""
 
 resources:
   requests:
@@ -49,6 +65,32 @@ resources:
 # The confidential client secret is read from rustfs-credentials via envFrom.
 # The callback is on the API port (9000); the Console runs on port 9001.
 extraEnv:
+  - name: K8S_NAMESPACE
+    valueFrom:
+      fieldRef:
+        fieldPath: metadata.namespace
+  - name: K8S_POD_NAME
+    valueFrom:
+      fieldRef:
+        fieldPath: metadata.name
+  - name: OTEL_RESOURCE_ATTRIBUTES
+    value: service.namespace=storage,deployment.environment=local,k8s.cluster.name=docker-desktop,k8s.namespace.name=$(K8S_NAMESPACE),k8s.pod.name=$(K8S_POD_NAME)
+  - name: RUSTFS_OBS_SERVICE_NAME
+    value: rustfs
+  - name: RUSTFS_OBS_METRICS_EXPORT_ENABLED
+    value: "true"
+  - name: RUSTFS_OBS_TRACES_EXPORT_ENABLED
+    value: "true"
+  - name: RUSTFS_OBS_LOGS_EXPORT_ENABLED
+    value: "true"
+  - name: RUSTFS_OBS_LOG_STDOUT_ENABLED
+    value: "true"
+  - name: RUSTFS_OBS_SAMPLE_RATIO
+    value: "1.0"
+  - name: RUSTFS_OBS_METER_INTERVAL
+    value: "60"
+  - name: RUSTFS_OBS_LOGGER_LEVEL
+    value: info
   - name: RUSTFS_TLS_PATH
     value: /etc/rustfs/tls
   - name: SSL_CERT_FILE

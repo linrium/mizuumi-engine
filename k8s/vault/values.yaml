@@ -16,9 +16,16 @@ server:
         tls_disable_client_certs = true
         tls_cert_file = "/vault/tls/tls.crt"
         tls_key_file = "/vault/tls/tls.key"
+        telemetry {
+          unauthenticated_metrics_access = true
+        }
       }
       storage "file" {
         path = "/vault/data"
+      }
+      telemetry {
+        prometheus_retention_time = "60s"
+        disable_hostname = true
       }
   dataStorage:
     enabled: true
