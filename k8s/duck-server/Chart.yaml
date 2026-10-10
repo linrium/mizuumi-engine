@@ -1,0 +1,6 @@
+apiVersion: v2
+name: duck-server
+description: DuckDB Quack server with RustFS-backed Parquet storage
+type: application
+version: 0.1.0
+appVersion: "1.5.3"

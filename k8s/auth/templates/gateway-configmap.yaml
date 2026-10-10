@@ -110,6 +110,23 @@ data:
       }
     }
 
+    https://query.mizuumi.test:8443 {
+      tls /etc/caddy/gateway-tls/tls.crt /etc/caddy/gateway-tls/tls.key
+      reverse_proxy http://duck-server.duck-server.svc.cluster.local:9494 {
+        # Quack streams FETCH responses and requires them to be flushed rather
+        # than buffered by the reverse proxy.
+        flush_interval -1
+        header_up -Forwarded
+        header_up X-Forwarded-For {http.request.remote.host}
+        header_up X-Forwarded-Host {host}
+        header_up X-Forwarded-Port 443
+        header_up X-Forwarded-Proto https
+      }
+      request_body {
+        max_size 256MB
+      }
+    }
+
     https://api.redpanda.mizuumi.test:8443 {
       tls /etc/caddy/gateway-tls/tls.crt /etc/caddy/gateway-tls/tls.key
       reverse_proxy http://redpanda.redpanda.svc.cluster.local:8082 {

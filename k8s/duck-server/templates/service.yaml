@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "duck-server.fullname" . }}
+  labels:
+    {{- include "duck-server.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "duck-server.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: quack
+      port: {{ .Values.service.port }}
+      targetPort: quack

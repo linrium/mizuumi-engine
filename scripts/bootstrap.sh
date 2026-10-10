@@ -55,6 +55,8 @@ fi
 run_step auth/bootstrap-sovico.sh
 run_step storage/bootstrap.sh
 run_step storage/setup.sh
+run_step duck-server/bootstrap.sh
+run_step duck-server/setup.sh
 run_step unitycatalog/bootstrap.sh
 run_step unitycatalog/setup.sh
 run_step chronicle/bootstrap.sh

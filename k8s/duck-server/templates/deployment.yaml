@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "duck-server.fullname" . }}
+  labels:
+    {{- include "duck-server.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicas }}
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "duck-server.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "duck-server.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "duck-server.serviceAccountName" . }}
+      automountServiceAccountToken: false
+      securityContext:
+        fsGroup: 65532
+        runAsGroup: 65532
+        runAsNonRoot: true
+        runAsUser: 65532
+      containers:
+        - name: duck-server
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: quack
+              containerPort: {{ .Values.service.port }}
+          env:
+            - name: DUCKDB_DATABASE
+              value: /var/lib/duckdb/mizuumi.duckdb
+            - name: QUACK_LISTEN_URI
+              value: quack:0.0.0.0:9494
+            - name: QUACK_INTERNAL_URI
+              value: quack:127.0.0.1:9494
+            - name: S3_ENDPOINT
+              value: {{ .Values.rustfs.endpoint | quote }}
+            - name: S3_BUCKET
+              value: {{ .Values.rustfs.bucket | quote }}
+            - name: S3_REGION
+              value: {{ .Values.rustfs.region | quote }}
+            - name: S3_CA_FILE
+              value: /etc/duck-server/trust/rustfs-ca.crt
+          envFrom:
+            - secretRef:
+                name: {{ .Values.credentialsSecretName }}
+          readinessProbe:
+            tcpSocket:
+              port: quack
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: quack
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/duckdb
+            - name: trust
+              mountPath: /etc/duck-server/trust
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "duck-server.fullname" . }}
+        - name: trust
+          secret:
+            secretName: {{ .Values.trustSecretName }}
+        - name: tmp
+          emptyDir: {}
