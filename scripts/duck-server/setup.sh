@@ -8,6 +8,8 @@ image_repository="${DUCK_SERVER_IMAGE_REPOSITORY:-mizuumi/duck-server}"
 skip_image_build="${DUCK_SERVER_SKIP_IMAGE_BUILD:-0}"
 credentials_secret="${DUCK_SERVER_CREDENTIALS_SECRET:-duck-server-credentials}"
 trust_secret="${DUCK_SERVER_TRUST_SECRET:-duck-server-trust}"
+uc_catalog="${DUCK_SERVER_UNITY_CATALOG:-unity}"
+uc_schema="${DUCK_SERVER_UNITY_SCHEMA:-demo}"
 if [[ -n "${DUCK_SERVER_IMAGE_TAG:-}" ]]; then
   image_tag="$DUCK_SERVER_IMAGE_TAG"
 elif [[ "$skip_image_build" == 1 ]]; then
@@ -33,6 +35,8 @@ Environment overrides:
   DUCK_SERVER_CREDENTIALS_SECRET
                                  Credentials Secret (default: duck-server-credentials)
   DUCK_SERVER_TRUST_SECRET      CA Secret (default: duck-server-trust)
+  DUCK_SERVER_UNITY_CATALOG     Unity Catalog name (default: unity)
+  DUCK_SERVER_UNITY_SCHEMA      Unity Catalog schema (default: demo)
 EOF
 }
 
@@ -58,6 +62,8 @@ if ! kubectl -n "$namespace" get secret "$credentials_secret" >/dev/null 2>&1; t
   echo "Missing $namespace/$credentials_secret. Run ./scripts/duck-server/bootstrap.sh first." >&2
   exit 1
 fi
+SPARK_UNITY_CATALOG="$uc_catalog" SPARK_UNITY_SCHEMAS="$uc_schema" \
+  "$repo_root/scripts/spark/init-catalog.sh"
 for ca in "$repo_root/k8s/storage/tls/ca.crt" "$repo_root/k8s/auth/tls/ca.crt"; do
   [[ -f "$ca" ]] || { echo "Missing local CA: $ca" >&2; exit 1; }
 done
@@ -70,7 +76,8 @@ fi
 image="$image_repository:$image_tag"
 if [[ "$skip_image_build" != 1 ]]; then
   echo "Building Duck server image: $image"
-  docker build -t "$image" "$repo_root/packages/duck-server"
+  docker build -f "$repo_root/packages/duck-server/Dockerfile" -t "$image" \
+    "$repo_root/packages"
   case "$context" in
     kind-*)
       command -v kind >/dev/null || { echo "Missing required command: kind" >&2; exit 1; }
@@ -104,6 +111,8 @@ helm upgrade --install "$release" "$repo_root/k8s/duck-server" \
   --set-string "image.tag=$image_tag" \
   --set-string "credentialsSecretName=$credentials_secret" \
   --set-string "trustSecretName=$trust_secret" \
+  --set-string "unityCatalog.catalog=$uc_catalog" \
+  --set-string "unityCatalog.defaultSchema=$uc_schema" \
   --wait --timeout 10m "$@"
 
 if [[ "$skip_image_build" != 1 ]]; then

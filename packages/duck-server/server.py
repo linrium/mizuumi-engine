@@ -3,10 +3,13 @@
 
 from __future__ import annotations
 
+import json
 import os
 import signal
+import ssl
 import sys
 import threading
+from urllib import error, parse, request
 
 import duckdb
 
@@ -20,6 +23,49 @@ def required_env(name: str) -> str:
 
 def sql_string(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
+
+
+def service_principal_token() -> str:
+    token_url = required_env("KEYCLOAK_TOKEN_URL")
+    if not token_url.startswith("https://"):
+        raise RuntimeError("KEYCLOAK_TOKEN_URL must use https://")
+
+    ca_certificate = required_env("KEYCLOAK_CA_CERT")
+    if not os.path.isfile(ca_certificate):
+        raise RuntimeError(f"KEYCLOAK_CA_CERT does not exist: {ca_certificate}")
+
+    payload = parse.urlencode(
+        {
+            "grant_type": "client_credentials",
+            "client_id": required_env("KEYCLOAK_CLIENT_ID"),
+            "client_secret": required_env("KEYCLOAK_CLIENT_SECRET"),
+        }
+    ).encode("ascii")
+    token_request = request.Request(
+        token_url,
+        data=payload,
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        method="POST",
+    )
+    try:
+        with request.urlopen(
+            token_request,
+            context=ssl.create_default_context(cafile=ca_certificate),
+            timeout=15,
+        ) as response:
+            token_response = json.load(response)
+    except error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(
+            f"Keycloak token request failed with HTTP {exc.code}: {detail}"
+        ) from exc
+    except (error.URLError, OSError, ValueError) as exc:
+        raise RuntimeError(f"Keycloak token request failed: {exc}") from exc
+
+    token = token_response.get("access_token")
+    if not isinstance(token, str) or not token:
+        raise RuntimeError("Keycloak token response did not contain an access_token")
+    return token
 
 
 def configure_rustfs(connection: duckdb.DuckDBPyConnection) -> str:
@@ -52,6 +98,45 @@ def configure_rustfs(connection: duckdb.DuckDBPyConnection) -> str:
         """
     )
     return bucket
+
+
+def configure_unity_catalog(connection: duckdb.DuckDBPyConnection) -> str:
+    extension_dir = os.environ.get("DUCKDB_EXTENSION_DIR", "/opt/duckdb/extensions")
+    catalog = os.environ.get("UNITY_CATALOG_NAME", "unity")
+    default_schema = os.environ.get("UNITY_CATALOG_DEFAULT_SCHEMA", "demo")
+    endpoint = required_env("UNITY_CATALOG_ENDPOINT")
+    s3_endpoint = required_env("S3_ENDPOINT")
+    region = os.environ.get("S3_REGION", "us-east-1")
+
+    connection.execute(
+        f"LOAD {sql_string(os.path.join(extension_dir, 'delta.duckdb_extension'))}"
+    )
+    connection.execute(
+        f"LOAD {sql_string(os.path.join(extension_dir, 'unity_catalog.duckdb_extension'))}"
+    )
+    connection.execute(
+        f"""
+        CREATE OR REPLACE TEMPORARY SECRET unity_catalog_auth (
+          TYPE unity_catalog,
+          TOKEN {sql_string(service_principal_token())},
+          ENDPOINT {sql_string(endpoint)},
+          AWS_REGION {sql_string(region)},
+          S3_ENDPOINT {sql_string(s3_endpoint)},
+          S3_URL_STYLE path,
+          S3_USE_SSL true
+        )
+        """
+    )
+    connection.execute(
+        f"""
+        ATTACH {sql_string(catalog)} AS unity (
+          TYPE unity_catalog,
+          SECRET unity_catalog_auth,
+          DEFAULT_SCHEMA {sql_string(default_schema)}
+        )
+        """
+    )
+    return catalog
 
 
 def seed_example(connection: duckdb.DuckDBPyConnection, bucket: str) -> None:
@@ -104,8 +189,11 @@ def main() -> int:
     internal_uri = os.environ.get("QUACK_INTERNAL_URI", "quack:127.0.0.1:9494")
     token = required_env("QUACK_TOKEN")
 
-    connection = duckdb.connect(database_path)
+    connection = duckdb.connect(
+        database_path, config={"allow_unsigned_extensions": "true"}
+    )
     bucket = configure_rustfs(connection)
+    unity_catalog = configure_unity_catalog(connection)
     seed_example(connection, bucket)
     connection.execute("LOAD quack")
     result = connection.execute(
@@ -142,7 +230,10 @@ def main() -> int:
     finally:
         initialization_client.close()
 
-    print(f"DuckDB Quack is listening at {result[0]}; RustFS bucket: {bucket}")
+    print(
+        f"DuckDB Quack is listening at {result[0]}; RustFS bucket: {bucket}; "
+        f"Unity Catalog: {unity_catalog} (attached as unity)"
+    )
 
     stopped = threading.Event()
 

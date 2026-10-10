@@ -20,6 +20,12 @@ rustfs:
   bucket: duck-server
   region: us-east-1
 
+unityCatalog:
+  endpoint: http://unitycatalog-server.tower.svc.cluster.local:8080
+  catalog: unity
+  defaultSchema: demo
+  tokenUrl: https://auth.mizuumi.test/realms/sovico/protocol/openid-connect/token
+
 resources:
   requests:
     cpu: 100m

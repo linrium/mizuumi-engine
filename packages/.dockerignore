@@ -1,0 +1,9 @@
+*
+!duck-server/
+!duck-server/**
+!duck-uc-extension/
+!duck-uc-extension/**
+**/.DS_Store
+**/.git
+**/build
+**/.cache

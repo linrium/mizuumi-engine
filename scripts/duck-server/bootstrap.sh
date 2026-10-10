@@ -5,6 +5,8 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 namespace="${DUCK_SERVER_NAMESPACE:-duck-server}"
 credentials_secret="${DUCK_SERVER_CREDENTIALS_SECRET:-duck-server-credentials}"
 bucket="${DUCK_SERVER_S3_BUCKET:-duck-server}"
+uc_namespace="${UNITYCATALOG_NAMESPACE:-tower}"
+uc_credentials_secret="${UNITYCATALOG_CREDENTIALS_SECRET:-unitycatalog-credentials}"
 rustfs_ca="$repo_root/k8s/storage/tls/ca.crt"
 
 for command in kubectl curl jq openssl; do
@@ -19,6 +21,19 @@ esac
 
 [[ -f "$rustfs_ca" ]] || { echo "Missing RustFS CA: $rustfs_ca" >&2; exit 1; }
 kubectl get namespace "$namespace" >/dev/null 2>&1 || kubectl create namespace "$namespace"
+kubectl -n "$uc_namespace" get secret "$uc_credentials_secret" >/dev/null 2>&1 || {
+  echo "Missing $uc_namespace/$uc_credentials_secret. Run ./scripts/unitycatalog/bootstrap.sh and setup.sh first." >&2
+  exit 1
+}
+
+keycloak_client_id="$(kubectl -n "$uc_namespace" get secret "$uc_credentials_secret" \
+  -o jsonpath='{.data.KEYCLOAK_CLIENT_ID}' | base64 --decode)"
+keycloak_client_secret="$(kubectl -n "$uc_namespace" get secret "$uc_credentials_secret" \
+  -o jsonpath='{.data.KEYCLOAK_CLIENT_SECRET}' | base64 --decode)"
+[[ -n "$keycloak_client_id" && -n "$keycloak_client_secret" ]] || {
+  echo "Unity Catalog service-principal credentials are empty; rerun its bootstrap and setup." >&2
+  exit 1
+}
 
 existing_secret="$(kubectl -n "$namespace" get secret "$credentials_secret" -o json 2>/dev/null || true)"
 if [[ -n "$existing_secret" ]]; then
@@ -90,8 +105,10 @@ kubectl -n "$namespace" create secret generic "$credentials_secret" \
   --from-literal=S3_ACCESS_KEY="$s3_access_key" \
   --from-literal=S3_SECRET_KEY="$s3_secret_key" \
   --from-literal=QUACK_TOKEN="$quack_token" \
+  --from-literal=KEYCLOAK_CLIENT_ID="$keycloak_client_id" \
+  --from-literal=KEYCLOAK_CLIENT_SECRET="$keycloak_client_secret" \
   --dry-run=client -o yaml | kubectl apply -f - >/dev/null
 
-unset rustfs_root_access rustfs_root_secret s3_secret_key quack_token
-echo "Duck server bootstrap complete: RustFS user, bucket '$bucket', and Kubernetes credentials are ready."
+unset rustfs_root_access rustfs_root_secret s3_secret_key quack_token keycloak_client_secret
+echo "Duck server bootstrap complete: RustFS, Quack, and Unity Catalog credentials are ready."
 echo "Run ./scripts/duck-server/setup.sh."

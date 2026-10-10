@@ -45,6 +45,16 @@ spec:
               value: {{ .Values.rustfs.region | quote }}
             - name: S3_CA_FILE
               value: /etc/duck-server/trust/rustfs-ca.crt
+            - name: UNITY_CATALOG_ENDPOINT
+              value: {{ .Values.unityCatalog.endpoint | quote }}
+            - name: UNITY_CATALOG_NAME
+              value: {{ .Values.unityCatalog.catalog | quote }}
+            - name: UNITY_CATALOG_DEFAULT_SCHEMA
+              value: {{ .Values.unityCatalog.defaultSchema | quote }}
+            - name: KEYCLOAK_TOKEN_URL
+              value: {{ .Values.unityCatalog.tokenUrl | quote }}
+            - name: KEYCLOAK_CA_CERT
+              value: /etc/duck-server/trust/gateway-ca.crt
           envFrom:
             - secretRef:
                 name: {{ .Values.credentialsSecretName }}
