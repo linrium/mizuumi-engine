@@ -1,0 +1,6 @@
+apiVersion: v2
+name: chronicle-ui
+description: Chronicle web UI (Next.js) served at https://ui.chronicle.mizuumi.test via the shared Caddy gateway
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

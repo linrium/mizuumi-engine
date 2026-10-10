@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "chronicle-ui.name" . }}
+  labels:
+    {{- include "chronicle-ui.labels" . | nindent 4 }}
+    app.kubernetes.io/component: chronicle-ui
+spec:
+  replicas: {{ .Values.chronicleUi.replicas }}
+  selector:
+    matchLabels:
+      {{- include "chronicle-ui.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: chronicle-ui
+  template:
+    metadata:
+      labels:
+        {{- include "chronicle-ui.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: chronicle-ui
+    spec:
+      serviceAccountName: {{ include "chronicle-ui.serviceAccountName" . }}
+      automountServiceAccountToken: {{ .Values.serviceAccount.automount }}
+      securityContext:
+        fsGroup: 65532
+      containers:
+        - name: chronicle-ui
+          image: "{{ .Values.chronicleUi.image.repository }}:{{ .Values.chronicleUi.image.tag }}"
+          imagePullPolicy: {{ .Values.chronicleUi.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.chronicleUi.port }}
+          env:
+            - name: PORT
+              value: {{ .Values.chronicleUi.port | quote }}
+            - name: HOSTNAME
+              value: "0.0.0.0"
+            - name: NODE_ENV
+              value: production
+            - name: CHRONICLE_API_BASE_URL
+              value: {{ .Values.chronicleUi.apiBaseUrl | quote }}
+            - name: NEXT_PUBLIC_PUBLIC_URL
+              value: {{ .Values.chronicleUi.publicUrl | quote }}
+            {{- with .Values.chronicleUi.env }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.chronicleUi.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            capabilities:
+              drop:
+                - ALL

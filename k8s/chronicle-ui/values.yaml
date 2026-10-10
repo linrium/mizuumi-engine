@@ -1,0 +1,28 @@
+chronicleUi:
+  replicas: 1
+  image:
+    repository: mizuumi/chronicle-ui
+    tag: latest
+    pullPolicy: IfNotPresent
+  port: 3000
+  # Public URL served by the shared Caddy gateway in the auth namespace.
+  publicUrl: https://ui.chronicle.mizuumi.test
+  # In-cluster Chronicle API that the Next.js server-side proxy
+  # (/api/chronicle/*) forwards requests to.
+  apiBaseUrl: http://chronicle.chronicle.svc.cluster.local
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
+  env: []
+
+service:
+  type: ClusterIP
+  port: 80
+
+serviceAccount:
+  create: true
+  name: ""
+  automount: true
