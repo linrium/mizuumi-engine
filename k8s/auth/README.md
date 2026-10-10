@@ -24,7 +24,7 @@ Visit `https://auth.mizuumi.test` and sign in to the Administration Console with
 
 ## Vault login through Keycloak
 
-After installing Keycloak and initializing/unsealing Vault, run `./scripts/auth/bootstrap-sovico.sh`. It creates the `sovico` realm, a confidential `vault` OIDC client, and an initial `khaopad` account. The script prompts for the account password when run interactively and defaults to `123` when left blank. In noninteractive runs it reuses the ignored, mode-600 `k8s/auth/sovico-user-password` file when present; otherwise it writes the default password there. You can instead set `SOVICO_USER_PASSWORD` in its environment. Existing user passwords are left unchanged. It then configures Vault's `oidc` auth method and `sovico` role. Run `./scripts/forward.sh` before signing in to Vault at `https://vault.mizuumi.test/ui/`.
+After installing Keycloak and initializing/unsealing Vault, run `./scripts/auth/bootstrap-sovico.sh`. It creates the `sovico` realm, a confidential `vault` OIDC client, and an initial `khaopad` account. Bootstrap runs without prompting, writes the default password `123` to the ignored, mode-600 `k8s/auth/sovico-user-password` file, and resets the Keycloak password on rerun; set `SOVICO_USER_PASSWORD` to override it. The default profile is `Khao Pad <khaopad@mizuumi.test>`; override it with `SOVICO_USER_FIRST_NAME`, `SOVICO_USER_LAST_NAME`, and `SOVICO_USER_EMAIL`. It then configures Vault's `oidc` auth method and `sovico` role. Run `./scripts/forward.sh` before signing in to Vault at `https://vault.mizuumi.test/ui/`.
 
 ## Public HTTPS ingress
 

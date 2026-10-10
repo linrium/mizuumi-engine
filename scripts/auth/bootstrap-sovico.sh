@@ -4,6 +4,9 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 password_file="$repo_root/k8s/auth/sovico-user-password"
 default_user_password=123
+default_user_email="${SOVICO_USER_EMAIL:-khaopad@mizuumi.test}"
+default_user_first_name="${SOVICO_USER_FIRST_NAME:-Khao}"
+default_user_last_name="${SOVICO_USER_LAST_NAME:-Pad}"
 vault_init_file="$repo_root/k8s/vault/init.json"
 vault_ca="$repo_root/k8s/vault/tls/ca.crt"
 keycloak_ca="$repo_root/k8s/auth/tls/ca.crt"
@@ -165,35 +168,36 @@ if [[ -z "$client_secret" ]]; then
 fi
 
 users="$(keycloak_request GET '/admin/realms/sovico/users?username=khaopad&exact=true')"
-if printf '%s' "$users" | jq -e 'any(.[]; .username == "khaopad")' >/dev/null; then
-  echo 'Keycloak user khaopad already exists; password unchanged.'
+user_id="$(printf '%s' "$users" | jq -r '[.[] | select(.username == "khaopad")][0].id // empty')"
+SOVICO_USER_PASSWORD="${SOVICO_USER_PASSWORD:-$default_user_password}"
+[[ -n "$SOVICO_USER_PASSWORD" ]] || { echo 'User password cannot be empty.' >&2; exit 1; }
+umask 077
+printf '%s\n' "$SOVICO_USER_PASSWORD" > "$password_file"
+echo "Wrote khaopad password to $password_file (mode 600)."
+if [[ -n "$user_id" ]]; then
+  current_user="$(keycloak_request GET "/admin/realms/sovico/users/$user_id")"
+  user_payload="$(printf '%s' "$current_user" | jq -c \
+    --arg email "$default_user_email" \
+    --arg first_name "$default_user_first_name" \
+    --arg last_name "$default_user_last_name" \
+    '.email=$email | .emailVerified=true | .firstName=$first_name | .lastName=$last_name')"
+  keycloak_request PUT "/admin/realms/sovico/users/$user_id" "$user_payload" >/dev/null
+  password_payload="$(jq -cn --arg password "$SOVICO_USER_PASSWORD" '{type:"password",value:$password,temporary:false}')"
+  keycloak_request PUT "/admin/realms/sovico/users/$user_id/reset-password" "$password_payload" >/dev/null
+  unset password_payload
+  unset user_payload
+  echo 'Keycloak user khaopad already exists; profile and password updated.'
 else
-  if [[ -z "${SOVICO_USER_PASSWORD:-}" ]]; then
-    if [[ -t 0 ]]; then
-      read -r -s -p "Password for new sovico/khaopad [default: $default_user_password]: " SOVICO_USER_PASSWORD
-      echo
-      SOVICO_USER_PASSWORD="${SOVICO_USER_PASSWORD:-$default_user_password}"
-    elif [[ -f "$password_file" ]]; then
-      SOVICO_USER_PASSWORD="$(<"$password_file")"
-    else
-      SOVICO_USER_PASSWORD="$default_user_password"
-      umask 077
-      printf '%s\n' "$SOVICO_USER_PASSWORD" > "$password_file"
-      echo "Wrote default user password to $password_file (mode 600)."
-    fi
-  fi
-  if [[ -z "$SOVICO_USER_PASSWORD" ]]; then
-    echo 'User password cannot be empty.' >&2
-    exit 1
-  fi
-  # The initial admin token can expire while waiting at the interactive prompt.
-  admin_token="$(get_admin_token)"
   user_payload="$(printf '%s' "$SOVICO_USER_PASSWORD" | jq -Rs \
-    '{username:"khaopad",enabled:true,credentials:[{type:"password",value:.,temporary:false}]}')"
+    --arg email "$default_user_email" \
+    --arg first_name "$default_user_first_name" \
+    --arg last_name "$default_user_last_name" \
+    '{username:"khaopad",enabled:true,email:$email,emailVerified:true,firstName:$first_name,lastName:$last_name,credentials:[{type:"password",value:.,temporary:false}]}')"
   keycloak_request POST /admin/realms/sovico/users "$user_payload" >/dev/null
   unset SOVICO_USER_PASSWORD user_payload
   echo 'Created Keycloak user khaopad.'
 fi
+unset SOVICO_USER_PASSWORD
 unset admin_password admin_token
 
 auth_mounts="$(vault_request GET /v1/sys/auth)"

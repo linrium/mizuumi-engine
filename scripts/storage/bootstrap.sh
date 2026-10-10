@@ -8,6 +8,12 @@ admin_password_file="$repo_root/k8s/storage/admin-password"
 admin_username="${RUSTFS_ADMIN_USERNAME:-admin}"
 legacy_admin_username=rustfs-admin
 default_admin_password=123
+admin_email="${RUSTFS_ADMIN_EMAIL:-admin@mizuumi.test}"
+admin_first_name="${RUSTFS_ADMIN_FIRST_NAME:-Admin}"
+admin_last_name="${RUSTFS_ADMIN_LAST_NAME:-User}"
+khaopad_email="${SOVICO_USER_EMAIL:-khaopad@mizuumi.test}"
+khaopad_first_name="${SOVICO_USER_FIRST_NAME:-Khao}"
+khaopad_last_name="${SOVICO_USER_LAST_NAME:-Pad}"
 vault_ca="$repo_root/k8s/vault/tls/ca.crt"
 keycloak_ca="$repo_root/k8s/auth/tls/ca.crt"
 for command in kubectl curl jq openssl; do
@@ -110,6 +116,14 @@ if [[ -z "$group_id" ]]; then
 fi
 users="$(kc GET '/admin/realms/sovico/users?username=khaopad&exact=true')"
 user_id="$(printf '%s' "$users" | jq -er '[.[] | select(.username == "khaopad")][0].id')"
+khaopad_user="$(kc GET "/admin/realms/sovico/users/$user_id")"
+khaopad_payload="$(printf '%s' "$khaopad_user" | jq -c \
+  --arg email "$khaopad_email" \
+  --arg first_name "$khaopad_first_name" \
+  --arg last_name "$khaopad_last_name" \
+  '.email=$email | .emailVerified=true | .firstName=$first_name | .lastName=$last_name')"
+kc PUT "/admin/realms/sovico/users/$user_id" "$khaopad_payload" >/dev/null
+unset khaopad_payload
 kc PUT "/admin/realms/sovico/users/$user_id/groups/$group_id" >/dev/null
 
 groups="$(kc GET '/admin/realms/sovico/groups?search=consoleAdmin')"
@@ -136,20 +150,38 @@ if [[ -z "$admin_user_id" && "$admin_username" == admin ]]; then
   legacy_admin_user_id="$(printf '%s' "$legacy_admin_users" | jq -r --arg username "$legacy_admin_username" '[.[] | select(.username == $username)][0].id // empty')"
   if [[ -n "$legacy_admin_user_id" ]]; then
     legacy_admin_user="$(kc GET "/admin/realms/sovico/users/$legacy_admin_user_id")"
-    renamed_admin_user="$(printf '%s' "$legacy_admin_user" | jq -c --arg username "$admin_username" '.username=$username')"
+    renamed_admin_user="$(printf '%s' "$legacy_admin_user" | jq -c \
+      --arg username "$admin_username" \
+      --arg email "$admin_email" \
+      --arg first_name "$admin_first_name" \
+      --arg last_name "$admin_last_name" \
+      '.username=$username | .email=$email | .emailVerified=true | .firstName=$first_name | .lastName=$last_name')"
     kc PUT "/admin/realms/sovico/users/$legacy_admin_user_id" "$renamed_admin_user" >/dev/null
     admin_user_id="$legacy_admin_user_id"
     echo "Renamed Keycloak user $legacy_admin_username to $admin_username."
   fi
 fi
 if [[ -z "$admin_user_id" ]]; then
-  admin_user_payload="$(jq -cn --arg username "$admin_username" --arg password "$RUSTFS_ADMIN_PASSWORD" \
-    '{username:$username,enabled:true,credentials:[{type:"password",value:$password,temporary:false}]}')"
+  admin_user_payload="$(jq -cn \
+    --arg username "$admin_username" \
+    --arg password "$RUSTFS_ADMIN_PASSWORD" \
+    --arg email "$admin_email" \
+    --arg first_name "$admin_first_name" \
+    --arg last_name "$admin_last_name" \
+    '{username:$username,enabled:true,email:$email,emailVerified:true,firstName:$first_name,lastName:$last_name,credentials:[{type:"password",value:$password,temporary:false}]}')"
   kc POST /admin/realms/sovico/users "$admin_user_payload" >/dev/null
   unset admin_user_payload
   admin_user_id="$(kc GET "/admin/realms/sovico/users?username=$admin_username&exact=true" | jq -er --arg username "$admin_username" '[.[] | select(.username == $username)][0].id')"
   echo "Created Keycloak user $admin_username."
 else
+  current_admin_user="$(kc GET "/admin/realms/sovico/users/$admin_user_id")"
+  admin_profile_payload="$(printf '%s' "$current_admin_user" | jq -c \
+    --arg email "$admin_email" \
+    --arg first_name "$admin_first_name" \
+    --arg last_name "$admin_last_name" \
+    '.email=$email | .emailVerified=true | .firstName=$first_name | .lastName=$last_name')"
+  kc PUT "/admin/realms/sovico/users/$admin_user_id" "$admin_profile_payload" >/dev/null
+  unset admin_profile_payload
   password_payload="$(jq -cn --arg password "$RUSTFS_ADMIN_PASSWORD" '{type:"password",value:$password,temporary:false}')"
   kc PUT "/admin/realms/sovico/users/$admin_user_id/reset-password" "$password_payload" >/dev/null
   unset password_payload
