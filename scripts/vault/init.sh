@@ -9,7 +9,7 @@ done
 if [[ -e "$init_file" ]]; then
   echo "Vault initialization would overwrite existing unseal material at $init_file." >&2
   echo "This Vault may have a new empty volume. Restore its original volume if you need the old data." >&2
-  echo "For an intentional fresh start, back up and move init.json out of k8s/vault/, then rerun bootstrap." >&2
+  echo "For an intentional fresh local bootstrap, rerun ./scripts/bootstrap.sh --fresh-vault." >&2
   exit 1
 fi
 kubectl -n vault get pod vault-0 >/dev/null

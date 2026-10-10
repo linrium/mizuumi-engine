@@ -2,7 +2,7 @@
 
 This uses the official HashiCorp Vault Helm chart 0.34.1 in standalone server mode, not dev mode. Vault uses a 10 Gi PVC, TLS, and manual unseal. It is a single-node local setup, not an HA production deployment. The generated certificate is self-signed and only suitable for this local cluster.
 
-From the repository root, run `./scripts/bootstrap.sh` for the full Keycloak → Vault → RustFS setup (or `./scripts/bootstrap.sh --no-forward` to skip the final gateway check). To run Vault's steps individually:
+From the repository root, run `./scripts/bootstrap.sh` for the full Keycloak → Vault → RustFS setup (or `./scripts/bootstrap.sh --no-forward` to skip the final gateway check). Use `./scripts/bootstrap.sh --fresh-vault` only when intentionally replacing a local Vault volume; it backs up the old `init.json` before initializing the new empty Vault. To run Vault's steps individually:
 
 ```sh
 ./scripts/vault/setup.sh
@@ -14,7 +14,7 @@ sudo ./scripts/configure_workstation_dns.sh # once per workstation
 
 `scripts/vault/setup.sh` creates a local CA and CA-signed server certificate in `k8s/vault/tls/` (ignored by Git), creates the `vault-tls` Kubernetes Secret, and adds the CA to the shared gateway's upstream trust bundle. If the server certificate changes, it restarts Vault and unseals it when the local init file is available. `scripts/vault/init.sh` saves the unseal key and initial root token to ignored, mode-600 `k8s/vault/init.json`. Back up this file securely outside the machine. A later restart seals Vault; run `./scripts/vault/unseal.sh` before using it again. The UI is `https://vault.mizuumi.test/ui/`; using a dedicated hostname prevents cookies from the other local services from overflowing Vault's request headers. On macOS, `./scripts/forward.sh --trust --open` trusts the gateway CA and opens the browser UIs without certificate warnings.
 
-If Vault reports that it is uninitialized while `init.json` already exists, the file belongs to another Vault volume. Restore the original volume to keep its data. For an intentional fresh start, back up `init.json`, move it out of the way, and rerun `./scripts/bootstrap.sh`. Do not use the old unseal key with a new volume.
+If Vault reports that it is uninitialized while `init.json` already exists, the file belongs to another Vault volume. Restore the original volume to keep its data. For an intentional fresh local start, rerun `./scripts/bootstrap.sh --fresh-vault`; bootstrap backs up `init.json` before creating new unseal material. Do not use the old unseal key with a new volume.
 
 The old dev-mode StatefulSet has no PVC, and Kubernetes cannot add one in place. If `scripts/vault/setup.sh` detects it, it stops before changing anything. After exporting any dev data you need, run `helm -n vault uninstall vault`, then rerun the setup, init, and bootstrap commands. The old in-memory Vault state is destroyed by that uninstall. Keycloak data remains in its PostgreSQL PVC.
 

@@ -4,8 +4,10 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 namespace=storage
 credentials_file="$repo_root/k8s/storage/credentials.env"
-admin_password_file="$repo_root/k8s/storage/rustfs-admin-password"
-admin_username="${RUSTFS_ADMIN_USERNAME:-rustfs-admin}"
+admin_password_file="$repo_root/k8s/storage/admin-password"
+admin_username="${RUSTFS_ADMIN_USERNAME:-admin}"
+legacy_admin_username=rustfs-admin
+default_admin_password=123
 vault_ca="$repo_root/k8s/vault/tls/ca.crt"
 keycloak_ca="$repo_root/k8s/auth/tls/ca.crt"
 for command in kubectl curl jq openssl; do
@@ -121,32 +123,39 @@ if printf '%s' "$user_groups" | jq -e --arg id "$admin_group_id" 'any(.[]; .id =
   kc DELETE "/admin/realms/sovico/users/$user_id/groups/$admin_group_id" >/dev/null
 fi
 
+RUSTFS_ADMIN_PASSWORD="${RUSTFS_ADMIN_PASSWORD:-$default_admin_password}"
+[[ -n "$RUSTFS_ADMIN_PASSWORD" ]] || { echo "RustFS admin password cannot be empty." >&2; exit 1; }
+umask 077
+printf '%s\n' "$RUSTFS_ADMIN_PASSWORD" > "$admin_password_file"
+echo "Wrote RustFS admin password to $admin_password_file (mode 600)."
+
 admin_users="$(kc GET "/admin/realms/sovico/users?username=$admin_username&exact=true")"
 admin_user_id="$(printf '%s' "$admin_users" | jq -r --arg username "$admin_username" '[.[] | select(.username == $username)][0].id // empty')"
-if [[ -z "$admin_user_id" ]]; then
-  if [[ -z "${RUSTFS_ADMIN_PASSWORD:-}" ]]; then
-    if [[ -t 0 ]]; then
-      read -r -s -p "Password for new sovico/$admin_username: " RUSTFS_ADMIN_PASSWORD
-      echo
-    elif [[ -f "$admin_password_file" ]]; then
-      RUSTFS_ADMIN_PASSWORD="$(<"$admin_password_file")"
-    else
-      RUSTFS_ADMIN_PASSWORD="$(openssl rand -base64 24)"
-      umask 077
-      printf '%s\n' "$RUSTFS_ADMIN_PASSWORD" > "$admin_password_file"
-      echo "Generated RustFS admin password in $admin_password_file (mode 600)."
-    fi
+if [[ -z "$admin_user_id" && "$admin_username" == admin ]]; then
+  legacy_admin_users="$(kc GET "/admin/realms/sovico/users?username=$legacy_admin_username&exact=true")"
+  legacy_admin_user_id="$(printf '%s' "$legacy_admin_users" | jq -r --arg username "$legacy_admin_username" '[.[] | select(.username == $username)][0].id // empty')"
+  if [[ -n "$legacy_admin_user_id" ]]; then
+    legacy_admin_user="$(kc GET "/admin/realms/sovico/users/$legacy_admin_user_id")"
+    renamed_admin_user="$(printf '%s' "$legacy_admin_user" | jq -c --arg username "$admin_username" '.username=$username')"
+    kc PUT "/admin/realms/sovico/users/$legacy_admin_user_id" "$renamed_admin_user" >/dev/null
+    admin_user_id="$legacy_admin_user_id"
+    echo "Renamed Keycloak user $legacy_admin_username to $admin_username."
   fi
-  [[ -n "$RUSTFS_ADMIN_PASSWORD" ]] || { echo "RustFS admin password cannot be empty." >&2; exit 1; }
+fi
+if [[ -z "$admin_user_id" ]]; then
   admin_user_payload="$(jq -cn --arg username "$admin_username" --arg password "$RUSTFS_ADMIN_PASSWORD" \
     '{username:$username,enabled:true,credentials:[{type:"password",value:$password,temporary:false}]}')"
   kc POST /admin/realms/sovico/users "$admin_user_payload" >/dev/null
-  unset RUSTFS_ADMIN_PASSWORD admin_user_payload
+  unset admin_user_payload
   admin_user_id="$(kc GET "/admin/realms/sovico/users?username=$admin_username&exact=true" | jq -er --arg username "$admin_username" '[.[] | select(.username == $username)][0].id')"
   echo "Created Keycloak user $admin_username."
 else
-  echo "Keycloak user $admin_username already exists; password unchanged."
+  password_payload="$(jq -cn --arg password "$RUSTFS_ADMIN_PASSWORD" '{type:"password",value:$password,temporary:false}')"
+  kc PUT "/admin/realms/sovico/users/$admin_user_id/reset-password" "$password_payload" >/dev/null
+  unset password_payload
+  echo "Reset Keycloak user $admin_username password."
 fi
+unset RUSTFS_ADMIN_PASSWORD
 kc PUT "/admin/realms/sovico/users/$admin_user_id/groups/$admin_group_id" >/dev/null
 
 mounts="$(vault GET /v1/sys/mounts)"

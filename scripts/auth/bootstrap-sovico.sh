@@ -3,6 +3,7 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 password_file="$repo_root/k8s/auth/sovico-user-password"
+default_user_password=123
 vault_init_file="$repo_root/k8s/vault/init.json"
 vault_ca="$repo_root/k8s/vault/tls/ca.crt"
 keycloak_ca="$repo_root/k8s/auth/tls/ca.crt"
@@ -169,19 +170,16 @@ if printf '%s' "$users" | jq -e 'any(.[]; .username == "khaopad")' >/dev/null; t
 else
   if [[ -z "${SOVICO_USER_PASSWORD:-}" ]]; then
     if [[ -t 0 ]]; then
-      read -r -s -p 'Password for new sovico/khaopad: ' SOVICO_USER_PASSWORD
+      read -r -s -p "Password for new sovico/khaopad [default: $default_user_password]: " SOVICO_USER_PASSWORD
       echo
+      SOVICO_USER_PASSWORD="${SOVICO_USER_PASSWORD:-$default_user_password}"
     elif [[ -f "$password_file" ]]; then
       SOVICO_USER_PASSWORD="$(<"$password_file")"
     else
-      if ! command -v openssl >/dev/null 2>&1; then
-        echo 'Missing openssl; set SOVICO_USER_PASSWORD to create the initial user.' >&2
-        exit 1
-      fi
-      SOVICO_USER_PASSWORD="$(openssl rand -base64 24)"
+      SOVICO_USER_PASSWORD="$default_user_password"
       umask 077
       printf '%s\n' "$SOVICO_USER_PASSWORD" > "$password_file"
-      echo "Generated user password in $password_file (mode 600)."
+      echo "Wrote default user password to $password_file (mode 600)."
     fi
   fi
   if [[ -z "$SOVICO_USER_PASSWORD" ]]; then
@@ -223,4 +221,4 @@ fi
 
 echo 'Vault OIDC is configured for Keycloak realm sovico.'
 echo 'Run ./scripts/forward.sh, then open https://vault.mizuumi.test/ui/ and choose OIDC login.'
-echo 'Sign in as khaopad with the password set during bootstrap.'
+echo 'Sign in as khaopad with the password set during bootstrap (default: 123).'
