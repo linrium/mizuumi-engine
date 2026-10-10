@@ -1,0 +1,34 @@
+# Local, single-node SigNoz configuration for Docker Desktop and kind.
+global:
+  storageClass: standard
+  clusterName: docker-desktop
+
+clickhouse:
+  layout:
+    shardsCount: 1
+    replicasCount: 1
+  persistence:
+    enabled: true
+    size: 10Gi
+  zookeeper:
+    replicaCount: 1
+    persistence:
+      enabled: true
+      size: 2Gi
+
+# Keep local services private. Use the port-forward commands documented in
+# README.md to reach the UI and the OTLP endpoints from the workstation.
+signoz:
+  replicaCount: 1
+  env:
+    signoz_alertmanager_signoz_external__url: https://console.signoz.mizuumi.test
+  persistence:
+    enabled: true
+    size: 1Gi
+  service:
+    type: ClusterIP
+
+otelCollector:
+  replicaCount: 1
+  service:
+    type: ClusterIP

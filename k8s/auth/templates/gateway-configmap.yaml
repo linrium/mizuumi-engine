@@ -130,6 +130,27 @@ data:
       }
     }
 
+    https://console.signoz.mizuumi.test:8443 {
+      tls /etc/caddy/gateway-tls/tls.crt /etc/caddy/gateway-tls/tls.key
+      reverse_proxy http://signoz.signoz.svc.cluster.local:8080 {
+        header_up -Forwarded
+        header_up X-Forwarded-For {http.request.remote.host}
+        header_up X-Forwarded-Host {host}
+        header_up X-Forwarded-Port 443
+        header_up X-Forwarded-Proto https
+      }
+    }
+
+    https://otlp.signoz.mizuumi.test:8443 {
+      tls /etc/caddy/gateway-tls/tls.crt /etc/caddy/gateway-tls/tls.key
+      route {
+        # Serve OTLP/gRPC and OTLP/HTTP on the same public HTTPS endpoint.
+        @grpc header Content-Type application/grpc*
+        reverse_proxy @grpc h2c://signoz-otel-collector.signoz.svc.cluster.local:4317
+        reverse_proxy http://signoz-otel-collector.signoz.svc.cluster.local:4318
+      }
+    }
+
 {{- if .Values.gateway.openshell.enabled }}
     https://openshell.mizuumi.test:8443 {
       tls /etc/caddy/gateway-tls/tls.crt /etc/caddy/gateway-tls/tls.key {
