@@ -173,6 +173,7 @@ decode_secret_key tls.key "$tls_dir/tls.key"
 cp "$repo_root/k8s/auth/tls/ca.crt" "$tls_dir/ca.crt"
 chmod 600 "$tls_dir/ca.crt" "$tls_dir/tls.crt" "$tls_dir/tls.key"
 openshell_oidc gateway select "$gateway_name"
+openshell_oidc gateway login "$gateway_name"
 openshell_oidc status
 
 if [[ "$run_example" == true ]]; then

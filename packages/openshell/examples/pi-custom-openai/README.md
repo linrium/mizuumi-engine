@@ -128,6 +128,26 @@ It is idempotent and waits for asynchronous sandbox deletion before removing
 the provider and profile. It intentionally preserves the Vault KV mount and
 the locally built container image.
 
+## MCP servers
+
+The wrapper also materializes `${PI_CODING_AGENT_DIR}/mcp.json` from the
+`PI_MCP_SERVERS_JSON` env var, if set. The value is a JSON object matching the
+`mcpServers` field documented at
+[pi.dev/docs/latest/mcp](https://pi.dev/docs/latest/mcp). Example:
+
+```json
+{
+  "mizuumi": {
+    "url": "https://mcp.mizuumi.test/mcp",
+    "timeout": 60,
+    "exposure": "direct"
+  }
+}
+```
+
+Studio sets this automatically for every sandbox it creates; override the
+endpoint with `MIZUUMI_MCP_URL`.
+
 ## Compatibility
 
 The generated Pi configuration uses `openai-completions`. If the service only

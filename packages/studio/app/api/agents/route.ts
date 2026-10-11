@@ -42,17 +42,34 @@ export async function POST(request: Request) {
 
     const image = process.env.OPENSHELL_PI_IMAGE ?? "pi-custom-openai:local-1"
     const provider = process.env.OPENSHELL_PI_PROVIDER ?? "pi-custom-openai"
+    const mcpProvider =
+      process.env.OPENSHELL_MCP_PROVIDER ?? "mizuumi-mcp"
     const { baseUrl } = await getPiConfig()
+
+    const mcpUrl =
+      process.env.MIZUUMI_MCP_URL ??
+      "http://mcp.mcp.svc.cluster.local:8080/mcp"
+    const mcpServersJson = JSON.stringify({
+      mizuumi: {
+        url: mcpUrl,
+        timeout: 60,
+        enabled: true,
+        exposure: "direct",
+        description:
+          "Mizuumi DuckDB Quack tools: run_sql and get_demo_orders.",
+      },
+    })
 
     const agent = await createSandbox({
       name,
       image,
-      providers: [provider],
+      providers: [provider, mcpProvider],
       environment: {
         CUSTOM_OPENAI_BASE_URL: baseUrl,
         CUSTOM_OPENAI_MODEL: DEFAULT_PI_MODEL,
         CUSTOM_OPENAI_MODELS_JSON: PI_MODELS_JSON,
         PI_CODING_AGENT_DIR: "/tmp/pi-agent-runtime",
+        PI_MCP_SERVERS_JSON: mcpServersJson,
       },
       labels: { "mizuumi.studio.agent": "true" },
       policy: {

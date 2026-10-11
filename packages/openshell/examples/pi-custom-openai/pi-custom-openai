@@ -35,11 +35,21 @@ const config = {
   },
 };
 
+const agentDir = process.env.PI_CODING_AGENT_DIR;
 fs.writeFileSync(
-  path.join(process.env.PI_CODING_AGENT_DIR, "models.json"),
+  path.join(agentDir, "models.json"),
   `${JSON.stringify(config, null, 2)}\n`,
   { mode: 0o600 },
 );
+
+if (process.env.PI_MCP_SERVERS_JSON) {
+  const mcpServers = JSON.parse(process.env.PI_MCP_SERVERS_JSON);
+  fs.writeFileSync(
+    path.join(agentDir, "mcp.json"),
+    `${JSON.stringify({ mcpServers }, null, 2)}\n`,
+    { mode: 0o600 },
+  );
+}
 NODE
 
 exec pi --model "custom-openai/$CUSTOM_OPENAI_MODEL" "$@"
