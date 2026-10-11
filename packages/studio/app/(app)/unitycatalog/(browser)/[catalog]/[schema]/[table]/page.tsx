@@ -1,14 +1,12 @@
 "use client"
 
-import { IconTable } from "@tabler/icons-react"
 import { cn } from "cn"
 import { use } from "react"
-import { Badge } from "@/components/ui/badge"
 import { useBrowser } from "../../../browser-context"
-import { HeaderBlock, MetaGrid, NotFound } from "../../../detail"
+import { MetaGrid, NotFound } from "../../../detail"
 import { formatDate } from "../../../../types"
 
-export default function TablePage({
+export default function TableOverviewPage({
   params,
 }: {
   params: Promise<{ catalog: string; schema: string; table: string }>
@@ -24,15 +22,7 @@ export default function TablePage({
   const table = schema?.tables?.find((t) => t.name === tableParam)
 
   if (!catalog || !schema || !table) {
-    return (
-      <NotFound
-        message={
-          isPending
-            ? "Loading…"
-            : `Table "${catalogParam}.${schemaParam}.${tableParam}" not found.`
-        }
-      />
-    )
+    return <NotFound message={isPending ? "Loading…" : "Table not found."} />
   }
 
   const columns = table.columns ?? []
@@ -40,21 +30,6 @@ export default function TablePage({
 
   return (
     <div className="space-y-6">
-      <HeaderBlock
-        icon={<IconTable className="size-4" />}
-        kind="Table"
-        title={`${catalog.name}.${schema.name}.${table.name}`}
-        badges={
-          <>
-            {table.table_type ? (
-              <Badge variant="secondary">{table.table_type}</Badge>
-            ) : null}
-            {table.data_source_format ? (
-              <Badge variant="outline">{table.data_source_format}</Badge>
-            ) : null}
-          </>
-        }
-      />
       <MetaGrid
         items={[
           ["Owner", table.owner ?? "—"],
