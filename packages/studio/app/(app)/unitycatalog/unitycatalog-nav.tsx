@@ -4,11 +4,7 @@ import { cn } from "cn"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
-const tabs = [
-  { href: "/unitycatalog", label: "Browser" },
-  { href: "/unitycatalog/permissions", label: "Permissions" },
-  { href: "/unitycatalog/assignments", label: "Assignments" },
-] as const
+const tabs = [{ href: "/unitycatalog", label: "Browser" }] as const
 
 export function UnityCatalogNav() {
   const pathname = usePathname()
@@ -17,12 +13,7 @@ export function UnityCatalogNav() {
       {tabs.map((t) => {
         const active =
           t.href === "/unitycatalog"
-            ? !tabs
-                .slice(1)
-                .some(
-                  (o) =>
-                    pathname === o.href || pathname.startsWith(`${o.href}/`),
-                )
+            ? true
             : pathname === t.href || pathname.startsWith(`${t.href}/`)
         return (
           <Link
