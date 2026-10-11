@@ -42,7 +42,29 @@ Install SigNoz and `k8s-infra` before applying the auth chart:
 
 ## Vault login through Keycloak
 
-After installing Keycloak and initializing/unsealing Vault, run `./scripts/auth/bootstrap-sovico.sh`. It creates the `sovico` realm, a confidential `vault` OIDC client, and an initial `khaopad` account. Bootstrap runs without prompting, writes the default password `123` to the ignored, mode-600 `k8s/auth/sovico-user-password` file, and resets the Keycloak password on rerun; set `SOVICO_USER_PASSWORD` to override it. The default profile is `Khao Pad <khaopad@mizuumi.test>`; override it with `SOVICO_USER_FIRST_NAME`, `SOVICO_USER_LAST_NAME`, and `SOVICO_USER_EMAIL`. It then configures Vault's `oidc` auth method and `sovico` role. Run `./scripts/forward.sh` before signing in to Vault at `https://vault.mizuumi.test/ui/`.
+After installing Keycloak and initializing/unsealing Vault, run `./scripts/auth/bootstrap-sovico.sh`. It creates the `sovico` realm, a confidential `vault` OIDC client, and the `khaopad` and `khaosoi` accounts. Bootstrap runs without prompting, uses the default password `123`, writes each password to an ignored mode-600 file, and resets both passwords on rerun. Set `SOVICO_USER_PASSWORD` for `khaopad` or `SOVICO_KHAOSOI_PASSWORD` for `khaosoi` to override the defaults. The default profiles are `Khao Pad <khaopad@mizuumi.test>` and `Khao Soi <khaosoi@mizuumi.test>`; override them with the matching `SOVICO_USER_*` or `SOVICO_KHAOSOI_*` profile variables. It then configures Vault's `oidc` auth method and `sovico` role. Run `./scripts/forward.sh` before signing in to Vault at `https://vault.mizuumi.test/ui/`.
+
+## Organization groups
+
+Keycloak 26.6 and later supports groups scoped to an organization. After creating
+the `sovico` realm, bootstrap the example organizations and their top-level
+groups:
+
+```sh
+./scripts/auth/bootstrap-organizations.sh
+```
+
+The default mappings are `hdbank=hdbankGrow=khaosoi` and
+`vietjet=vietjetGrow=khaopad`. The script is idempotent, enables Organizations
+for the realm, creates any missing organizations and groups, adds each user to
+the corresponding organization, and assigns the user to the group. Pass
+`organization=group` or `organization=group=user` mappings to replace the
+defaults, or set `KEYCLOAK_REALM` to use another existing realm:
+
+```sh
+./scripts/auth/bootstrap-organizations.sh acme=Engineering=khaosoi acme=Sales
+KEYCLOAK_REALM=partners ./scripts/auth/bootstrap-organizations.sh acme=Engineering=alex
+```
 
 ## Public HTTPS ingress
 

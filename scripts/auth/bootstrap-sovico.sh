@@ -2,11 +2,15 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-password_file="$repo_root/k8s/auth/sovico-user-password"
 default_user_password=123
-default_user_email="${SOVICO_USER_EMAIL:-khaopad@mizuumi.test}"
-default_user_first_name="${SOVICO_USER_FIRST_NAME:-Khao}"
-default_user_last_name="${SOVICO_USER_LAST_NAME:-Pad}"
+khaopad_password_file="$repo_root/k8s/auth/sovico-khaopad-password"
+khaopad_email="${SOVICO_USER_EMAIL:-khaopad@mizuumi.test}"
+khaopad_first_name="${SOVICO_USER_FIRST_NAME:-Khao}"
+khaopad_last_name="${SOVICO_USER_LAST_NAME:-Pad}"
+khaosoi_password_file="$repo_root/k8s/auth/sovico-khaosoi-password"
+khaosoi_email="${SOVICO_KHAOSOI_EMAIL:-khaosoi@mizuumi.test}"
+khaosoi_first_name="${SOVICO_KHAOSOI_FIRST_NAME:-Khao}"
+khaosoi_last_name="${SOVICO_KHAOSOI_LAST_NAME:-Soi}"
 vault_init_file="$repo_root/k8s/vault/init.json"
 vault_ca="$repo_root/k8s/vault/tls/ca.crt"
 keycloak_ca="$repo_root/k8s/auth/tls/ca.crt"
@@ -167,37 +171,47 @@ if [[ -z "$client_secret" ]]; then
   client_secret="$(keycloak_request POST "/admin/realms/sovico/clients/$client_uuid/client-secret" '{}' | jq -er '.value')"
 fi
 
-users="$(keycloak_request GET '/admin/realms/sovico/users?username=khaopad&exact=true')"
-user_id="$(printf '%s' "$users" | jq -r '[.[] | select(.username == "khaopad")][0].id // empty')"
-SOVICO_USER_PASSWORD="${SOVICO_USER_PASSWORD:-$default_user_password}"
-[[ -n "$SOVICO_USER_PASSWORD" ]] || { echo 'User password cannot be empty.' >&2; exit 1; }
-umask 077
-printf '%s\n' "$SOVICO_USER_PASSWORD" > "$password_file"
-echo "Wrote khaopad password to $password_file (mode 600)."
-if [[ -n "$user_id" ]]; then
-  current_user="$(keycloak_request GET "/admin/realms/sovico/users/$user_id")"
-  user_payload="$(printf '%s' "$current_user" | jq -c \
-    --arg email "$default_user_email" \
-    --arg first_name "$default_user_first_name" \
-    --arg last_name "$default_user_last_name" \
-    '.email=$email | .emailVerified=true | .firstName=$first_name | .lastName=$last_name')"
-  keycloak_request PUT "/admin/realms/sovico/users/$user_id" "$user_payload" >/dev/null
-  password_payload="$(jq -cn --arg password "$SOVICO_USER_PASSWORD" '{type:"password",value:$password,temporary:false}')"
-  keycloak_request PUT "/admin/realms/sovico/users/$user_id/reset-password" "$password_payload" >/dev/null
-  unset password_payload
-  unset user_payload
-  echo 'Keycloak user khaopad already exists; profile and password updated.'
-else
-  user_payload="$(printf '%s' "$SOVICO_USER_PASSWORD" | jq -Rs \
-    --arg email "$default_user_email" \
-    --arg first_name "$default_user_first_name" \
-    --arg last_name "$default_user_last_name" \
-    '{username:"khaopad",enabled:true,email:$email,emailVerified:true,firstName:$first_name,lastName:$last_name,credentials:[{type:"password",value:.,temporary:false}]}')"
-  keycloak_request POST /admin/realms/sovico/users "$user_payload" >/dev/null
-  unset SOVICO_USER_PASSWORD user_payload
-  echo 'Created Keycloak user khaopad.'
-fi
-unset SOVICO_USER_PASSWORD
+ensure_user() {
+  local username="$1" email="$2" first_name="$3" last_name="$4" password="$5" password_file="$6"
+  local users user_id current_user user_payload password_payload
+
+  [[ -n "$password" ]] || { echo "$username password cannot be empty." >&2; exit 1; }
+  umask 077
+  printf '%s\n' "$password" > "$password_file"
+  echo "Wrote $username password to $password_file (mode 600)."
+
+  users="$(keycloak_request GET "/admin/realms/sovico/users?username=$username&exact=true")"
+  user_id="$(printf '%s' "$users" | jq -r --arg username "$username" '[.[] | select(.username == $username)][0].id // empty')"
+  if [[ -n "$user_id" ]]; then
+    current_user="$(keycloak_request GET "/admin/realms/sovico/users/$user_id")"
+    user_payload="$(printf '%s' "$current_user" | jq -c \
+      --arg email "$email" \
+      --arg first_name "$first_name" \
+      --arg last_name "$last_name" \
+      '.enabled=true | .email=$email | .emailVerified=true | .firstName=$first_name | .lastName=$last_name')"
+    keycloak_request PUT "/admin/realms/sovico/users/$user_id" "$user_payload" >/dev/null
+    password_payload="$(jq -cn --arg password "$password" '{type:"password",value:$password,temporary:false}')"
+    keycloak_request PUT "/admin/realms/sovico/users/$user_id/reset-password" "$password_payload" >/dev/null
+    echo "Keycloak user $username already exists; profile and password updated."
+  else
+    user_payload="$(jq -cn \
+      --arg username "$username" \
+      --arg email "$email" \
+      --arg first_name "$first_name" \
+      --arg last_name "$last_name" \
+      --arg password "$password" \
+      '{username:$username,enabled:true,email:$email,emailVerified:true,firstName:$first_name,lastName:$last_name,credentials:[{type:"password",value:$password,temporary:false}]}')"
+    keycloak_request POST /admin/realms/sovico/users "$user_payload" >/dev/null
+    echo "Created Keycloak user $username."
+  fi
+}
+
+ensure_user \
+  khaopad "$khaopad_email" "$khaopad_first_name" "$khaopad_last_name" \
+  "${SOVICO_USER_PASSWORD:-$default_user_password}" "$khaopad_password_file"
+ensure_user \
+  khaosoi "$khaosoi_email" "$khaosoi_first_name" "$khaosoi_last_name" \
+  "${SOVICO_KHAOSOI_PASSWORD:-$default_user_password}" "$khaosoi_password_file"
 unset admin_password admin_token
 
 auth_mounts="$(vault_request GET /v1/sys/auth)"
@@ -225,4 +239,4 @@ fi
 
 echo 'Vault OIDC is configured for Keycloak realm sovico.'
 echo 'Run ./scripts/forward.sh, then open https://vault.mizuumi.test/ui/ and choose OIDC login.'
-echo 'Sign in as khaopad with the password set during bootstrap (default: 123).'
+echo 'Sign in as khaopad or khaosoi with the password set during bootstrap (default: 123).'

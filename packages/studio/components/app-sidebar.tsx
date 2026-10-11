@@ -18,6 +18,9 @@ import {
   IconChartPpf,
   IconCodeAsterisk,
   IconSparkle2,
+  IconUsers,
+  IconTestPipe,
+  IconBrandZapier,
 } from "@tabler/icons-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -55,6 +58,8 @@ const navSections: { label: string; items: NavItem[] }[] = [
       { href: "/mcp", label: "MCP", icon: IconPlugConnected },
       { href: "/dashboard", label: "Dashboard", icon: IconChartPpf },
       { href: "/sql", label: "Interactive", icon: IconCodeAsterisk },
+      { href: "/experiments", label: "Experiments", icon: IconTestPipe },
+      { href: "/groups", label: "Groups", icon: IconUsers },
     ],
   },
   {
@@ -74,8 +79,9 @@ export function AppSidebar({ user, ...props }: AppSidebarProps) {
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
         <div className="flex items-center gap-2 px-2 py-1.5">
-          <div className="flex flex-col leading-tight group-data-[collapsible=icon]:hidden">
-            <span className="text-sm font-semibold">Mizuumi Studio</span>
+          <div className="flex items-center leading-tight group-data-[collapsible=icon]:hidden">
+            <IconBrandZapier size={24}/>
+            <span className="text-sm font-semibold ml-2">Mizuumi</span>
           </div>
         </div>
       </SidebarHeader>
