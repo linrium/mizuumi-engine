@@ -19,6 +19,18 @@ EOF
     ;;
 esac
 
+KAFKA_TOPIC="${KAFKA_TOPIC:-t24.payment.events}"
+KAFKA_TOPIC_PARTITIONS="${KAFKA_TOPIC_PARTITIONS:-3}"
+KAFKA_TOPIC_REPLICAS="${KAFKA_TOPIC_REPLICAS:-1}"
+REDPANDA_NAMESPACE="${REDPANDA_NAMESPACE:-redpanda}"
+REDPANDA_POD="${REDPANDA_POD:-redpanda-0}"
+
+echo "Ensuring Kafka topic '$KAFKA_TOPIC' exists in $REDPANDA_NAMESPACE/$REDPANDA_POD..."
+kubectl -n "$REDPANDA_NAMESPACE" exec "$REDPANDA_POD" -c redpanda -- \
+  rpk topic create "$KAFKA_TOPIC" \
+  --partitions "$KAFKA_TOPIC_PARTITIONS" \
+  --replicas "$KAFKA_TOPIC_REPLICAS" 2>&1 | grep -v "TOPIC_ALREADY_EXISTS" || true
+
 export SPARK_UNITY_CATALOG="${SPARK_UNITY_CATALOG:-payments}"
 export SPARK_UNITY_SCHEMAS="${SPARK_UNITY_SCHEMAS:-bronze}"
 export SPARK_UNITY_STORAGE_ROOT="${SPARK_UNITY_STORAGE_ROOT:-s3://unitycatalog/payments}"
