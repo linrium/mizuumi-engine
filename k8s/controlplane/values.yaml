@@ -49,5 +49,11 @@ externalPostgresql:
 serviceAccount:
   create: true
   name: ""
-  automount: false
+  automount: true
+
+rbac:
+  create: true
+  sparkApplications:
+    apiGroup: sparkoperator.k8s.io
+    namespaces: []
 

@@ -19,6 +19,7 @@ use crate::{
     features::{
         access_requests::{DefaultAccessRequestService, access_request_router},
         health::{DefaultHealthService, health_router},
+        pipelines::{DefaultPipelineService, pipeline_router},
         policy_templates::{DefaultPolicyTemplateService, policy_template_router},
     },
     infrastructure::postgres::{create_pool, run_migrations},
@@ -43,15 +44,21 @@ async fn main() -> anyhow::Result<()> {
         .await
         .context("failed to run postgres migrations")?;
 
+    let kube_client = kube::Client::try_default()
+        .await
+        .context("failed to initialize kubernetes client")?;
+
     let state = AppState {
         access_requests: Arc::new(DefaultAccessRequestService::new(pool.clone())),
         health: Arc::new(DefaultHealthService::new(pool.clone())),
+        pipelines: Arc::new(DefaultPipelineService::new(kube_client)),
         policy_templates: Arc::new(DefaultPolicyTemplateService::new(pool)),
     };
     let app = Router::new()
         .merge(health_router())
         .merge(policy_template_router())
         .merge(access_request_router())
+        .merge(pipeline_router())
         .with_state(state)
         .layer(
             TraceLayer::new_for_http()

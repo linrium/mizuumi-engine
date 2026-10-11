@@ -16,6 +16,8 @@ pub enum AppError {
     Postgres(#[from] tokio_postgres::Error),
     #[error("postgres pool failed")]
     Pool(#[from] deadpool_postgres::PoolError),
+    #[error("kubernetes api failed: {0}")]
+    Kube(#[from] kube::Error),
 }
 
 #[derive(Serialize)]
@@ -31,6 +33,8 @@ impl IntoResponse for AppError {
             AppError::Conflict(_) => StatusCode::CONFLICT,
             AppError::Forbidden(_) => StatusCode::FORBIDDEN,
             AppError::Postgres(_) | AppError::Pool(_) => StatusCode::SERVICE_UNAVAILABLE,
+            AppError::Kube(kube::Error::Api(resp)) if resp.code == 404 => StatusCode::NOT_FOUND,
+            AppError::Kube(_) => StatusCode::BAD_GATEWAY,
         };
         if status.is_server_error() {
             tracing::error!(error = %self, "request failed");
