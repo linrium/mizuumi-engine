@@ -11,6 +11,13 @@ import {
   IconShape2,
   IconIcons,
   IconSmartHome,
+  IconCpu,
+  IconPipeline,
+  IconShield,
+  IconGitPullRequest,
+  IconChartPpf,
+  IconCodeAsterisk,
+  IconSparkle2,
 } from "@tabler/icons-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -38,18 +45,16 @@ type NavItem = {
 
 const navSections: { label: string; items: NavItem[] }[] = [
   {
-    label: "Overview",
+    label: "Home",
     items: [
-      { href: "/", label: "Home", icon: IconSmartHome },
+      { href: "/", label: "Home", icon: IconSparkle2 },
       { href: "/unitycatalog", label: "Catalog", icon: IconIcons },
-    ],
-  },
-  {
-    label: "Workspaces",
-    items: [
-      { href: "/chat", label: "Pi Agents", icon: IconMessageCircle },
-      { href: "/mcp", label: "MCP Chat", icon: IconPlugConnected },
-      { href: "/sql", label: "DuckDB SQL", icon: IconTerminal2 },
+      { href: "/computes", label: "Computes", icon: IconCpu },
+      { href: "/pipelines", label: "Pipelines", icon: IconPipeline },
+      { href: "/guard", label: "Review", icon: IconGitPullRequest },
+      { href: "/mcp", label: "MCP", icon: IconPlugConnected },
+      { href: "/dashboard", label: "Dashboard", icon: IconChartPpf },
+      { href: "/sql", label: "Interactive", icon: IconCodeAsterisk },
     ],
   },
   {
