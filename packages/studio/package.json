@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
+    "@duckdb/node-api": "^1.5.3-r.1",
     "@nvidia/openshell-sdk": "^0.1.2",
     "@tabler/icons-react": "^3.48.0",
     "better-auth": "^1.7.6",

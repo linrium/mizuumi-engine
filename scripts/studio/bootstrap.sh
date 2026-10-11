@@ -13,6 +13,9 @@ openshell_audience="${OPENSHELL_OIDC_AUDIENCE:-openshell-cli}"
 vault_addr="${VAULT_ADDR:-https://vault.mizuumi.test}"
 vault_kv_mount="${VAULT_KV_MOUNT:-pi-custom-openai}"
 vault_kv_secret_path="${VAULT_KV_SECRET_PATH:-config}"
+duck_server_namespace="${DUCK_SERVER_NAMESPACE:-duck-server}"
+duck_server_credentials_secret="${DUCK_SERVER_CREDENTIALS_SECRET:-duck-server-credentials}"
+quack_uri="${QUACK_URI:-quack:query.mizuumi.test:443}"
 keycloak_url="https://127.0.0.1:18080"
 rotate_secret=0
 
@@ -36,6 +39,10 @@ Environment overrides:
   VAULT_CACERT               Default: k8s/auth/tls/ca.crt
   VAULT_KV_MOUNT             Default: pi-custom-openai
   VAULT_KV_SECRET_PATH       Default: config
+  DUCK_SERVER_NAMESPACE      Default: duck-server
+  DUCK_SERVER_CREDENTIALS_SECRET
+                             Default: duck-server-credentials
+  QUACK_URI                  Default: quack:query.mizuumi.test:443
 EOF
 }
 
@@ -98,6 +105,7 @@ fi
 
 admin_user="$(kubectl -n auth get deployment keycloak -o json | jq -er '.spec.template.spec.containers[] | select(.name == "keycloak") | .env[] | select(.name == "KC_BOOTSTRAP_ADMIN_USERNAME") | .value')"
 admin_password="$(kubectl -n auth get secret keycloak-credentials -o json | jq -er '.data.ADMIN_PASSWORD | @base64d')"
+quack_token="$(kubectl -n "$duck_server_namespace" get secret "$duck_server_credentials_secret" -o json | jq -er '.data.QUACK_TOKEN | @base64d')"
 keycloak_pid=""
 env_tmp=""
 
@@ -227,16 +235,16 @@ fi
 umask 077
 env_tmp="$(mktemp "$repo_root/packages/studio/.env.local.XXXXXX")"
 if [[ -f "$studio_env" ]]; then
-  awk '!/^(KEYCLOAK_CLIENT_ID|KEYCLOAK_CLIENT_SECRET|KEYCLOAK_ISSUER|OPENSHELL_OIDC_ISSUER|OPENSHELL_OIDC_CLIENT_ID|OPENSHELL_OIDC_CLIENT_SECRET|OPENSHELL_OIDC_AUDIENCE|VAULT_ADDR|VAULT_CACERT|VAULT_KV_MOUNT|VAULT_KV_SECRET_PATH)=/' "$studio_env" > "$env_tmp"
+  awk '!/^(KEYCLOAK_CLIENT_ID|KEYCLOAK_CLIENT_SECRET|KEYCLOAK_ISSUER|OPENSHELL_OIDC_ISSUER|OPENSHELL_OIDC_CLIENT_ID|OPENSHELL_OIDC_CLIENT_SECRET|OPENSHELL_OIDC_AUDIENCE|VAULT_ADDR|VAULT_CACERT|VAULT_KV_MOUNT|VAULT_KV_SECRET_PATH|QUACK_URI|QUACK_TOKEN|QUACK_CA_FILE)=/' "$studio_env" > "$env_tmp"
 fi
-printf 'KEYCLOAK_CLIENT_ID=%s\nKEYCLOAK_CLIENT_SECRET=%s\nKEYCLOAK_ISSUER=%s\nOPENSHELL_OIDC_ISSUER=%s\nOPENSHELL_OIDC_CLIENT_ID=%s\nOPENSHELL_OIDC_CLIENT_SECRET=%s\nOPENSHELL_OIDC_AUDIENCE=%s\nVAULT_ADDR=%s\nVAULT_CACERT=%s\nVAULT_KV_MOUNT=%s\nVAULT_KV_SECRET_PATH=%s\n' \
+printf 'KEYCLOAK_CLIENT_ID=%s\nKEYCLOAK_CLIENT_SECRET=%s\nKEYCLOAK_ISSUER=%s\nOPENSHELL_OIDC_ISSUER=%s\nOPENSHELL_OIDC_CLIENT_ID=%s\nOPENSHELL_OIDC_CLIENT_SECRET=%s\nOPENSHELL_OIDC_AUDIENCE=%s\nVAULT_ADDR=%s\nVAULT_CACERT=%s\nVAULT_KV_MOUNT=%s\nVAULT_KV_SECRET_PATH=%s\nQUACK_URI=%s\nQUACK_TOKEN=%s\nQUACK_CA_FILE=%s\n' \
   "$client_id" "$client_secret" "$issuer" "$issuer" "$client_id" "$client_secret" "$openshell_audience" "$vault_addr" "$vault_ca" \
-  "$vault_kv_mount" "$vault_kv_secret_path" >> "$env_tmp"
+  "$vault_kv_mount" "$vault_kv_secret_path" "$quack_uri" "$quack_token" "$keycloak_ca" >> "$env_tmp"
 chmod 600 "$env_tmp"
 mv "$env_tmp" "$studio_env"
 env_tmp=""
 
-unset admin_token client_secret
+unset admin_token client_secret quack_token
 echo "Studio credentials written to $studio_env (mode 600)."
 echo "Redirect URI: $callback_url"
 echo "Post-logout redirect URI: $post_logout_url"

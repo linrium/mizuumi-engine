@@ -70,3 +70,19 @@ CA under `k8s/vault/tls` is only for the gateway-to-Vault upstream connection.
 
 For a non-local deployment, give the Studio workload a read-only Vault identity
 for `<mount>/data/<secret-path>` instead of using a developer token.
+
+## DuckDB SQL
+
+The `/sql` page executes SQL against `packages/duck-server` through its Quack
+endpoint. `./scripts/studio/bootstrap.sh` copies the Duck server administrator
+token into `.env.local`. The resulting settings are:
+
+```sh
+QUACK_URI=quack:query.mizuumi.test:443
+QUACK_TOKEN=<value from the duck-server-credentials Kubernetes secret>
+QUACK_CA_FILE=../../k8s/auth/tls/ca.crt
+```
+
+The token stays in the Studio server process and is never sent to the browser.
+Quack currently exposes the full SQL surface, so only trusted users should have
+access to this page.

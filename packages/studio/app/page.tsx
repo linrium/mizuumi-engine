@@ -19,6 +19,7 @@ export default async function Home() {
         <Link href="/chat">Pi Agents</Link>
         <Link href="/unitycatalog">Unity Catalog</Link>
         <Link href="/banking">Banking</Link>
+        <Link href="/sql">DuckDB SQL</Link>
       </div>
       <div className="flex min-h-screen items-center justify-center">
         <section className="space-y-4 rounded-lg border p-6">
