@@ -11,6 +11,7 @@ config = "0.15"
 controlplane_queries = { path = "cornucopia" }
 deadpool-postgres = "0.14"
 serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 thiserror = "2.0"
 tokio = { version = "1.0", features = ["macros", "rt-multi-thread", "net", "signal"] }
 tokio-postgres = "0.7"

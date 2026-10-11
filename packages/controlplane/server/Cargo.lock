@@ -214,6 +214,7 @@ dependencies = [
  "controlplane_queries",
  "deadpool-postgres",
  "serde",
+ "serde_json",
  "thiserror",
  "tokio",
  "tokio-postgres",
@@ -231,6 +232,8 @@ dependencies = [
  "postgres",
  "postgres-protocol",
  "postgres-types",
+ "serde",
+ "serde_json",
  "tokio-postgres",
 ]
 
@@ -928,6 +931,8 @@ dependencies = [
  "fallible-iterator",
  "postgres-derive",
  "postgres-protocol",
+ "serde_core",
+ "serde_json",
 ]
 
 [[package]]

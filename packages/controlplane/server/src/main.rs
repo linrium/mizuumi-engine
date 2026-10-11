@@ -16,7 +16,11 @@ use tracing_subscriber::EnvFilter;
 use crate::{
     app_state::AppState,
     config::Settings,
-    features::health::{DefaultHealthService, health_router},
+    features::{
+        access_requests::{DefaultAccessRequestService, access_request_router},
+        health::{DefaultHealthService, health_router},
+        policy_templates::{DefaultPolicyTemplateService, policy_template_router},
+    },
     infrastructure::postgres::{create_pool, run_migrations},
 };
 
@@ -40,10 +44,14 @@ async fn main() -> anyhow::Result<()> {
         .context("failed to run postgres migrations")?;
 
     let state = AppState {
-        health: Arc::new(DefaultHealthService::new(pool)),
+        access_requests: Arc::new(DefaultAccessRequestService::new(pool.clone())),
+        health: Arc::new(DefaultHealthService::new(pool.clone())),
+        policy_templates: Arc::new(DefaultPolicyTemplateService::new(pool)),
     };
     let app = Router::new()
         .merge(health_router())
+        .merge(policy_template_router())
+        .merge(access_request_router())
         .with_state(state)
         .layer(
             TraceLayer::new_for_http()

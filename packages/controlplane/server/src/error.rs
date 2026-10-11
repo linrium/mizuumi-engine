@@ -4,6 +4,14 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum AppError {
+    #[error("invalid parameter: {0}")]
+    InvalidParameter(String),
+    #[error("not found: {0}")]
+    NotFound(String),
+    #[error("conflict: {0}")]
+    Conflict(String),
+    #[error("forbidden: {0}")]
+    Forbidden(String),
     #[error("postgres query failed")]
     Postgres(#[from] tokio_postgres::Error),
     #[error("postgres pool failed")]
@@ -17,9 +25,20 @@ struct ErrorBody {
 
 impl IntoResponse for AppError {
     fn into_response(self) -> axum::response::Response {
-        tracing::error!(error = %self, "request failed");
+        let status = match &self {
+            AppError::InvalidParameter(_) => StatusCode::BAD_REQUEST,
+            AppError::NotFound(_) => StatusCode::NOT_FOUND,
+            AppError::Conflict(_) => StatusCode::CONFLICT,
+            AppError::Forbidden(_) => StatusCode::FORBIDDEN,
+            AppError::Postgres(_) | AppError::Pool(_) => StatusCode::SERVICE_UNAVAILABLE,
+        };
+        if status.is_server_error() {
+            tracing::error!(error = %self, "request failed");
+        } else {
+            tracing::warn!(error = %self, "request rejected");
+        }
         (
-            StatusCode::SERVICE_UNAVAILABLE,
+            status,
             Json(ErrorBody {
                 error: self.to_string(),
             }),
