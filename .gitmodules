@@ -1,3 +1,6 @@
 [submodule "packages/unitycatalog/unitycatalog"]
 	path = packages/unitycatalog/unitycatalog
 	url = https://github.com/unitycatalog/unitycatalog.git
+[submodule "packages/duck-uc-extension"]
+	path = packages/duck-uc-extension
+	url = git@github.com:linrium/unity_catalog.git
