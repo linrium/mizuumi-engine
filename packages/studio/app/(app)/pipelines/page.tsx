@@ -1,14 +1,5 @@
-import { listPipelines } from "@/app/(app)/pipelines/actions"
-import { PipelinesView } from "@/app/(app)/pipelines/pipelines-view"
+import { redirect } from "next/navigation"
 
-export const dynamic = "force-dynamic"
-
-export default async function PipelinesPage() {
-  try {
-    const { items } = await listPipelines()
-    return <PipelinesView initialPipelines={items} />
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error"
-    return <PipelinesView initialPipelines={[]} initialError={message} />
-  }
+export default function PipelinesPage() {
+  redirect("/pipelines/jobs")
 }

@@ -127,22 +127,7 @@ export function PipelinesView({ initialPipelines, initialError }: Props) {
   }
 
   return (
-    <div className="flex flex-col gap-4 p-6">
-      <header className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-lg font-semibold tracking-tight">Pipelines</h1>
-        </div>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={refresh}
-          disabled={isRefreshing}
-        >
-          <IconRefresh className="size-3.5" />
-          Refresh
-        </Button>
-      </header>
-
+    <div className="flex flex-col gap-4">
       {error ? (
         <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
           {error}
