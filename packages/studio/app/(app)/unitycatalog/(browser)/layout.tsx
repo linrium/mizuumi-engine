@@ -1,15 +1,7 @@
 "use client"
 
-import { IconAlertCircle, IconRefresh } from "@tabler/icons-react"
-import { cn } from "cn"
+import { IconAlertCircle } from "@tabler/icons-react"
 import { useCallback, useEffect, useState, useTransition } from "react"
-import { Button } from "@/components/ui/button"
-import {
-  Card,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { authClient } from "@/lib/auth-client"
 import { getUnityCatalogInfo } from "../actions"
@@ -52,32 +44,23 @@ export default function BrowserLayout({ children }: { children: React.ReactNode 
     <BrowserContext.Provider
       value={{ catalogs, isPending, error, refresh: load }}
     >
-      <div className="flex justify-end">
-        <Button size="sm" variant="outline" disabled={isPending} onClick={load}>
-          <IconRefresh className={cn(isPending && "animate-spin")} />
-          {isPending ? "Loading" : "Refresh"}
-        </Button>
-      </div>
-
       {error ? (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-destructive">
-              <IconAlertCircle className="size-4" />
-              Unable to load Unity Catalog
-            </CardTitle>
-            <CardDescription className="break-all">{error}</CardDescription>
-          </CardHeader>
-        </Card>
+        <div className="mx-4 flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+          <IconAlertCircle className="mt-0.5 size-4 shrink-0" />
+          <div className="min-w-0">
+            <div className="font-medium">Unable to load Unity Catalog</div>
+            <div className="break-all opacity-80">{error}</div>
+          </div>
+        </div>
       ) : null}
 
-      <div className="grid min-h-0 flex-1 grid-cols-[320px_1fr] gap-4">
-        <CatalogTree />
-        <Card className="min-h-0 overflow-hidden p-0">
-          <ScrollArea className="h-full">
-            <div className="p-6">{children}</div>
-          </ScrollArea>
-        </Card>
+      <div className="grid min-h-0 flex-1 grid-cols-[280px_1fr]">
+        <div className="min-h-0 border-r">
+          <CatalogTree />
+        </div>
+        <ScrollArea className="h-full min-h-0">
+          <div className="p-5">{children}</div>
+        </ScrollArea>
       </div>
     </BrowserContext.Provider>
   )

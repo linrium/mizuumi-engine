@@ -11,12 +11,6 @@ import { cn } from "cn"
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import { useState } from "react"
-import {
-  Card,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useBrowser } from "./browser-context"
 
@@ -33,15 +27,8 @@ export function CatalogTree() {
     setExpanded((prev) => ({ ...prev, [key]: !prev[key] }))
 
   return (
-    <Card className="min-h-0 overflow-hidden p-0">
-      <CardHeader className="border-b py-3">
-        <CardTitle className="text-sm">Browser</CardTitle>
-        <CardDescription>
-          {catalogs.length} catalog{catalogs.length === 1 ? "" : "s"}
-        </CardDescription>
-      </CardHeader>
-      <ScrollArea className="h-full">
-        <div className="p-2">
+    <ScrollArea className="h-full min-h-0">
+      <div className="p-2">
           {isPending && catalogs.length === 0 ? (
             <div className="px-2 py-6 text-center text-xs text-muted-foreground">
               Loading Unity Catalog metadata…
@@ -126,9 +113,8 @@ export function CatalogTree() {
               })}
             </ul>
           )}
-        </div>
-      </ScrollArea>
-    </Card>
+      </div>
+    </ScrollArea>
   )
 }
 
