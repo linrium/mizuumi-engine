@@ -14,6 +14,7 @@ export const auth = betterAuth({
           issuer:
             process.env.KEYCLOAK_ISSUER ??
             "https://auth.mizuumi.test/realms/sovico",
+          scopes: ["openid", "profile", "email", "organization:*"],
           postLogoutRedirectURI: baseURL,
           overrideUserInfo: true,
         }),

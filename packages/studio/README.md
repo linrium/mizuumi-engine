@@ -17,6 +17,12 @@ fetch Keycloak's discovery document. Set `NODE_EXTRA_CA_CERTS` before running th
 script if your Keycloak issuer uses a different CA. Restart the dev server after
 changing this variable; Node reads it only at startup.
 
+The `/groups` page requests the Keycloak `organization:*` scope and displays only
+the signed-in user's organization and organization-group memberships. The Studio
+bootstrap adds the Organization Group Membership mapper to Keycloak's built-in
+`organization` client scope. After bootstrapping or changing memberships, sign
+out and sign in again so Keycloak issues a token with the current memberships.
+
 If discovery fails, check the issuer in `.env.local` and verify it is reachable
 with the local CA:
 

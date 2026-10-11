@@ -202,6 +202,27 @@ else
   echo "Updated the OpenShell audience for Studio access tokens."
 fi
 
+# Include the signed-in user's organization group memberships in the existing
+# organization claim. Studio requests organization:* and reads this claim from
+# the userinfo endpoint; it does not need realm-wide Admin REST permissions.
+organization_scope="$(kc GET "/admin/realms/$realm/client-scopes" | jq -c '[.[] | select(.name == "organization" and .protocol == "openid-connect")][0] // empty')"
+if [[ -z "$organization_scope" ]]; then
+  echo "Missing built-in organization client scope; enable Organizations for realm $realm first." >&2
+  exit 1
+fi
+organization_scope_id="$(printf '%s' "$organization_scope" | jq -er '.id')"
+organization_mappers="$(kc GET "/admin/realms/$realm/client-scopes/$organization_scope_id/protocol-mappers/models")"
+organization_group_mapper_payload='{"name":"organization-groups","protocol":"openid-connect","protocolMapper":"oidc-organization-group-membership-mapper","consentRequired":false,"config":{"access.token.claim":"true","id.token.claim":"true","userinfo.token.claim":"true","introspection.token.claim":"true","lightweight.claim":"false","addGroupRoleMappings":"false"}}'
+organization_group_mapper_id="$(printf '%s' "$organization_mappers" | jq -r '[.[] | select(.protocolMapper == "oidc-organization-group-membership-mapper")][0].id // empty')"
+if [[ -z "$organization_group_mapper_id" ]]; then
+  kc POST "/admin/realms/$realm/client-scopes/$organization_scope_id/protocol-mappers/models" "$organization_group_mapper_payload" >/dev/null
+  echo "Added organization groups to Studio organization claims."
+else
+  organization_group_mapper_payload="$(printf '%s' "$organization_group_mapper_payload" | jq -c --arg id "$organization_group_mapper_id" '.id=$id')"
+  kc PUT "/admin/realms/$realm/client-scopes/$organization_scope_id/protocol-mappers/models/$organization_group_mapper_id" "$organization_group_mapper_payload" >/dev/null
+  echo "Updated organization groups in Studio organization claims."
+fi
+
 realm_roles="$(kc GET "/admin/realms/$realm/roles")"
 for role in openshell-admin openshell-user; do
   if ! printf '%s' "$realm_roles" | jq -e --arg role "$role" 'any(.[]; .name == $role)' >/dev/null; then
