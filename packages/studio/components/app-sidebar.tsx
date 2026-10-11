@@ -49,9 +49,9 @@ const navSections: { label: string; items: NavItem[] }[] = [
     items: [
       { href: "/", label: "Home", icon: IconSparkle2 },
       { href: "/unitycatalog", label: "Catalog", icon: IconIcons },
+      { href: "/governance", label: "Review", icon: IconGitPullRequest },
       { href: "/computes", label: "Computes", icon: IconCpu },
       { href: "/pipelines", label: "Pipelines", icon: IconPipeline },
-      { href: "/guard", label: "Review", icon: IconGitPullRequest },
       { href: "/mcp", label: "MCP", icon: IconPlugConnected },
       { href: "/dashboard", label: "Dashboard", icon: IconChartPpf },
       { href: "/sql", label: "Interactive", icon: IconCodeAsterisk },
