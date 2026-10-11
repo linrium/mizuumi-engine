@@ -15,12 +15,34 @@ export default async function Home() {
 
   return (
     <main className="">
-      <div>
-        <Link href="/chat">Pi Agents</Link>
-        <Link href="/unitycatalog">Unity Catalog</Link>
-        <Link href="/banking">Banking</Link>
-        <Link href="/sql">DuckDB SQL</Link>
-      </div>
+      <header className="sticky top-0 z-10 border-b bg-background/80 backdrop-blur">
+        <nav className="mx-auto flex w-full max-w-5xl items-center justify-between gap-4 px-6 py-3">
+          <Link
+            href="/"
+            className="text-sm font-semibold tracking-tight"
+          >
+            Mizuumi Studio
+          </Link>
+          <ul className="flex items-center gap-1 text-sm">
+            {[
+              { href: "/chat", label: "Pi Agents" },
+              { href: "/mcp", label: "MCP Chat" },
+              { href: "/unitycatalog", label: "Unity Catalog" },
+              { href: "/banking", label: "Banking" },
+              { href: "/sql", label: "DuckDB SQL" },
+            ].map((item) => (
+              <li key={item.href}>
+                <Link
+                  href={item.href}
+                  className="rounded-md px-3 py-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                >
+                  {item.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      </header>
       <div className="flex min-h-screen items-center justify-center">
         <section className="space-y-4 rounded-lg border p-6">
           <h1 className="text-lg font-semibold">Signed in</h1>

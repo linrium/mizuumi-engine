@@ -6,12 +6,10 @@ release="${MCP_RELEASE:-mcp}"
 
 command -v kubectl >/dev/null || { echo "Missing required command: kubectl" >&2; exit 1; }
 
-pod="$(kubectl -n "$namespace" get pod -l app.kubernetes.io/instance="$release" \
-  -o jsonpath='{.items[0].metadata.name}')"
-[[ -n "$pod" ]] || { echo "No MCP pod found in $namespace." >&2; exit 1; }
+kubectl -n "$namespace" wait --for=condition=available deployment/"$release" --timeout=120s
 
-echo "Probing MCP health endpoint on $pod"
-kubectl -n "$namespace" exec "$pod" -- node -e '
+echo "Probing MCP health endpoint via deployment/$release"
+kubectl -n "$namespace" exec deployment/"$release" -- node -e '
 const http = require("http");
 http.get("http://127.0.0.1:8080/health", (res) => {
   let body = "";
@@ -24,7 +22,7 @@ http.get("http://127.0.0.1:8080/health", (res) => {
 '
 
 echo "Issuing MCP initialize + tools/call(get_demo_orders) via Streamable HTTP"
-kubectl -n "$namespace" exec "$pod" -- node -e '
+kubectl -n "$namespace" exec deployment/"$release" -- node -e '
 const http = require("http");
 
 function request(path, headers, body) {

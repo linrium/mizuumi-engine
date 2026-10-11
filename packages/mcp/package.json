@@ -10,7 +10,7 @@
     "serve": "NODE_EXTRA_CA_CERTS=${NODE_EXTRA_CA_CERTS:-../../k8s/auth/tls/ca.crt} node dist/server.js"
   },
   "dependencies": {
-    "@duckdb/node-api": "^1.5.0-alpha.33",
+    "@duckdb/node-api": "^1.5.3-r.1",
     "@modelcontextprotocol/sdk": "^1.19.0",
     "fastify": "^5.1.0",
     "zod": "^3.23.8"

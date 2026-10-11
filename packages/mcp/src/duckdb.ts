@@ -21,7 +21,8 @@ export async function runSql(sql: string): Promise<QueryResult> {
     connection = await (await getInstance()).connect();
     // INSTALL/LOAD must happen before we pin ca_cert_file to the gateway CA,
     // otherwise the TLS handshake with extensions.duckdb.org fails.
-    await connection.run("INSTALL quack; LOAD quack");
+    await connection.run("INSTALL quack");
+    await connection.run("LOAD quack");
     if (config.gatewayCaFile) {
       await connection.run("SET ca_cert_file = ?", [config.gatewayCaFile]);
       await connection.run("SET enable_server_cert_verification = true");
