@@ -1,6 +1,6 @@
 "use client"
 
-import { IconFolder, IconTable } from "@tabler/icons-react"
+import { IconTable } from "@tabler/icons-react"
 import Link from "next/link"
 import { use } from "react"
 import { Badge } from "@/components/ui/badge"
@@ -11,9 +11,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { useBrowser } from "../../browser-context"
-import { HeaderBlock, MetaGrid, NotFound } from "../../detail"
-import { formatDate } from "../../../types"
+import { useBrowser } from "@/app/(app)/unitycatalog/(browser)/browser-context"
+import { MetaGrid, NotFound } from "@/app/(app)/unitycatalog/(browser)/detail"
+import { formatDate } from "@/app/(app)/unitycatalog/types"
 
 export default function SchemaPage({
   params,
@@ -39,12 +39,6 @@ export default function SchemaPage({
 
   return (
     <div className="space-y-6">
-      <HeaderBlock
-        icon={<IconFolder className="size-4" />}
-        kind="Schema"
-        title={schema.full_name ?? `${catalog.name}.${schema.name}`}
-        subtitle={schema.comment ?? undefined}
-      />
       <MetaGrid
         items={[
           ["Owner", schema.owner ?? "—"],

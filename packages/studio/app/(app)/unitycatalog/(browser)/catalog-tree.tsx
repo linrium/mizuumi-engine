@@ -12,7 +12,7 @@ import Link from "next/link"
 import { useParams } from "next/navigation"
 import { useState } from "react"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { useBrowser } from "./browser-context"
+import { useBrowser } from "@/app/(app)/unitycatalog/(browser)/browser-context"
 
 export function CatalogTree() {
   const { catalogs, isPending } = useBrowser()

@@ -15,7 +15,7 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
-import { executeSql, type SqlQueryResult } from "./actions"
+import { executeSql, type SqlQueryResult } from "@/app/(app)/sql/actions"
 
 const DEFAULT_SQL = "SELECT * FROM hello ORDER BY id;"
 

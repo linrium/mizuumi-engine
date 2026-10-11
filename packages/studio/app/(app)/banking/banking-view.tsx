@@ -32,7 +32,7 @@ import {
   loadCustomerDashboard,
   type Product,
   type Transfer,
-} from "./actions"
+} from "@/app/(app)/banking/actions"
 
 type DashboardState = {
   customer?: Customer

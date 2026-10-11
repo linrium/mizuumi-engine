@@ -1,7 +1,7 @@
 "use client"
 
 import { createContext, useContext } from "react"
-import type { Catalog } from "../types"
+import type { Catalog } from "@/app/(app)/unitycatalog/types"
 
 type BrowserContextValue = {
   catalogs: Catalog[]

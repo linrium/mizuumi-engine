@@ -1,6 +1,6 @@
 "use client"
 
-import { IconDatabase, IconFolder } from "@tabler/icons-react"
+import { IconFolder } from "@tabler/icons-react"
 import Link from "next/link"
 import { use } from "react"
 import {
@@ -10,9 +10,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { useBrowser } from "../browser-context"
-import { HeaderBlock, MetaGrid, NotFound } from "../detail"
-import { formatDate } from "../../types"
+import { useBrowser } from "@/app/(app)/unitycatalog/(browser)/browser-context"
+import { MetaGrid, NotFound } from "@/app/(app)/unitycatalog/(browser)/detail"
+import { formatDate } from "@/app/(app)/unitycatalog/types"
 
 export default function CatalogPage({
   params,
@@ -33,12 +33,6 @@ export default function CatalogPage({
 
   return (
     <div className="space-y-6">
-      <HeaderBlock
-        icon={<IconDatabase className="size-4" />}
-        kind="Catalog"
-        title={catalog.name}
-        subtitle={catalog.comment ?? undefined}
-      />
       <MetaGrid
         items={[
           ["Owner", catalog.owner ?? "—"],

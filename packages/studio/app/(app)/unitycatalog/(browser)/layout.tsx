@@ -4,10 +4,10 @@ import { IconAlertCircle } from "@tabler/icons-react"
 import { useCallback, useEffect, useState, useTransition } from "react"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { authClient } from "@/lib/auth-client"
-import { getUnityCatalogInfo } from "../actions"
-import type { Catalog, UnityCatalogData } from "../types"
-import { BrowserContext } from "./browser-context"
-import { CatalogTree } from "./catalog-tree"
+import { getUnityCatalogInfo } from "@/app/(app)/unitycatalog/actions"
+import type { Catalog, UnityCatalogData } from "@/app/(app)/unitycatalog/types"
+import { BrowserContext } from "@/app/(app)/unitycatalog/(browser)/browser-context"
+import { CatalogTree } from "@/app/(app)/unitycatalog/(browser)/catalog-tree"
 
 export default function BrowserLayout({ children }: { children: React.ReactNode }) {
   const [catalogs, setCatalogs] = useState<Catalog[]>([])

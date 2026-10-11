@@ -43,7 +43,7 @@ export async function executeSql(sql: string): Promise<SqlQueryResult> {
   }
 
   const uri = process.env.QUACK_URI ?? "quack:query.mizuumi.test:443"
-  const caFile = process.env.QUACK_CA_FILE ?? "../../k8s/auth/tls/ca.crt"
+  const caFile = process.env.QUACK_CA_FILE ?? "@/app/k8s/auth/tls/ca.crt"
   const startedAt = performance.now()
   let connection: DuckDBConnection | undefined
 

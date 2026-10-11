@@ -1,4 +1,4 @@
-import { UnityCatalogNav } from "./unitycatalog-nav"
+import { UnityCatalogNav } from "@/app/(app)/unitycatalog/unitycatalog-nav"
 
 export default function UnityCatalogLayout({
   children,

@@ -3,9 +3,9 @@
 import { IconTable } from "@tabler/icons-react"
 import { use } from "react"
 import { Badge } from "@/components/ui/badge"
-import { useBrowser } from "../../../browser-context"
-import { HeaderBlock, NotFound } from "../../../detail"
-import { TableNav } from "./table-nav"
+import { useBrowser } from "@/app/(app)/unitycatalog/(browser)/browser-context"
+import { HeaderBlock, NotFound } from "@/app/(app)/unitycatalog/(browser)/detail"
+import { TableNav } from "@/app/(app)/unitycatalog/(browser)/[catalog]/[schema]/[table]/table-nav"
 
 export default function TableLayout({
   params,
@@ -37,12 +37,7 @@ export default function TableLayout({
   }
 
   return (
-    <div className="space-y-5">
-      <TableNav
-        catalog={catalog.name}
-        schema={schema.name}
-        table={table.name}
-      />
+    <div className="space-y-3">
       <HeaderBlock
         icon={<IconTable className="size-4" />}
         kind="Table"
@@ -57,6 +52,11 @@ export default function TableLayout({
             ) : null}
           </>
         }
+      />
+      <TableNav
+        catalog={catalog.name}
+        schema={schema.name}
+        table={table.name}
       />
       {children}
     </div>

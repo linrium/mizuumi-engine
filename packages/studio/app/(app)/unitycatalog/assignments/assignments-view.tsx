@@ -18,7 +18,7 @@ import {
   getUnityCatalogAllAssignments,
   revokeAllPrivileges,
   type SecurableAssignments,
-} from "../actions"
+} from "@/app/(app)/unitycatalog/actions"
 
 export function AssignmentsView() {
   const [assignments, setAssignments] = useState<SecurableAssignments[]>([])

@@ -2,9 +2,9 @@
 
 import { cn } from "cn"
 import { use } from "react"
-import { useBrowser } from "../../../browser-context"
-import { MetaGrid, NotFound } from "../../../detail"
-import { formatDate } from "../../../../types"
+import { useBrowser } from "@/app/(app)/unitycatalog/(browser)/browser-context"
+import { MetaGrid, NotFound } from "@/app/(app)/unitycatalog/(browser)/detail"
+import { formatDate } from "@/app/(app)/unitycatalog/types"
 
 export default function TableOverviewPage({
   params,

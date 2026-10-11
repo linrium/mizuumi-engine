@@ -29,8 +29,8 @@ import {
   type PrivilegeAssignment,
   type SecurableType,
   updateUnityCatalogPermissions,
-} from "../actions"
-import type { Catalog, UnityCatalogData } from "../types"
+} from "@/app/(app)/unitycatalog/actions"
+import type { Catalog, UnityCatalogData } from "@/app/(app)/unitycatalog/types"
 
 const PRIVILEGES_BY_TYPE: Record<SecurableType, string[]> = {
   catalog: [
