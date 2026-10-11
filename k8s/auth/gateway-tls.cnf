@@ -28,5 +28,6 @@ DNS.10 = otlp.signoz.mizuumi.test
 DNS.11 = api.chronicle.mizuumi.test
 DNS.12 = ui.chronicle.mizuumi.test
 DNS.13 = query.mizuumi.test
-DNS.14 = localhost
+DNS.14 = mcp.mizuumi.test
+DNS.15 = localhost
 IP.1 = 127.0.0.1

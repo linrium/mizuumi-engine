@@ -1,0 +1,23 @@
+{
+  "name": "@mizuumi/mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "NODE_EXTRA_CA_CERTS=${NODE_EXTRA_CA_CERTS:-../../k8s/auth/tls/ca.crt} tsx watch src/server.ts",
+    "start": "NODE_EXTRA_CA_CERTS=${NODE_EXTRA_CA_CERTS:-../../k8s/auth/tls/ca.crt} tsx src/server.ts",
+    "build": "tsc",
+    "serve": "NODE_EXTRA_CA_CERTS=${NODE_EXTRA_CA_CERTS:-../../k8s/auth/tls/ca.crt} node dist/server.js"
+  },
+  "dependencies": {
+    "@duckdb/node-api": "^1.5.0-alpha.33",
+    "@modelcontextprotocol/sdk": "^1.19.0",
+    "fastify": "^5.1.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.6",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
+  }
+}

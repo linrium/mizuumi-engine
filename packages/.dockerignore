@@ -3,6 +3,10 @@
 !duck-server/**
 !duck-uc-extension/
 !duck-uc-extension/**
+!mcp/
+!mcp/**
+mcp/node_modules
+mcp/dist
 **/.DS_Store
 **/.git
 **/build

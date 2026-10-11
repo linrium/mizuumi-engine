@@ -1,0 +1,32 @@
+image:
+  repository: mizuumi/mcp
+  tag: latest
+  pullPolicy: IfNotPresent
+
+replicas: 1
+
+service:
+  port: 8080
+
+credentialsSecretName: mcp-credentials
+trustSecretName: mcp-trust
+
+quack:
+  uri: quack:query.mizuumi.test:443
+
+unityCatalog:
+  catalog: unity
+  defaultSchema: demo
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: "1"
+    memory: 512Mi
+
+serviceAccount:
+  create: true
+  automount: false
+  name: ""

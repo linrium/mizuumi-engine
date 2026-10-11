@@ -1,0 +1,80 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "mcp.fullname" . }}
+  labels:
+    {{- include "mcp.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicas }}
+  selector:
+    matchLabels:
+      {{- include "mcp.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "mcp.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "mcp.serviceAccountName" . }}
+      automountServiceAccountToken: false
+      securityContext:
+        fsGroup: 65532
+        runAsGroup: 65532
+        runAsNonRoot: true
+        runAsUser: 65532
+      containers:
+        - name: mcp
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.port }}
+          env:
+            - name: PORT
+              value: {{ .Values.service.port | quote }}
+            - name: QUACK_URI
+              value: {{ .Values.quack.uri | quote }}
+            - name: QUACK_CA_FILE
+              value: /etc/mcp/trust/gateway-ca.crt
+            - name: NODE_EXTRA_CA_CERTS
+              value: /etc/mcp/trust/gateway-ca.crt
+            - name: UNITY_CATALOG_NAME
+              value: {{ .Values.unityCatalog.catalog | quote }}
+            - name: UNITY_CATALOG_DEFAULT_SCHEMA
+              value: {{ .Values.unityCatalog.defaultSchema | quote }}
+          envFrom:
+            - secretRef:
+                name: {{ .Values.credentialsSecretName }}
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: trust
+              mountPath: /etc/mcp/trust
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+            - name: home
+              mountPath: /home/mcp
+      volumes:
+        - name: trust
+          secret:
+            secretName: {{ .Values.trustSecretName }}
+        - name: tmp
+          emptyDir: {}
+        - name: home
+          emptyDir: {}
