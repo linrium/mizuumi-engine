@@ -9,6 +9,8 @@ export default async function Home() {
     headers: await headers(),
   })
 
+  console.log('session', session)
+
   if (!session) {
     redirect("/login")
   }

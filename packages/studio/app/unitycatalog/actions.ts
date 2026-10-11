@@ -153,6 +153,48 @@ export async function updateUnityCatalogPermissions(input: {
   return { data: result.value }
 }
 
+export async function revokeAllPrivileges(input: {
+  securableType: string
+  fullName: string
+  principal: string
+  privileges: string[]
+}): Promise<{ error?: string; needsReconnect?: boolean }> {
+  const { securableType, fullName, principal, privileges } = input
+  if (privileges.length === 0) return {}
+  const result = await withAccessToken((accessToken) =>
+    unityCatalogPatch<unknown>(
+      `/permissions/${securableType}/${encodeURIComponent(fullName)}`,
+      accessToken,
+      { changes: [{ principal, add: [], remove: privileges }] },
+    ),
+  )
+  if (!result.ok)
+    return { error: result.error, needsReconnect: result.needsReconnect }
+  return {}
+}
+
+export type SecurableAssignments = {
+  securable_type: string
+  full_name: string
+  privilege_assignments: PrivilegeAssignment[]
+}
+
+export async function getUnityCatalogAllAssignments(): Promise<{
+  data?: { assignments: SecurableAssignments[] }
+  error?: string
+  needsReconnect?: boolean
+}> {
+  const result = await withAccessToken((accessToken) =>
+    unityCatalogGet<{ assignments?: SecurableAssignments[] }>(
+      "/permissions",
+      accessToken,
+    ),
+  )
+  if (!result.ok)
+    return { error: result.error, needsReconnect: result.needsReconnect }
+  return { data: { assignments: result.value.assignments ?? [] } }
+}
+
 export async function getUnityCatalogInfo(): Promise<{
   data?: UnityCatalogObject
   error?: string

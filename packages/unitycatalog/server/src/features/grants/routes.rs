@@ -7,15 +7,26 @@ use axum_valid::Valid;
 
 use crate::{app_state::AppState, error::AppError};
 
-use super::dtos::{GetPermissionsRequest, PermissionsList, SecurableType, UpdatePermissions};
+use super::dtos::{
+    AllAssignmentsList, GetPermissionsRequest, PermissionsList, SecurableType, UpdatePermissions,
+};
 
 const PERMISSIONS_PATH: &str = "/api/2.1/unity-catalog/permissions/{securable_type}/{full_name}";
+const ALL_ASSIGNMENTS_PATH: &str = "/api/2.1/unity-catalog/permissions";
 
 pub fn grant_router() -> Router<AppState> {
-    Router::new().route(
-        PERMISSIONS_PATH,
-        get(get_permissions).patch(update_permissions),
-    )
+    Router::new()
+        .route(ALL_ASSIGNMENTS_PATH, get(list_all_assignments))
+        .route(
+            PERMISSIONS_PATH,
+            get(get_permissions).patch(update_permissions),
+        )
+}
+
+async fn list_all_assignments(
+    State(state): State<AppState>,
+) -> Result<Json<AllAssignmentsList>, AppError> {
+    Ok(Json(state.grants.list_all_assignments().await?))
 }
 
 async fn get_permissions(

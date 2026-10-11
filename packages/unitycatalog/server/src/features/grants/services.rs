@@ -7,8 +7,8 @@ use unitycatalog_queries::queries::grants as queries;
 use crate::error::AppError;
 
 use super::dtos::{
-    GetPermissionsRequest, PermissionsList, Privilege, PrivilegeAssignment, SecurableType,
-    UpdatePermissions,
+    AllAssignmentsList, GetPermissionsRequest, PermissionsList, Privilege, PrivilegeAssignment,
+    SecurableAssignments, SecurableType, UpdatePermissions,
 };
 
 #[async_trait]
@@ -45,6 +45,8 @@ pub trait GrantService: Send + Sync {
         full_name: String,
         request: UpdatePermissions,
     ) -> Result<PermissionsList, AppError>;
+
+    async fn list_all_assignments(&self) -> Result<AllAssignmentsList, AppError>;
 }
 
 pub struct DefaultGrantService {
@@ -213,6 +215,71 @@ impl GrantService for DefaultGrantService {
                 .filter(|row| changed_principals.contains(&row.principal))
                 .collect(),
         )
+    }
+
+    async fn list_all_assignments(&self) -> Result<AllAssignmentsList, AppError> {
+        let client = self.pool.get().await?;
+        let rows = client
+            .query(
+                "WITH resource AS ( \
+                   SELECT id, 'catalog'::text AS securable_type, name AS full_name FROM uc_catalogs \
+                   UNION ALL \
+                   SELECT s.id, 'schema', CONCAT(c.name, '.', s.name) \
+                   FROM uc_schemas s JOIN uc_catalogs c ON c.id = s.catalog_id \
+                   UNION ALL \
+                   SELECT t.id, 'table', CONCAT(c.name, '.', s.name, '.', t.name) \
+                   FROM uc_tables t \
+                   JOIN uc_schemas s ON s.id = t.schema_id \
+                   JOIN uc_catalogs c ON c.id = s.catalog_id \
+                   UNION ALL \
+                   SELECT id, 'credential', name FROM uc_credentials \
+                   UNION ALL \
+                   SELECT id, 'external_location', name FROM uc_external_locations \
+                 ) \
+                 SELECT r.securable_type, r.full_name, p.principal, p.privilege \
+                 FROM uc_permissions p \
+                 JOIN resource r ON r.id = p.resource_id \
+                 ORDER BY r.securable_type, r.full_name, p.principal, p.privilege",
+                &[],
+            )
+            .await?;
+
+        let mut groups: BTreeMap<(String, String), BTreeMap<String, Vec<Privilege>>> =
+            BTreeMap::new();
+        for row in rows {
+            let securable_type: String = row.get("securable_type");
+            let full_name: String = row.get("full_name");
+            let principal: String = row.get("principal");
+            let privilege: String = row.get("privilege");
+            let privilege = Privilege::try_from(privilege).map_err(|privilege| {
+                AppError::InvalidParameter(format!("unknown stored privilege: {privilege}"))
+            })?;
+            groups
+                .entry((securable_type, full_name))
+                .or_default()
+                .entry(principal)
+                .or_default()
+                .push(privilege);
+        }
+
+        let assignments = groups
+            .into_iter()
+            .map(
+                |((securable_type, full_name), by_principal)| SecurableAssignments {
+                    securable_type,
+                    full_name,
+                    privilege_assignments: by_principal
+                        .into_iter()
+                        .map(|(principal, privileges)| PrivilegeAssignment {
+                            principal,
+                            privileges,
+                        })
+                        .collect(),
+                },
+            )
+            .collect();
+
+        Ok(AllAssignmentsList { assignments })
     }
 }
 

@@ -163,6 +163,18 @@ pub struct PrivilegeAssignment {
     pub privileges: Vec<Privilege>,
 }
 
+#[derive(Debug, Serialize)]
+pub struct AllAssignmentsList {
+    pub assignments: Vec<SecurableAssignments>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct SecurableAssignments {
+    pub securable_type: String,
+    pub full_name: String,
+    pub privilege_assignments: Vec<PrivilegeAssignment>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::Privilege;
