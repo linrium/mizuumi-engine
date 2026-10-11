@@ -42,9 +42,9 @@ type Table = {
 }
 
 const SUGGESTIONS = [
-  "Get the demo orders",
-  "Show every row from unity.demo.orders",
-  "How many orders do we have?",
+  "What data do we have?",
+  "Show me the demo orders",
+  "How many orders do we have per status?",
 ]
 
 export function McpChat() {
