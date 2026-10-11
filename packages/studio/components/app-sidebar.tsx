@@ -1,4 +1,4 @@
-"use client"
+"use client";
 
 import {
   IconDatabase,
@@ -7,10 +7,14 @@ import {
   IconBuildingBank,
   IconTerminal2,
   IconHome,
-} from "@tabler/icons-react"
-import Link from "next/link"
-import { usePathname } from "next/navigation"
-import type { ComponentProps } from "react"
+  IconShape,
+  IconShape2,
+  IconIcons,
+  IconSmartHome,
+} from "@tabler/icons-react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import type { ComponentProps } from "react";
 import {
   Sidebar,
   SidebarContent,
@@ -23,19 +27,22 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
-} from "@/components/ui/sidebar"
-import { SignOutButton } from "@/components/sign-out-button"
+} from "@/components/ui/sidebar";
+import { SignOutButton } from "@/components/sign-out-button";
 
 type NavItem = {
-  href: string
-  label: string
-  icon: React.ComponentType<{ className?: string }>
-}
+  href: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+};
 
 const navSections: { label: string; items: NavItem[] }[] = [
   {
     label: "Overview",
-    items: [{ href: "/", label: "Home", icon: IconHome }],
+    items: [
+      { href: "/", label: "Home", icon: IconSmartHome },
+      { href: "/unitycatalog", label: "Catalog", icon: IconIcons },
+    ],
   },
   {
     label: "Workspaces",
@@ -47,30 +54,23 @@ const navSections: { label: string; items: NavItem[] }[] = [
   },
   {
     label: "Data",
-    items: [
-      { href: "/unitycatalog", label: "Unity Catalog", icon: IconDatabase },
-      { href: "/banking", label: "Banking", icon: IconBuildingBank },
-    ],
+    items: [{ href: "/banking", label: "Banking", icon: IconBuildingBank }],
   },
-]
+];
 
 type AppSidebarProps = ComponentProps<typeof Sidebar> & {
-  user?: { name?: string | null; email?: string | null }
-}
+  user?: { name?: string | null; email?: string | null };
+};
 
 export function AppSidebar({ user, ...props }: AppSidebarProps) {
-  const pathname = usePathname()
+  const pathname = usePathname();
 
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
         <div className="flex items-center gap-2 px-2 py-1.5">
-          <div className="flex size-8 items-center justify-center rounded-md bg-primary text-primary-foreground text-sm font-semibold">
-            M
-          </div>
           <div className="flex flex-col leading-tight group-data-[collapsible=icon]:hidden">
             <span className="text-sm font-semibold">Mizuumi Studio</span>
-            <span className="text-xs text-muted-foreground">Platform</span>
           </div>
         </div>
       </SidebarHeader>
@@ -84,8 +84,9 @@ export function AppSidebar({ user, ...props }: AppSidebarProps) {
                   const isActive =
                     item.href === "/"
                       ? pathname === "/"
-                      : pathname === item.href || pathname.startsWith(`${item.href}/`)
-                  const Icon = item.icon
+                      : pathname === item.href ||
+                        pathname.startsWith(`${item.href}/`);
+                  const Icon = item.icon;
                   return (
                     <SidebarMenuItem key={item.href}>
                       <SidebarMenuButton
@@ -99,7 +100,7 @@ export function AppSidebar({ user, ...props }: AppSidebarProps) {
                         tooltip={item.label}
                       />
                     </SidebarMenuItem>
-                  )
+                  );
                 })}
               </SidebarMenu>
             </SidebarGroupContent>
@@ -125,5 +126,5 @@ export function AppSidebar({ user, ...props }: AppSidebarProps) {
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
-  )
+  );
 }
