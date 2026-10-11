@@ -5,7 +5,8 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 namespace="${CONTROLPLANE_NAMESPACE:-tower}"
 release="${CONTROLPLANE_RELEASE:-controlplane}"
 image_repository="${CONTROLPLANE_IMAGE_REPOSITORY:-mizuumi/controlplane-server}"
-image_tag="${CONTROLPLANE_IMAGE_TAG:-latest}"
+default_image_tag="dev-$(date -u +%Y%m%d%H%M%S)"
+image_tag="${CONTROLPLANE_IMAGE_TAG:-$default_image_tag}"
 skip_image_build="${CONTROLPLANE_SKIP_IMAGE_BUILD:-0}"
 chart="$repo_root/k8s/controlplane"
 server_dir="$repo_root/packages/controlplane/server"
@@ -21,7 +22,7 @@ Environment overrides:
   CONTROLPLANE_NAMESPACE          Kubernetes namespace (default: tower)
   CONTROLPLANE_RELEASE            Helm release name (default: controlplane)
   CONTROLPLANE_IMAGE_REPOSITORY   Image repository (default: mizuumi/controlplane-server)
-  CONTROLPLANE_IMAGE_TAG          Image tag (default: latest)
+  CONTROLPLANE_IMAGE_TAG          Image tag (default: unique UTC dev timestamp)
   CONTROLPLANE_SKIP_IMAGE_BUILD   Set to 1 to skip docker build/load
 EOF
 }

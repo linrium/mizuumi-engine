@@ -1,30 +1,23 @@
-"use client";
+"use client"
 
 import {
-  IconDatabase,
-  IconMessageCircle,
-  IconPlugConnected,
+  IconBrandZapier,
   IconBuildingBank,
-  IconTerminal2,
-  IconHome,
-  IconShape,
-  IconShape2,
-  IconIcons,
-  IconSmartHome,
-  IconCpu,
-  IconPipeline,
-  IconShield,
-  IconGitPullRequest,
   IconChartPpf,
   IconCodeAsterisk,
+  IconCpu,
+  IconGitPullRequest,
+  IconIcons,
+  IconPipeline,
+  IconPlugConnected,
   IconSparkle2,
-  IconUsers,
   IconTestPipe,
-  IconBrandZapier,
-} from "@tabler/icons-react";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-import type { ComponentProps } from "react";
+  IconUsers,
+} from "@tabler/icons-react"
+import Link from "next/link"
+import { usePathname } from "next/navigation"
+import type { ComponentProps } from "react"
+import { SignOutButton } from "@/components/sign-out-button"
 import {
   Sidebar,
   SidebarContent,
@@ -37,14 +30,13 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
-} from "@/components/ui/sidebar";
-import { SignOutButton } from "@/components/sign-out-button";
+} from "@/components/ui/sidebar"
 
 type NavItem = {
-  href: string;
-  label: string;
-  icon: React.ComponentType<{ className?: string }>;
-};
+  href: string
+  label: string
+  icon: React.ComponentType<{ className?: string }>
+}
 
 const navSections: { label: string; items: NavItem[] }[] = [
   {
@@ -52,7 +44,7 @@ const navSections: { label: string; items: NavItem[] }[] = [
     items: [
       { href: "/", label: "Home", icon: IconSparkle2 },
       { href: "/unitycatalog", label: "Catalog", icon: IconIcons },
-      { href: "/governance", label: "Review", icon: IconGitPullRequest },
+      { href: "/review", label: "Review", icon: IconGitPullRequest },
       { href: "/computes", label: "Computes", icon: IconCpu },
       { href: "/pipelines", label: "Pipelines", icon: IconPipeline },
       { href: "/mcp", label: "MCP", icon: IconPlugConnected },
@@ -66,21 +58,21 @@ const navSections: { label: string; items: NavItem[] }[] = [
     label: "Data",
     items: [{ href: "/banking", label: "Banking", icon: IconBuildingBank }],
   },
-];
+]
 
 type AppSidebarProps = ComponentProps<typeof Sidebar> & {
-  user?: { name?: string | null; email?: string | null };
-};
+  user?: { name?: string | null; email?: string | null }
+}
 
 export function AppSidebar({ user, ...props }: AppSidebarProps) {
-  const pathname = usePathname();
+  const pathname = usePathname()
 
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
         <div className="flex items-center gap-2 px-2 py-1.5">
           <div className="flex items-center leading-tight group-data-[collapsible=icon]:hidden">
-            <IconBrandZapier size={24}/>
+            <IconBrandZapier size={24} />
             <span className="text-sm font-semibold ml-2">Mizuumi</span>
           </div>
         </div>
@@ -96,8 +88,8 @@ export function AppSidebar({ user, ...props }: AppSidebarProps) {
                     item.href === "/"
                       ? pathname === "/"
                       : pathname === item.href ||
-                        pathname.startsWith(`${item.href}/`);
-                  const Icon = item.icon;
+                        pathname.startsWith(`${item.href}/`)
+                  const Icon = item.icon
                   return (
                     <SidebarMenuItem key={item.href}>
                       <SidebarMenuButton
@@ -111,7 +103,7 @@ export function AppSidebar({ user, ...props }: AppSidebarProps) {
                         tooltip={item.label}
                       />
                     </SidebarMenuItem>
-                  );
+                  )
                 })}
               </SidebarMenu>
             </SidebarGroupContent>
@@ -137,5 +129,5 @@ export function AppSidebar({ user, ...props }: AppSidebarProps) {
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
-  );
+  )
 }
