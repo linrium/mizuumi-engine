@@ -10,6 +10,8 @@ CN = auth.mizuumi.test
 basicConstraints = critical,CA:FALSE
 keyUsage = critical,digitalSignature,keyEncipherment
 extendedKeyUsage = serverAuth
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = keyid:always
 subjectAltName = @san
 
 [san]

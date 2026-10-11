@@ -122,9 +122,7 @@ helm upgrade --install "$release" "$repo_root/k8s/duck-server" \
   --set-string "unityCatalog.defaultSchema=$uc_schema" \
   --wait --timeout 10m "$@"
 
-if [[ "$skip_image_build" != 1 ]]; then
-  kubectl -n "$namespace" rollout restart deployment/"$release"
-fi
+kubectl -n "$namespace" rollout restart deployment/"$release"
 kubectl -n "$namespace" rollout status deployment/"$release" --timeout=5m
 "$repo_root/scripts/duck-server/test.sh"
 

@@ -1,0 +1,152 @@
+diff --git a/src/include/storage/unity_catalog.hpp b/src/include/storage/unity_catalog.hpp
+index 0c6f6bc..f03e42e 100644
+--- a/src/include/storage/unity_catalog.hpp
++++ b/src/include/storage/unity_catalog.hpp
+@@ -23,6 +23,10 @@ struct UCCredentials {
+ 
+ 	// Not really part of the credentials, but required to query s3 tables
+ 	string aws_region;
++	string s3_endpoint;
++	string s3_url_style;
++	bool s3_use_ssl = false;
++	bool s3_use_ssl_set = false;
+ };
+ 
+ class UCClearCacheFunction : public TableFunction {
+diff --git a/src/storage/uc_table_set.cpp b/src/storage/uc_table_set.cpp
+index 5068777..2ea51c2 100644
+--- a/src/storage/uc_table_set.cpp
++++ b/src/storage/uc_table_set.cpp
+@@ -37,6 +37,35 @@ static ColumnDefinition CreateColumnDefinition(ClientContext &context, UCAPIColu
+ 	return {coldef.name, UCUtils::TypeToLogicalType(context, coldef.type_text)};
+ }
+ 
++struct S3EndpointConfig {
++	string endpoint;
++	bool use_ssl = false;
++	bool use_ssl_set = false;
++};
++
++static S3EndpointConfig ParseS3EndpointConfig(const UCCredentials &credentials) {
++	S3EndpointConfig result;
++	result.endpoint = credentials.s3_endpoint;
++	result.use_ssl = credentials.s3_use_ssl;
++	result.use_ssl_set = credentials.s3_use_ssl_set;
++
++	if (StringUtil::StartsWith(result.endpoint, "https://")) {
++		result.endpoint = result.endpoint.substr(8);
++		if (!result.use_ssl_set) {
++			result.use_ssl = true;
++			result.use_ssl_set = true;
++		}
++	} else if (StringUtil::StartsWith(result.endpoint, "http://")) {
++		result.endpoint = result.endpoint.substr(7);
++		if (!result.use_ssl_set) {
++			result.use_ssl = false;
++			result.use_ssl_set = true;
++		}
++	}
++	StringUtil::RTrim(result.endpoint, "/");
++	return result;
++}
++
+ optional_ptr<CatalogEntry> TableInformation::GetVersion(ClientContext &context, const EntryLookupInfo &lookup_info) {
+ 	auto at = lookup_info.GetAtClause();
+ 	if (!at) {
+@@ -103,6 +132,16 @@ void TableInformation::RefreshCredentials(ClientContext &context) {
+ 	    {"session_token", table_credentials.session_token},
+ 	    {"region", catalog.credentials.aws_region},
+ 	};
++	auto s3_endpoint = ParseS3EndpointConfig(catalog.credentials);
++	if (!s3_endpoint.endpoint.empty()) {
++		input.options["endpoint"] = s3_endpoint.endpoint;
++	}
++	if (s3_endpoint.use_ssl_set) {
++		input.options["use_ssl"] = Value::BOOLEAN(s3_endpoint.use_ssl);
++	}
++	if (!catalog.credentials.s3_url_style.empty()) {
++		input.options["url_style"] = catalog.credentials.s3_url_style;
++	}
+ 	input.scope = {table_data->storage_location};
+ 
+ 	secret_manager.CreateSecret(context, input);
+diff --git a/src/unity_catalog_extension.cpp b/src/unity_catalog_extension.cpp
+index 6ad27dc..3504fd6 100644
+--- a/src/unity_catalog_extension.cpp
++++ b/src/unity_catalog_extension.cpp
+@@ -37,6 +37,12 @@ static unique_ptr<BaseSecret> CreateUCSecretFunction(ClientContext &, CreateSecr
+ 			result->secret_map["endpoint"] = named_param.second.ToString();
+ 		} else if (lower_name == "aws_region") {
+ 			result->secret_map["aws_region"] = named_param.second.ToString();
++		} else if (lower_name == "s3_endpoint") {
++			result->secret_map["s3_endpoint"] = named_param.second.ToString();
++		} else if (lower_name == "s3_url_style") {
++			result->secret_map["s3_url_style"] = named_param.second.ToString();
++		} else if (lower_name == "s3_use_ssl") {
++			result->secret_map["s3_use_ssl"] = named_param.second.ToString();
+ 		} else {
+ 			throw InternalException("Unknown named parameter passed to CreateUCSecretFunction: " + lower_name);
+ 		}
+@@ -52,6 +58,9 @@ static void SetUCSecretParameters(CreateSecretFunction &function) {
+ 	function.named_parameters["token"] = LogicalType::VARCHAR;
+ 	function.named_parameters["endpoint"] = LogicalType::VARCHAR;
+ 	function.named_parameters["aws_region"] = LogicalType::VARCHAR;
++	function.named_parameters["s3_endpoint"] = LogicalType::VARCHAR;
++	function.named_parameters["s3_url_style"] = LogicalType::VARCHAR;
++	function.named_parameters["s3_use_ssl"] = LogicalType::BOOLEAN;
+ }
+ 
+ unique_ptr<SecretEntry> GetSecret(ClientContext &context, const string &secret_name) {
+@@ -123,7 +132,17 @@ static unique_ptr<Catalog> UnityCatalogAttach(optional_ptr<StorageExtensionInfo>
+ 		StringUtil::RTrim(credentials.endpoint, "/");
+ 
+ 		Value aws_region_val = kv_secret.TryGetValue("aws_region");
+-		credentials.aws_region = endpoint_val.IsNull() ? "" : aws_region_val.ToString();
++		credentials.aws_region = aws_region_val.IsNull() ? "" : aws_region_val.ToString();
++
++		Value s3_endpoint_val = kv_secret.TryGetValue("s3_endpoint");
++		credentials.s3_endpoint = s3_endpoint_val.IsNull() ? "" : s3_endpoint_val.ToString();
++		Value s3_url_style_val = kv_secret.TryGetValue("s3_url_style");
++		credentials.s3_url_style = s3_url_style_val.IsNull() ? "" : s3_url_style_val.ToString();
++		Value s3_use_ssl_val = kv_secret.TryGetValue("s3_use_ssl");
++		if (!s3_use_ssl_val.IsNull()) {
++			credentials.s3_use_ssl = BooleanValue::Get(s3_use_ssl_val.DefaultCastAs(LogicalType::BOOLEAN));
++			credentials.s3_use_ssl_set = true;
++		}
+ 
+ 	} else if (explicit_secret) {
+ 		// secret not found and one was explicitly provided - throw an error
+diff --git a/src/uc_api.cpp b/src/uc_api.cpp
+--- a/src/uc_api.cpp
++++ b/src/uc_api.cpp
+@@ -61,6 +61,7 @@ static string MakeRequest(ClientContext &ctx, const string &url, const string &to
+ 
+ 	HTTPHeaders hdrs(*ctx.db);
+ 	AuthenticateViaBearerToken(hdrs, token);
++	hdrs.Insert("Content-Type", "application/json");
+ 
+ 	unique_ptr<HTTPResponse> resp;
+ 	if (body.empty()) {
+@@ -296,8 +296,8 @@ static UCAPIColumnDefinition ParseColumnDefinition(duckdb_yyjson::yyjson_val *co
+ 
+ 	result.name = TryGetStrFromObject(column_def, "name");
+ 	result.type_text = TryGetStrFromObject(column_def, "type_text");
+-	result.precision = TryGetNumFromObject(column_def, "type_precision");
+-	result.scale = TryGetNumFromObject(column_def, "type_scale");
++	result.precision = TryGetNumFromObject(column_def, "type_precision", false);
++	result.scale = TryGetNumFromObject(column_def, "type_scale", false);
+ 	result.position = TryGetNumFromObject(column_def, "position");
+ 
+ 	return result;
+diff --git a/src/uc_utils.cpp b/src/uc_utils.cpp
+--- a/src/uc_utils.cpp
++++ b/src/uc_utils.cpp
+@@ -49,6 +49,8 @@ LogicalType UCUtils::TypeToLogicalType(const string &type_text) {
+ 		return LogicalType::BOOLEAN;
+ 	} else if (type_text == "timestamp") {
+ 		return LogicalType::TIMESTAMP_TZ;
++	} else if (type_text == "timestamp_ntz") {
++		return LogicalType::TIMESTAMP;
+ 	} else if (type_text == "binary") {
+ 		return LogicalType::BLOB;
+ 	} else if (type_text == "date") {

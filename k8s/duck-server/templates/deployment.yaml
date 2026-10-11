@@ -45,6 +45,8 @@ spec:
               value: {{ .Values.rustfs.region | quote }}
             - name: S3_CA_FILE
               value: /etc/duck-server/trust/rustfs-ca.crt
+            - name: SSL_CERT_FILE
+              value: /etc/duck-server/trust/rustfs-ca.crt
             - name: UNITY_CATALOG_ENDPOINT
               value: {{ .Values.unityCatalog.endpoint | quote }}
             - name: UNITY_CATALOG_NAME

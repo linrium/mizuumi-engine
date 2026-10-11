@@ -10,6 +10,8 @@ CN = keycloak.auth.svc.cluster.local
 basicConstraints = critical,CA:FALSE
 keyUsage = critical,digitalSignature,keyEncipherment
 extendedKeyUsage = serverAuth
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = keyid:always
 subjectAltName = @san
 
 [san]

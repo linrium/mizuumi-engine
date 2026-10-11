@@ -13,6 +13,7 @@ server_cert="$tls_dir/${4:-tls.crt}"
 server_key="$tls_dir/${5:-tls.key}"
 umask 077
 mkdir -p "$tls_dir"
+ca_renewed=0
 
 if [[ ! -f "$tls_dir/ca.crt" || ! -f "$tls_dir/ca.key" ]]; then
   if [[ -f "$tls_dir/ca.crt" && -f "$server_cert" && -f "$server_key" ]] &&
@@ -30,15 +31,30 @@ if [[ ! -f "$tls_dir/ca.crt" || ! -f "$tls_dir/ca.key" ]]; then
   fi
 fi
 
+if ! openssl x509 -in "$tls_dir/ca.crt" -noout -text | grep -q 'X509v3 Authority Key Identifier'; then
+  ca_serial="$(openssl x509 -in "$tls_dir/ca.crt" -noout -serial)"
+  ca_serial="${ca_serial#serial=}"
+  ca_serial="${ca_serial#Serial=}"
+  openssl req -x509 -new -key "$tls_dir/ca.key" -sha256 -days 3650 \
+    -config "$ca_config" -set_serial "0x$ca_serial" -out "$tls_dir/ca.crt.new"
+  mv "$tls_dir/ca.crt.new" "$tls_dir/ca.crt"
+  ca_renewed=1
+  echo "Renewed the local CA certificate in $tls_dir with RFC 5280 key identifiers."
+fi
+
 if [[ -e "$server_cert" || -e "$server_key" ]]; then
   if [[ ! -f "$server_cert" || ! -f "$server_key" ]]; then
     echo "Incomplete TLS server keypair in $tls_dir; refusing to replace it." >&2
     exit 1
   fi
-  if ! openssl x509 -in "$server_cert" -noout -text | grep -q 'CA:TRUE'; then
+  if (( ca_renewed == 0 )) && ! openssl x509 -in "$server_cert" -noout -text | grep -q 'CA:TRUE'; then
     openssl verify -CAfile "$tls_dir/ca.crt" "$server_cert"
     san_line="$(openssl x509 -in "$server_cert" -noout -text | awk '/Subject Alternative Name/ { getline; print; exit }')"
     renew=0
+    authority_key_id="$(openssl x509 -in "$server_cert" -noout -text | awk '/Authority Key Identifier/ { getline; print; exit }')"
+    if [[ "$authority_key_id" != *keyid:* ]]; then
+      renew=1
+    fi
     while IFS= read -r host; do
       if [[ ",${san_line// /}," != *",DNS:$host,"* ]]; then
         renew=1

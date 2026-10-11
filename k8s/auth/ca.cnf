@@ -9,3 +9,5 @@ CN = mizuumi local Keycloak CA
 [ext]
 basicConstraints = critical,CA:TRUE
 keyUsage = critical,keyCertSign,cRLSign
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = keyid:always
