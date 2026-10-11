@@ -1,0 +1,7 @@
+apiVersion: v2
+name: controlplane
+description: Mizuumi control plane server with PostgreSQL
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+

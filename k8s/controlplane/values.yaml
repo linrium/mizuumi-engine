@@ -1,0 +1,53 @@
+server:
+  image:
+    repository: mizuumi/controlplane-server
+    tag: latest
+    pullPolicy: IfNotPresent
+  replicas: 1
+  port: 8080
+  configPath: /etc/controlplane/config.toml
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
+
+service:
+  type: ClusterIP
+  port: 8080
+
+postgresql:
+  enabled: true
+  image:
+    repository: postgres
+    tag: "18-alpine"
+    pullPolicy: IfNotPresent
+  database: controlplane
+  username: controlplane
+  password: controlplane
+  existingSecretName: ""
+  passwordKey: password
+  persistence:
+    size: 8Gi
+    storageClassName: ""
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 1Gi
+
+externalPostgresql:
+  host: ""
+  port: 5432
+  database: controlplane
+  username: controlplane
+  existingSecretName: ""
+  passwordKey: password
+
+serviceAccount:
+  create: true
+  name: ""
+  automount: false
+

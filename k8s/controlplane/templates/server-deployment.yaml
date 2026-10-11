@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "controlplane.serverName" . }}
+  labels:
+    {{- include "controlplane.labels" . | nindent 4 }}
+    app.kubernetes.io/component: server
+spec:
+  replicas: {{ .Values.server.replicas }}
+  selector:
+    matchLabels:
+      {{- include "controlplane.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: server
+  template:
+    metadata:
+      labels:
+        {{- include "controlplane.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: server
+    spec:
+      serviceAccountName: {{ include "controlplane.serviceAccountName" . }}
+      automountServiceAccountToken: {{ .Values.serviceAccount.automount }}
+      containers:
+        - name: server
+          image: "{{ .Values.server.image.repository }}:{{ .Values.server.image.tag }}"
+          imagePullPolicy: {{ .Values.server.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.server.port }}
+          env:
+            - name: CONTROLPLANE_CONFIG
+              value: {{ .Values.server.configPath | quote }}
+            - name: CONTROLPLANE__POSTGRES__HOST
+              value: {{ include "controlplane.postgresqlHost" . | quote }}
+            - name: CONTROLPLANE__POSTGRES__PORT
+              value: {{ include "controlplane.postgresqlPort" . | quote }}
+            - name: CONTROLPLANE__POSTGRES__USER
+              value: {{ include "controlplane.postgresqlUsername" . | quote }}
+            - name: CONTROLPLANE__POSTGRES__DATABASE
+              value: {{ include "controlplane.postgresqlDatabase" . | quote }}
+            - name: CONTROLPLANE__POSTGRES__PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "controlplane.postgresqlSecretName" . }}
+                  key: {{ include "controlplane.postgresqlPasswordKey" . | quote }}
+          volumeMounts:
+            - name: config
+              mountPath: {{ dir .Values.server.configPath }}
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /health/readyz
+              port: http
+            periodSeconds: 10
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /health/livez
+              port: http
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.server.resources | nindent 12 }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "controlplane.serverName" . }}-config
+

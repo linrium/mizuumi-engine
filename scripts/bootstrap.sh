@@ -59,6 +59,7 @@ run_step duck-server/bootstrap.sh
 run_step duck-server/setup.sh
 run_step unitycatalog/bootstrap.sh
 run_step unitycatalog/setup.sh
+run_step controlplane/bootstrap.sh
 run_step chronicle/bootstrap.sh
 run_step chronicle/setup.sh
 
