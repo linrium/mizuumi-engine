@@ -189,7 +189,7 @@ export async function listRequestQueue(): Promise<
         controlPlaneRequest<{ access_requests: AccessRequestSummary[] }>(
           "/api/access-requests",
           undefined,
-          { status: "AWAITING_APPROVAL", approval_team: team },
+          { approval_team: team },
         ),
       ),
     )

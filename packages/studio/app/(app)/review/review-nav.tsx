@@ -1,48 +1,30 @@
 "use client"
 
-import { IconClipboardCheck, IconTemplate } from "@tabler/icons-react"
-import Link from "next/link"
-import { usePathname } from "next/navigation"
-import { cn } from "@/lib/utils"
+import { usePathname, useRouter } from "next/navigation"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 const items = [
-  {
-    href: "/review/requests",
-    label: "Request queue",
-    icon: IconClipboardCheck,
-  },
-  {
-    href: "/review/policy-templates",
-    label: "Policy templates",
-    icon: IconTemplate,
-  },
+  { href: "/review/requests", label: "Requests" },
+  { href: "/review/policy-templates", label: "Policy templates" },
 ]
 
 export function ReviewNav() {
+  const router = useRouter()
   const pathname = usePathname()
+  const active =
+    items.find(
+      (item) => pathname === item.href || pathname.startsWith(`${item.href}/`),
+    )?.href ?? items[0].href
 
   return (
-    <nav className="flex gap-1" aria-label="Review navigation">
-      {items.map((item) => {
-        const Icon = item.icon
-        const active =
-          pathname === item.href || pathname.startsWith(`${item.href}/`)
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={cn(
-              "flex items-center gap-2 rounded-md px-3 py-2 text-xs font-medium transition-colors",
-              active
-                ? "bg-primary text-primary-foreground"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground",
-            )}
-          >
-            <Icon className="size-4" />
+    <Tabs value={active} onValueChange={(value) => router.push(value)}>
+      <TabsList>
+        {items.map((item) => (
+          <TabsTrigger key={item.href} value={item.href}>
             {item.label}
-          </Link>
-        )
-      })}
-    </nav>
+          </TabsTrigger>
+        ))}
+      </TabsList>
+    </Tabs>
   )
 }
