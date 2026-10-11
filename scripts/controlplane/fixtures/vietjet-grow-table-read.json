@@ -1,0 +1,27 @@
+{
+  "key": "vietjet-grow-table-read",
+  "name": "VietJet Grow table read access",
+  "description": "Time-bound SELECT access to a requested Unity Catalog table for the vietjetGrow team.",
+  "approval_strategy": "ANY",
+  "default_duration_seconds": 28800,
+  "max_duration_seconds": 86400,
+  "affected_teams": [
+    "vietjetGrow"
+  ],
+  "approval_teams": [
+    {
+      "team": "vietjetGrow",
+      "required_approvals": 1
+    }
+  ],
+  "grants": [
+    {
+      "securable_type": "table",
+      "target_kind": "REQUEST_RESOURCE",
+      "target_full_name": "",
+      "privilege": "SELECT"
+    }
+  ],
+  "guardrails": [],
+  "created_by": "seed:controlplane"
+}

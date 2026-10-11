@@ -27,6 +27,8 @@ port_forward_pid=$!
 for attempt in {1..30}; do
   if curl --fail --silent --show-error "http://127.0.0.1:$local_port/health/livez" >/dev/null &&
      curl --fail --silent --show-error "http://127.0.0.1:$local_port/health/readyz" >/dev/null; then
+    CONTROLPLANE_URL="http://127.0.0.1:$local_port" \
+      "$repo_root/scripts/controlplane/seed.sh"
     echo "Control plane bootstrap complete; liveness and readiness checks passed."
     exit 0
   fi

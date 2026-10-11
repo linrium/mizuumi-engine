@@ -17,3 +17,14 @@ The default release is installed in the `tower` namespace and is available throu
 `/health/livez` for process liveness and `/health/readyz` for PostgreSQL-backed readiness.
 Use `CONTROLPLANE_SKIP_IMAGE_BUILD=1` when the configured image is already available to the cluster.
 
+Bootstrap idempotently seeds the `vietjet-grow-table-read` policy template. To seed or test an
+already-running deployment directly:
+
+```sh
+./scripts/controlplane/seed.sh
+./scripts/controlplane/test-access-request.sh
+```
+
+The access-request smoke test creates a one-hour table `SELECT` request, verifies its required
+reason and duration, and confirms that it appears in the `vietjetGrow` approval queue.
+
