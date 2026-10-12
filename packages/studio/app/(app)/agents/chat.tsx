@@ -30,7 +30,7 @@ import {
   type PiModel,
   type PiThinkingLevel,
 } from "@/lib/pi-models"
-import { buildPiSteps, type PiEvent, type StepStatus } from "@/app/(app)/chat/pi-steps"
+import { buildPiSteps, type PiEvent, type StepStatus } from "@/app/(app)/agents/pi-steps"
 
 type Agent = { name: string; status: string }
 
