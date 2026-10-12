@@ -58,6 +58,17 @@ Open the asset `unity/demo/orders` under group `unity_catalog`, enable the
 kubectl -n spark get pods -l 'spark-role in (driver,executor)' -w
 ```
 
+Clean up completed and failed Dagster run-worker Jobs and their owned pods:
+
+```bash
+./scripts/dagster/cleanup-run-pods.sh --dry-run
+./scripts/dagster/cleanup-run-pods.sh
+```
+
+The cleanup preserves active runs and the long-lived webserver, daemon,
+user-code, and PostgreSQL pods. Set `DAGSTER_NAMESPACE` or `DAGSTER_RELEASE`
+when using a non-default installation.
+
 ## RBAC
 
 The chart creates two bindings:
