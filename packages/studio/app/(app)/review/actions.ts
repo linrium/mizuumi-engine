@@ -19,7 +19,10 @@ type SessionUser = {
   email?: string | null
 }
 
-type AccessRequestSummary = Pick<AccessRequest, "id" | "submitted_at">
+type AccessRequestSummary = Pick<
+  AccessRequest,
+  "id" | "submitted_at" | "routed_for_team" | "decided_by"
+>
 
 type OrganizationClaim = Record<string, { groups?: unknown } | null | undefined>
 
@@ -285,13 +288,13 @@ export async function updateAccessRequest(input: {
   }
 }
 
-export async function revokeAccessRequest(
+export async function cancelAccessRequest(
   requestId: string,
 ): Promise<ActionResult<AccessRequest>> {
   const { user } = await currentUser()
   try {
     const request = await controlPlaneRequest<AccessRequest>(
-      `/api/access-requests/${encodeURIComponent(requestId)}/revoke`,
+      `/api/access-requests/${encodeURIComponent(requestId)}/cancel`,
       {
         method: "POST",
         body: JSON.stringify({ requested_by: principal(user) }),
@@ -310,20 +313,29 @@ export async function listRequestQueue(): Promise<
   const { requestHeaders, user } = await currentUser()
   try {
     const approvalTeams = await currentApprovalTeams(requestHeaders, user.id)
-    const responses = await Promise.all(
-      approvalTeams.map((team) =>
+    const [allRequests, ...teamResponses] = await Promise.all([
+      controlPlaneRequest<{ access_requests: AccessRequestSummary[] }>(
+        "/api/access-requests",
+      ),
+      ...approvalTeams.map((team) =>
         controlPlaneRequest<{ access_requests: AccessRequestSummary[] }>(
           "/api/access-requests",
           undefined,
           { approval_team: team },
         ),
       ),
+    ])
+    const autoApprovedRequests = allRequests.access_requests.filter(
+      (request) =>
+        request.decided_by === "system:auto-approve" &&
+        approvalTeams.includes(request.routed_for_team),
     )
     const queuedRequests = [
       ...new Map(
-        responses
-          .flatMap((response) => response.access_requests)
-          .map((request) => [request.id, request]),
+        [
+          ...teamResponses.flatMap((response) => response.access_requests),
+          ...autoApprovedRequests,
+        ].map((request) => [request.id, request]),
       ).values(),
     ]
     const requests = await Promise.all(

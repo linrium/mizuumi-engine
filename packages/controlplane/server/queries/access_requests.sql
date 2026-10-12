@@ -204,7 +204,11 @@ FROM access_requests requests
 WHERE requests.id = :request_id::text;
 
 --! lock_access_request
-SELECT requests.status, requests.approval_strategy
+SELECT
+    requests.status,
+    requests.approval_strategy,
+    COALESCE(requests.routed_for_team, '') AS routed_for_team,
+    COALESCE(requests.decided_by, '') AS decided_by
 FROM access_requests requests
 WHERE requests.id = :request_id::text
 FOR UPDATE OF requests;
@@ -226,16 +230,12 @@ SET reason = :reason::text,
     requested_duration_seconds = :requested_duration_seconds::bigint
 WHERE id = :request_id::text;
 
---! revoke_access_request
+--! cancel_access_request
 UPDATE access_requests
 SET status = 'CANCELLED',
     decided_by = :requested_by::text,
     decided_at = NOW(),
-    decision_comment = 'Access revoked by requester',
-    access_expires_at = CASE
-        WHEN access_expires_at IS NULL THEN NOW()
-        ELSE LEAST(access_expires_at, NOW())
-    END
+    decision_comment = 'Request cancelled by requester'
 WHERE id = :request_id::text;
 
 --! list_access_request_approval_teams
@@ -321,7 +321,12 @@ VALUES (
     :reviewer::text,
     :decision::text,
     NULLIF(:comment::text, '')
-);
+)
+ON CONFLICT (request_id, reviewer) DO UPDATE
+SET approval_team = EXCLUDED.approval_team,
+    decision = EXCLUDED.decision,
+    comment = EXCLUDED.comment,
+    created_at = NOW();
 
 --! is_access_request_fully_approved
 SELECT CASE requests.approval_strategy
@@ -367,6 +372,10 @@ UPDATE access_requests
 SET status = 'REJECTED',
     decided_by = :reviewer::text,
     decided_at = NOW(),
-    decision_comment = NULLIF(:comment::text, '')
+    decision_comment = NULLIF(:comment::text, ''),
+    access_expires_at = CASE
+        WHEN access_expires_at IS NULL THEN NOW()
+        ELSE LEAST(access_expires_at, NOW())
+    END
 WHERE id = :request_id::text;
 

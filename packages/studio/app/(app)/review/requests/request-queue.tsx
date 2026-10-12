@@ -5,6 +5,7 @@ import {
   IconCheck,
   IconDatabase,
   IconUser,
+  IconUsersGroup,
   IconX,
 } from "@tabler/icons-react"
 import { useRouter } from "next/navigation"
@@ -63,6 +64,25 @@ function shortId(id: string) {
   return id.slice(0, 8)
 }
 
+function isAutoApproved(request: AccessRequest) {
+  return request.decided_by === "system:auto-approve"
+}
+
+function availableReviewTeams(request: AccessRequest, approvalTeams: string[]) {
+  const assignedTeams = request.approval_teams
+    .map((team) => team.team)
+    .filter((team) => approvalTeams.includes(team))
+
+  if (
+    isAutoApproved(request) &&
+    approvalTeams.includes(request.routed_for_team)
+  ) {
+    assignedTeams.push(request.routed_for_team)
+  }
+
+  return [...new Set(assignedTeams)]
+}
+
 function statusVariant(
   status: string,
 ): "default" | "secondary" | "outline" | "destructive" {
@@ -97,15 +117,11 @@ export function RequestQueue({
 
   const requestTeams = useMemo(() => {
     if (!selected) return []
-    return selected.approval_teams
-      .map((team) => team.team)
-      .filter((team) => approvalTeams.includes(team))
+    return availableReviewTeams(selected, approvalTeams)
   }, [approvalTeams, selected])
 
   function openRequest(request: AccessRequest) {
-    const availableTeams = request.approval_teams
-      .map((team) => team.team)
-      .filter((team) => approvalTeams.includes(team))
+    const availableTeams = availableReviewTeams(request, approvalTeams)
     setSelected(request)
     setApprovalTeam(availableTeams[0] ?? "")
     setComment("")
@@ -128,16 +144,21 @@ export function RequestQueue({
       setResultMessage({
         kind: "success",
         text:
-          result.data.status === "APPROVED"
-            ? "Request approved."
-            : "Your approval was recorded.",
+          decision === "reject"
+            ? "Request rejected."
+            : result.data.status === "APPROVED"
+              ? "Request approved."
+              : "Your approval was recorded.",
       })
       router.refresh()
       setSelected(null)
     })
   }
 
-  const canAct = selected?.status === "AWAITING_APPROVAL"
+  const canApprove = selected?.status === "AWAITING_APPROVAL"
+  const canReject =
+    selected?.status === "AWAITING_APPROVAL" || selected?.status === "APPROVED"
+  const canAct = (canApprove || canReject) && requestTeams.length > 0
 
   if (initialError) {
     return (
@@ -157,6 +178,7 @@ export function RequestQueue({
               <TableHead className="pl-4">Request</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Resource</TableHead>
+              <TableHead>Requested by</TableHead>
               <TableHead>Requested for</TableHead>
               <TableHead>Duration</TableHead>
               <TableHead>Submitted</TableHead>
@@ -167,7 +189,7 @@ export function RequestQueue({
             {initialRequests.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={7}
+                  colSpan={8}
                   className="h-24 text-center text-muted-foreground"
                 >
                   No access requests.
@@ -187,9 +209,14 @@ export function RequestQueue({
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant={statusVariant(request.status)}>
-                      {request.status}
-                    </Badge>
+                    <div className="flex flex-col items-start gap-1">
+                      <Badge variant={statusVariant(request.status)}>
+                        {request.status}
+                      </Badge>
+                      {isAutoApproved(request) ? (
+                        <Badge variant="outline">Auto-approved</Badge>
+                      ) : null}
+                    </div>
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
@@ -207,7 +234,13 @@ export function RequestQueue({
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <IconUser className="size-4 text-muted-foreground" />
-                      {request.requested_for}
+                      {request.requested_by}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <IconUsersGroup className="size-4 text-muted-foreground" />
+                      {request.routed_for_team}
                     </div>
                   </TableCell>
                   <TableCell>
@@ -220,7 +253,8 @@ export function RequestQueue({
                       variant="outline"
                       onClick={() => openRequest(request)}
                     >
-                      {request.status === "AWAITING_APPROVAL"
+                      {request.status === "AWAITING_APPROVAL" ||
+                      request.status === "APPROVED"
                         ? "Review"
                         : "View"}
                     </Button>
@@ -249,6 +283,9 @@ export function RequestQueue({
                   <Badge variant="secondary">
                     {selected.target_securable_type}
                   </Badge>
+                  {isAutoApproved(selected) ? (
+                    <Badge variant="outline">Auto-approved</Badge>
+                  ) : null}
                   <span className="font-mono text-xs text-muted-foreground">
                     {shortId(selected.id)}
                   </span>
@@ -258,7 +295,7 @@ export function RequestQueue({
                 </DialogTitle>
                 <DialogDescription>
                   Requested by {selected.requested_by} for{" "}
-                  {selected.requested_for}
+                  {selected.routed_for_team}
                 </DialogDescription>
               </DialogHeader>
 
@@ -283,7 +320,9 @@ export function RequestQueue({
                       Strategy
                     </div>
                     <div className="mt-1 font-medium">
-                      {selected.approval_strategy}
+                      {isAutoApproved(selected)
+                        ? "Automatic"
+                        : selected.approval_strategy}
                     </div>
                   </div>
                   <div className="rounded-md bg-muted/50 p-3">
@@ -431,15 +470,21 @@ export function RequestQueue({
                     onClick={() => submitReview("reject")}
                   >
                     <IconX />
-                    {isReviewing ? "Saving…" : "Reject"}
+                    {isReviewing
+                      ? "Saving…"
+                      : canApprove
+                        ? "Reject"
+                        : "Reject access"}
                   </Button>
-                  <Button
-                    disabled={isReviewing || !approvalTeam}
-                    onClick={() => submitReview("approve")}
-                  >
-                    <IconCheck />
-                    {isReviewing ? "Saving…" : "Approve"}
-                  </Button>
+                  {canApprove ? (
+                    <Button
+                      disabled={isReviewing || !approvalTeam}
+                      onClick={() => submitReview("approve")}
+                    >
+                      <IconCheck />
+                      {isReviewing ? "Saving…" : "Approve"}
+                    </Button>
+                  ) : null}
                 </DialogFooter>
               ) : null}
             </>

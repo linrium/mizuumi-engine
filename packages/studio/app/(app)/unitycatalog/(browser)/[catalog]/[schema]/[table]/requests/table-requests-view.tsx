@@ -5,8 +5,8 @@ import { cn } from "cn"
 import { useRouter } from "next/navigation"
 import { useEffect, useState, useTransition } from "react"
 import {
+  cancelAccessRequest,
   createAccessRequest,
-  revokeAccessRequest,
   updateAccessRequest,
 } from "@/app/(app)/review/actions"
 import type { AccessRequest } from "@/app/(app)/review/types"
@@ -56,8 +56,8 @@ function statusVariant(
   return "outline"
 }
 
-function canRevoke(status: string) {
-  return !["REJECTED", "CANCELLED", "EXPIRED"].includes(status)
+function canCancel(status: string) {
+  return status === "AWAITING_APPROVAL"
 }
 
 const TABLE_PRIVILEGES = ["SELECT", "MODIFY"]
@@ -159,9 +159,9 @@ export function TableRequestsView({
     setDurationHours(String(request.requested_duration_seconds / 3600))
   }
 
-  function revoke(request: AccessRequest) {
+  function cancelRequest(request: AccessRequest) {
     startTransition(async () => {
-      const result = await revokeAccessRequest(request.id)
+      const result = await cancelAccessRequest(request.id)
       if (!result.ok) {
         setMessage({ kind: "error", text: result.error })
         return
@@ -169,7 +169,7 @@ export function TableRequestsView({
       setRequests((items) =>
         items.map((item) => (item.id === result.data.id ? result.data : item)),
       )
-      setMessage({ kind: "success", text: "Access request revoked." })
+      setMessage({ kind: "success", text: "Access request cancelled." })
       if (selected?.id === request.id) setSelected(result.data)
     })
   }
@@ -262,17 +262,19 @@ export function TableRequestsView({
                 </TableCell>
                 <TableCell>{formatDate(request.access_expires_at)}</TableCell>
                 <TableCell className="text-right">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={isPending || !canRevoke(request.status)}
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      revoke(request)
-                    }}
-                  >
-                    Revoke
-                  </Button>
+                  {canCancel(request.status) ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={isPending}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        cancelRequest(request)
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  ) : null}
                 </TableCell>
               </TableRow>
             ))
@@ -362,13 +364,13 @@ export function TableRequestsView({
             ) : null}
           </div>
           <DialogFooter>
-            {selected && canRevoke(selected.status) ? (
+            {selected && canCancel(selected.status) ? (
               <Button
                 variant="outline"
                 disabled={isPending}
-                onClick={() => revoke(selected)}
+                onClick={() => cancelRequest(selected)}
               >
-                Revoke
+                Cancel request
               </Button>
             ) : null}
             <Button

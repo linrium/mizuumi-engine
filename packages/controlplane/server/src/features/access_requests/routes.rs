@@ -8,8 +8,8 @@ use axum::{
 use crate::{app_state::AppState, error::AppError};
 
 use super::dtos::{
-    AccessRequest, CreateAccessRequest, ListAccessRequestsRequest, ListAccessRequestsResponse,
-    ReviewAccessRequest, RevokeAccessRequest, UpdateAccessRequest,
+    AccessRequest, CancelAccessRequest, CreateAccessRequest, ListAccessRequestsRequest,
+    ListAccessRequestsResponse, ReviewAccessRequest, UpdateAccessRequest,
 };
 
 const ACCESS_REQUESTS_PATH: &str = "/api/access-requests";
@@ -33,8 +33,8 @@ pub fn access_request_router() -> Router<AppState> {
             post(reject_access_request),
         )
         .route(
-            &format!("{ACCESS_REQUESTS_PATH}/{{request_id}}/revoke"),
-            post(revoke_access_request),
+            &format!("{ACCESS_REQUESTS_PATH}/{{request_id}}/cancel"),
+            post(cancel_access_request),
         )
         .route(
             "/api/approval-teams/{approval_team}/access-requests",
@@ -92,15 +92,15 @@ async fn update_access_request(
     ))
 }
 
-async fn revoke_access_request(
+async fn cancel_access_request(
     State(state): State<AppState>,
     Path(request_id): Path<String>,
-    Json(request): Json<RevokeAccessRequest>,
+    Json(request): Json<CancelAccessRequest>,
 ) -> Result<Json<AccessRequest>, AppError> {
     Ok(Json(
         state
             .access_requests
-            .revoke_access_request(request_id, request)
+            .cancel_access_request(request_id, request)
             .await?,
     ))
 }

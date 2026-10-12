@@ -37,7 +37,7 @@ pub struct UpdateAccessRequest {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct RevokeAccessRequest {
+pub struct CancelAccessRequest {
     pub requested_by: String,
 }
 

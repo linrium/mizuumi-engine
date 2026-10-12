@@ -110,7 +110,7 @@ pub struct UpdateAccessRequestParams<T1: crate::StringSql, T2: crate::StringSql>
     pub request_id: T2,
 }
 #[derive(Debug)]
-pub struct RevokeAccessRequestParams<T1: crate::StringSql, T2: crate::StringSql> {
+pub struct CancelAccessRequestParams<T1: crate::StringSql, T2: crate::StringSql> {
     pub requested_by: T1,
     pub request_id: T2,
 }
@@ -359,21 +359,29 @@ impl<'a> From<GetAccessRequestBorrowed<'a>> for GetAccessRequest {
 pub struct LockAccessRequest {
     pub status: String,
     pub approval_strategy: String,
+    pub routed_for_team: String,
+    pub decided_by: String,
 }
 pub struct LockAccessRequestBorrowed<'a> {
     pub status: &'a str,
     pub approval_strategy: &'a str,
+    pub routed_for_team: &'a str,
+    pub decided_by: &'a str,
 }
 impl<'a> From<LockAccessRequestBorrowed<'a>> for LockAccessRequest {
     fn from(
         LockAccessRequestBorrowed {
             status,
             approval_strategy,
+            routed_for_team,
+            decided_by,
         }: LockAccessRequestBorrowed<'a>,
     ) -> Self {
         Self {
             status: status.into(),
             approval_strategy: approval_strategy.into(),
+            routed_for_team: routed_for_team.into(),
+            decided_by: decided_by.into(),
         }
     }
 }
@@ -2136,7 +2144,7 @@ impl GetAccessRequestStmt {
 pub struct LockAccessRequestStmt(&'static str, Option<tokio_postgres::Statement>);
 pub fn lock_access_request() -> LockAccessRequestStmt {
     LockAccessRequestStmt(
-        "SELECT requests.status, requests.approval_strategy FROM access_requests requests WHERE requests.id = $1::text FOR UPDATE OF requests",
+        "SELECT requests.status, requests.approval_strategy, COALESCE(requests.routed_for_team, '') AS routed_for_team, COALESCE(requests.decided_by, '') AS decided_by FROM access_requests requests WHERE requests.id = $1::text FOR UPDATE OF requests",
         None,
     )
 }
@@ -2164,6 +2172,8 @@ impl LockAccessRequestStmt {
                 Ok(LockAccessRequestBorrowed {
                     status: row.try_get(0)?,
                     approval_strategy: row.try_get(1)?,
+                    routed_for_team: row.try_get(2)?,
+                    decided_by: row.try_get(3)?,
                 })
             },
             mapper: |it| LockAccessRequest::from(it),
@@ -2296,14 +2306,14 @@ impl<'a, C: GenericClient + Send + Sync, T1: crate::StringSql, T2: crate::String
         ))
     }
 }
-pub struct RevokeAccessRequestStmt(&'static str, Option<tokio_postgres::Statement>);
-pub fn revoke_access_request() -> RevokeAccessRequestStmt {
-    RevokeAccessRequestStmt(
-        "UPDATE access_requests SET status = 'CANCELLED', decided_by = $1::text, decided_at = NOW(), decision_comment = 'Access revoked by requester', access_expires_at = CASE WHEN access_expires_at IS NULL THEN NOW() ELSE LEAST(access_expires_at, NOW()) END WHERE id = $2::text",
+pub struct CancelAccessRequestStmt(&'static str, Option<tokio_postgres::Statement>);
+pub fn cancel_access_request() -> CancelAccessRequestStmt {
+    CancelAccessRequestStmt(
+        "UPDATE access_requests SET status = 'CANCELLED', decided_by = $1::text, decided_at = NOW(), decision_comment = 'Request cancelled by requester' WHERE id = $2::text",
         None,
     )
 }
-impl RevokeAccessRequestStmt {
+impl CancelAccessRequestStmt {
     pub async fn prepare<'a, C: GenericClient>(
         mut self,
         client: &'a C,
@@ -2325,17 +2335,17 @@ impl<'a, C: GenericClient + Send + Sync, T1: crate::StringSql, T2: crate::String
         'a,
         'a,
         'a,
-        RevokeAccessRequestParams<T1, T2>,
+        CancelAccessRequestParams<T1, T2>,
         std::pin::Pin<
             Box<dyn futures::Future<Output = Result<u64, tokio_postgres::Error>> + Send + 'a>,
         >,
         C,
-    > for RevokeAccessRequestStmt
+    > for CancelAccessRequestStmt
 {
     fn params(
         &'a self,
         client: &'a C,
-        params: &'a RevokeAccessRequestParams<T1, T2>,
+        params: &'a CancelAccessRequestParams<T1, T2>,
     ) -> std::pin::Pin<
         Box<dyn futures::Future<Output = Result<u64, tokio_postgres::Error>> + Send + 'a>,
     > {
@@ -2593,7 +2603,7 @@ impl<'c, 'a, 's, C: GenericClient, T1: crate::StringSql, T2: crate::StringSql>
 pub struct CreateAccessRequestReviewStmt(&'static str, Option<tokio_postgres::Statement>);
 pub fn create_access_request_review() -> CreateAccessRequestReviewStmt {
     CreateAccessRequestReviewStmt(
-        "INSERT INTO access_request_reviews ( request_id, approval_team, reviewer, decision, comment ) VALUES ( $1::text, $2::text, $3::text, $4::text, NULLIF($5::text, '') )",
+        "INSERT INTO access_request_reviews ( request_id, approval_team, reviewer, decision, comment ) VALUES ( $1::text, $2::text, $3::text, $4::text, NULLIF($5::text, '') ) ON CONFLICT (request_id, reviewer) DO UPDATE SET approval_team = EXCLUDED.approval_team, decision = EXCLUDED.decision, comment = EXCLUDED.comment, created_at = NOW()",
         None,
     )
 }
@@ -2770,7 +2780,7 @@ impl<
 pub struct RejectAccessRequestStmt(&'static str, Option<tokio_postgres::Statement>);
 pub fn reject_access_request() -> RejectAccessRequestStmt {
     RejectAccessRequestStmt(
-        "UPDATE access_requests SET status = 'REJECTED', decided_by = $1::text, decided_at = NOW(), decision_comment = NULLIF($2::text, '') WHERE id = $3::text",
+        "UPDATE access_requests SET status = 'REJECTED', decided_by = $1::text, decided_at = NOW(), decision_comment = NULLIF($2::text, ''), access_expires_at = CASE WHEN access_expires_at IS NULL THEN NOW() ELSE LEAST(access_expires_at, NOW()) END WHERE id = $3::text",
         None,
     )
 }

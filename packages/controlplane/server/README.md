@@ -14,7 +14,7 @@ The server exposes health, policy-template, and access-request workflow APIs.
 | `GET` | `/api/approval-teams/{team}/access-requests` | List the queue routed to an approval team. |
 | `POST` | `/api/access-requests/{request_id}/approve` | Record an approval and apply the template quorum. |
 | `POST` | `/api/access-requests/{request_id}/reject` | Reject a pending request. |
-| `POST` | `/api/access-requests/{request_id}/revoke` | Revoke or cancel a request without deleting its record. |
+| `POST` | `/api/access-requests/{request_id}/cancel` | Cancel an awaiting request owned by the requester. |
 
 Template creation publishes the initial version immediately. Manual templates route matching
 requests to `AWAITING_APPROVAL`: `ANY` templates are approved when one team's quorum is met and

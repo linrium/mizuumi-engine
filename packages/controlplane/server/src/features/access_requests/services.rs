@@ -6,9 +6,9 @@ use tokio_postgres::error::SqlState;
 use crate::error::AppError;
 
 use super::dtos::{
-    AccessRequest, AccessRequestSummary, CreateAccessRequest, ListAccessRequestsRequest,
-    ListAccessRequestsResponse, RequestApprovalTeam, RequestEvent, RequestGrant, RequestGuardrail,
-    RequestReview, ReviewAccessRequest, RevokeAccessRequest, UpdateAccessRequest,
+    AccessRequest, AccessRequestSummary, CancelAccessRequest, CreateAccessRequest,
+    ListAccessRequestsRequest, ListAccessRequestsResponse, RequestApprovalTeam, RequestEvent,
+    RequestGrant, RequestGuardrail, RequestReview, ReviewAccessRequest, UpdateAccessRequest,
 };
 
 const REQUEST_STATUSES: &[&str] = &[
@@ -89,10 +89,10 @@ pub trait AccessRequestService: Send + Sync {
         request_id: String,
         request: UpdateAccessRequest,
     ) -> Result<AccessRequest, AppError>;
-    async fn revoke_access_request(
+    async fn cancel_access_request(
         &self,
         request_id: String,
-        request: RevokeAccessRequest,
+        request: CancelAccessRequest,
     ) -> Result<AccessRequest, AppError>;
 }
 
@@ -123,21 +123,34 @@ impl DefaultAccessRequestService {
             .opt()
             .await?
             .ok_or_else(|| AppError::NotFound(format!("access request {request_id}")))?;
-        if locked.status != "AWAITING_APPROVAL" {
+        if !can_record_review(&locked.status, decision) {
             return Err(AppError::Conflict(format!(
-                "access request is {}, not AWAITING_APPROVAL",
-                locked.status
+                "access request is {} and cannot be {}",
+                locked.status,
+                decision.to_ascii_lowercase(),
             )));
         }
-        if !queries::is_access_request_approval_team()
+        let is_assigned_team = queries::is_access_request_approval_team()
             .bind(&transaction, &request_id, &review.approval_team)
             .one()
-            .await?
-        {
+            .await?;
+        let is_auto_approved_rejection = can_reject_auto_approved_request(
+            &locked.status,
+            &locked.decided_by,
+            &locked.routed_for_team,
+            &review.approval_team,
+            decision,
+        );
+        if !is_assigned_team && !is_auto_approved_rejection {
             return Err(AppError::Forbidden(format!(
                 "team {} is not assigned to this request",
                 review.approval_team
             )));
+        }
+        if is_auto_approved_rejection {
+            queries::create_access_request_approval_team()
+                .bind(&transaction, &request_id, &review.approval_team)
+                .await?;
         }
 
         queries::create_access_request_review()
@@ -182,6 +195,27 @@ impl DefaultAccessRequestService {
         transaction.commit().await?;
         load_access_request(&client, &request_id).await
     }
+}
+
+fn can_record_review(status: &str, decision: &str) -> bool {
+    status == "AWAITING_APPROVAL" || (status == "APPROVED" && decision == "REJECTED")
+}
+
+fn can_cancel_request(status: &str) -> bool {
+    status == "AWAITING_APPROVAL"
+}
+
+fn can_reject_auto_approved_request(
+    status: &str,
+    decided_by: &str,
+    routed_for_team: &str,
+    approval_team: &str,
+    decision: &str,
+) -> bool {
+    status == "APPROVED"
+        && decided_by == "system:auto-approve"
+        && routed_for_team == approval_team
+        && decision == "REJECTED"
 }
 
 #[async_trait]
@@ -439,10 +473,10 @@ impl AccessRequestService for DefaultAccessRequestService {
         load_access_request(&client, &request_id).await
     }
 
-    async fn revoke_access_request(
+    async fn cancel_access_request(
         &self,
         request_id: String,
-        request: RevokeAccessRequest,
+        request: CancelAccessRequest,
     ) -> Result<AccessRequest, AppError> {
         require_text("request_id", &request_id)?;
         require_text("requested_by", &request.requested_by)?;
@@ -454,22 +488,22 @@ impl AccessRequestService for DefaultAccessRequestService {
             .opt()
             .await?
             .ok_or_else(|| AppError::NotFound(format!("access request {request_id}")))?;
-        if matches!(status.as_str(), "REJECTED" | "CANCELLED" | "EXPIRED") {
+        if !can_cancel_request(&status) {
             return Err(AppError::Conflict(format!(
-                "access request is already {status}"
+                "access request is {status}, not cancellable"
             )));
         }
 
-        queries::revoke_access_request()
+        queries::cancel_access_request()
             .bind(&transaction, &request.requested_by, &request_id)
             .await?;
         queries::create_access_request_event()
             .bind(
                 &transaction,
                 &request_id,
-                &"ACCESS_REVOKED",
+                &"CANCELLED",
                 &request.requested_by,
-                &"Access revoked by requester",
+                &"Request cancelled by requester",
             )
             .await?;
         transaction.commit().await?;
@@ -664,6 +698,44 @@ fn non_empty(value: String) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn approved_request_can_be_rejected_but_not_approved_again() {
+        assert!(can_record_review("APPROVED", "REJECTED"));
+        assert!(!can_record_review("APPROVED", "APPROVED"));
+    }
+
+    #[test]
+    fn awaiting_request_accepts_either_review_decision() {
+        assert!(can_record_review("AWAITING_APPROVAL", "APPROVED"));
+        assert!(can_record_review("AWAITING_APPROVAL", "REJECTED"));
+    }
+
+    #[test]
+    fn only_awaiting_request_can_be_cancelled() {
+        assert!(can_cancel_request("AWAITING_APPROVAL"));
+        assert!(!can_cancel_request("APPROVED"));
+        assert!(!can_cancel_request("FULFILLED"));
+        assert!(!can_cancel_request("REJECTED"));
+    }
+
+    #[test]
+    fn auto_approved_request_can_be_rejected_by_its_routed_team() {
+        assert!(can_reject_auto_approved_request(
+            "APPROVED",
+            "system:auto-approve",
+            "analytics",
+            "analytics",
+            "REJECTED",
+        ));
+        assert!(!can_reject_auto_approved_request(
+            "APPROVED",
+            "system:auto-approve",
+            "analytics",
+            "security",
+            "REJECTED",
+        ));
+    }
 
     fn valid_request() -> CreateAccessRequest {
         CreateAccessRequest {
