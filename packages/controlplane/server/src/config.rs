@@ -20,6 +20,8 @@ pub struct UnityCatalogSettings {
     #[serde(default = "default_unity_catalog_token_url")]
     pub token_url: String,
     #[serde(default)]
+    pub ca_certificate: Option<PathBuf>,
+    #[serde(default)]
     pub client_id: String,
     #[serde(default)]
     pub client_secret: String,
@@ -90,6 +92,7 @@ impl Default for UnityCatalogSettings {
         Self {
             url: default_unity_catalog_url(),
             token_url: default_unity_catalog_token_url(),
+            ca_certificate: None,
             client_id: String::new(),
             client_secret: String::new(),
         }

@@ -30,6 +30,8 @@ spec:
           ports:
             - name: quack
               containerPort: {{ .Values.service.port }}
+            - name: query-http
+              containerPort: {{ .Values.service.queryPort }}
           env:
             - name: DUCKDB_DATABASE
               value: /var/lib/duckdb/mizuumi.duckdb
@@ -53,20 +55,24 @@ spec:
               value: {{ .Values.unityCatalog.catalog | quote }}
             - name: UNITY_CATALOG_DEFAULT_SCHEMA
               value: {{ .Values.unityCatalog.defaultSchema | quote }}
-            - name: KEYCLOAK_TOKEN_URL
-              value: {{ .Values.unityCatalog.tokenUrl | quote }}
+            - name: KEYCLOAK_INTROSPECTION_URL
+              value: {{ .Values.unityCatalog.introspectionUrl | quote }}
             - name: KEYCLOAK_CA_CERT
               value: /etc/duck-server/trust/gateway-ca.crt
+            - name: QUERY_HTTP_LISTEN
+              value: {{ printf "0.0.0.0:%v" .Values.service.queryPort | quote }}
           envFrom:
             - secretRef:
                 name: {{ .Values.credentialsSecretName }}
           readinessProbe:
-            tcpSocket:
-              port: quack
+            httpGet:
+              path: /health
+              port: query-http
             periodSeconds: 5
           livenessProbe:
-            tcpSocket:
-              port: quack
+            httpGet:
+              path: /health
+              port: query-http
             initialDelaySeconds: 10
             periodSeconds: 20
           resources:

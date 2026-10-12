@@ -22,6 +22,7 @@ data:
     [unity_catalog]
     url = {{ .Values.unityCatalog.url | quote }}
     token_url = {{ .Values.unityCatalog.tokenUrl | quote }}
+    ca_certificate = {{ .Values.unityCatalog.caCertificatePath | quote }}
     client_id = ""
     client_secret = ""
 

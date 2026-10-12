@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use reqwest::{Client, Url};
+use reqwest::{Certificate, Client, Url};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use thiserror::Error;
@@ -59,8 +59,25 @@ impl HttpUnityCatalog {
             ));
         }
 
+        let mut client = Client::builder().timeout(Duration::from_secs(10));
+        if let Some(path) = &settings.ca_certificate {
+            let pem = std::fs::read(path).map_err(|error| {
+                UnityCatalogError::Configuration(format!(
+                    "failed to read CA certificate {}: {error}",
+                    path.display()
+                ))
+            })?;
+            let certificate = Certificate::from_pem(&pem).map_err(|error| {
+                UnityCatalogError::Configuration(format!(
+                    "failed to parse CA certificate {}: {error}",
+                    path.display()
+                ))
+            })?;
+            client = client.add_root_certificate(certificate);
+        }
+
         Ok(Self {
-            client: Client::builder().timeout(Duration::from_secs(10)).build()?,
+            client: client.build()?,
             base_url: parse_url("url", &settings.url)?,
             token_url: parse_url("token_url", &settings.token_url)?,
             client_id: settings.client_id.clone(),
@@ -241,6 +258,7 @@ mod tests {
         UnityCatalogSettings {
             url: "http://unitycatalog:8080".to_owned(),
             token_url: "http://keycloak/token".to_owned(),
+            ca_certificate: None,
             client_id: "controlplane".to_owned(),
             client_secret: "secret".to_owned(),
         }

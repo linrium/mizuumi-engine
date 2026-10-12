@@ -9,6 +9,7 @@ default_image_tag="dev-$(date -u +%Y%m%d%H%M%S)"
 image_tag="${CONTROLPLANE_IMAGE_TAG:-$default_image_tag}"
 skip_image_build="${CONTROLPLANE_SKIP_IMAGE_BUILD:-0}"
 unitycatalog_credentials_secret="${UNITYCATALOG_CREDENTIALS_SECRET:-unitycatalog-credentials}"
+trust_secret="${CONTROLPLANE_TRUST_SECRET:-controlplane-trust}"
 chart="$repo_root/k8s/controlplane"
 server_dir="$repo_root/packages/controlplane/server"
 
@@ -27,6 +28,7 @@ Environment overrides:
   CONTROLPLANE_SKIP_IMAGE_BUILD   Set to 1 to skip docker build/load
   UNITYCATALOG_CREDENTIALS_SECRET Secret containing CONTROLPLANE_CLIENT_ID and
                                   CONTROLPLANE_CLIENT_SECRET (default: unitycatalog-credentials)
+  CONTROLPLANE_TRUST_SECRET       Secret containing the Keycloak CA (default: controlplane-trust)
 EOF
 }
 
@@ -88,11 +90,21 @@ for key in CONTROLPLANE_CLIENT_ID CONTROLPLANE_CLIENT_SECRET; do
   fi
 done
 
+keycloak_ca="$repo_root/k8s/auth/tls/ca.crt"
+[[ -f "$keycloak_ca" ]] || {
+  echo "Missing $keycloak_ca. Run scripts/auth/setup.sh first." >&2
+  exit 1
+}
+kubectl -n "$namespace" create secret generic "$trust_secret" \
+  --from-file=keycloak-ca.crt="$keycloak_ca" \
+  --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+
 helm upgrade --install "$release" "$chart" \
   --namespace "$namespace" \
   --set-string "server.image.repository=$image_repository" \
   --set-string "server.image.tag=$image_tag" \
   --set-string "unityCatalog.credentialsSecretName=$unitycatalog_credentials_secret" \
+  --set-string "unityCatalog.trustSecretName=$trust_secret" \
   --wait --timeout 10m "$@"
 
 server_deployment="$(kubectl -n "$namespace" get deployment \

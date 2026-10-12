@@ -7,6 +7,7 @@ replicas: 1
 
 service:
   port: 9494
+  queryPort: 9495
 
 persistence:
   size: 5Gi
@@ -24,7 +25,7 @@ unityCatalog:
   endpoint: http://unitycatalog-server.tower.svc.cluster.local:8080
   catalog: unity
   defaultSchema: demo
-  tokenUrl: https://auth.mizuumi.test/realms/sovico/protocol/openid-connect/token
+  introspectionUrl: https://auth.mizuumi.test/realms/sovico/protocol/openid-connect/token/introspect
 
 resources:
   requests:

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Connect to the local Mizuumi Quack endpoint and query both storage layers."""
+"""Connect to the local Mizuumi Quack endpoint and query its local data."""
 
 from __future__ import annotations
 
@@ -42,16 +42,6 @@ connection.sql(
     FROM quack_query(
       {sql_string(uri)},
       'FROM rustfs_events ORDER BY id',
-      token = {sql_string(token)}
-    )
-    """
-).show()
-print("Managed Delta table read through Unity Catalog by the Quack server:")
-connection.sql(
-    f"""
-    FROM quack_query(
-      {sql_string(uri)},
-      'FROM unity.demo.orders ORDER BY order_id',
       token = {sql_string(token)}
     )
     """

@@ -1,8 +1,9 @@
 # DuckDB Quack on local Kubernetes
 
-This chart deploys one DuckDB 1.5.3 process with a persistent catalog, an
-attached Unity Catalog, and a token-authenticated Quack endpoint. Caddy terminates TLS at
-`https://query.mizuumi.test`; the pod itself serves HTTP on port 9494.
+This chart deploys one DuckDB 1.5.6 process with a persistent local catalog, a
+token-authenticated Quack endpoint, and an identity-aware Unity Catalog query
+API. Caddy terminates TLS at `https://query.mizuumi.test`; the pod serves Quack
+on port 9494 and HTTP queries on port 9495.
 
 The setup provisions a dedicated `duck-server` IAM user and bucket in RustFS.
 DuckDB verifies the RustFS certificate using the mounted local CA and exposes a
@@ -17,12 +18,13 @@ sudo ./scripts/configure_workstation_dns.sh
 ./scripts/forward.sh
 ```
 
-Unity Catalog must be installed before Duck server bootstrap. The setup ensures
-the `unity.demo` schema and service-principal grants exist. To create the table
-used by the client example, also run `./scripts/spark/setup-managed.sh`.
+The bootstrap creates a least-privilege Keycloak client used for token
+introspection. It receives no Unity Catalog grants. Studio forwards each user's
+access token to `/api/query`, and DuckDB uses it for a request-scoped Unity
+Catalog attachment. A user with only `BROWSE` cannot query table data.
 
 Clients attach with `quack:query.mizuumi.test:443`; the explicit port selects
 the shared HTTPS gateway instead of Quack's default port 9494. See
-`packages/duck-server/README.md` for the client example. Quack is beta in
-DuckDB 1.5.3 and provides full read/write SQL access, so protect its token and
-do not expose this local deployment to an untrusted network.
+`packages/duck-server/README.md` for the local client example. Quack provides
+full read/write SQL access to the local DuckDB database, so protect its token
+and do not expose this local deployment to an untrusted network.

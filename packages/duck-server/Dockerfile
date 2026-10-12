@@ -70,6 +70,6 @@ USER duckdb
 # Unity Catalog and Delta above are built from the repository fork.
 RUN python -c "import duckdb; c=duckdb.connect(); c.execute('INSTALL httpfs'); c.execute('INSTALL quack')"
 
-EXPOSE 9494
+EXPOSE 9494 9495
 
 ENTRYPOINT ["python", "/app/server.py"]

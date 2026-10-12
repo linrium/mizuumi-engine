@@ -79,16 +79,14 @@ for `<mount>/data/<secret-path>` instead of using a developer token.
 
 ## DuckDB SQL
 
-The `/sql` page executes SQL against `packages/duck-server` through its Quack
-endpoint. `./scripts/studio/bootstrap.sh` copies the Duck server administrator
-token into `.env.local`. The resulting settings are:
+The `/sql` page and Unity Catalog previews execute SQL through the Duck server's
+identity-aware HTTP endpoint. Studio forwards the signed-in user's Keycloak
+access token, so Unity Catalog evaluates the user's own grants. The setting is:
 
 ```sh
-QUACK_URI=quack:query.mizuumi.test:443
-QUACK_TOKEN=<value from the duck-server-credentials Kubernetes secret>
-QUACK_CA_FILE=../../k8s/auth/tls/ca.crt
+DUCK_QUERY_URL=https://query.mizuumi.test/api/query
 ```
 
-The token stays in the Studio server process and is never sent to the browser.
-Quack currently exposes the full SQL surface, so only trusted users should have
-access to this page.
+The access token stays in the Studio server process and is never sent to the
+browser. The endpoint accepts one read-only statement. The Duck server validates
+the token with Keycloak and uses it for a request-scoped Unity Catalog attach.

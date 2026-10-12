@@ -10,6 +10,7 @@ kubectl -n "$namespace" exec deployment/"$release" -- python -c '
 import os
 import time
 import duckdb
+from urllib import error, request
 
 def quote(value):
     return "\047" + value.replace("\047", "\047\047") + "\047"
@@ -24,7 +25,7 @@ for attempt in range(30):
     try:
         hello = connection.execute(f"FROM quack_query({uri}, \047SELECT message FROM hello WHERE id = 1\047, token = {token})").fetchone()[0]
         events = connection.execute(f"FROM quack_query({uri}, \047SELECT count(*) FROM rustfs_events\047, token = {token})").fetchone()[0]
-        unity_tables = connection.execute(f"FROM quack_query({uri}, \047SHOW TABLES FROM unity.demo\047, token = {token})").fetchall()
+        databases = connection.execute(f"FROM quack_query({uri}, \047SHOW DATABASES\047, token = {token})").fetchall()
         break
     except duckdb.Error as error:
         if "Bad Gateway" not in str(error):
@@ -34,11 +35,27 @@ for attempt in range(30):
         time.sleep(1)
 assert hello == "hello from DuckDB Quack"
 assert events == 2
-table_names = {row[0] for row in unity_tables}
-if "orders" in table_names:
-    orders = connection.execute(f"FROM quack_query({uri}, \047SELECT count(*), sum(quantity) FROM unity.demo.orders\047, token = {token})").fetchone()
-    assert orders == (3, 6)
-    print(f"Quack, RustFS, and Unity Catalog verified: {hello}; {events} events; {orders[0]} managed orders")
-else:
-    print(f"Quack, RustFS, and Unity Catalog verified: {hello}; {events} events; demo schema attached (run the Spark managed example to create orders)")
+assert "unity" not in {row[0] for row in databases}
+
+health = request.urlopen("http://127.0.0.1:9495/health", timeout=5)
+assert health.status == 200
+try:
+    request.urlopen(request.Request("http://127.0.0.1:9495/api/query", data=b"{}", method="POST"), timeout=5)
+    raise AssertionError("identity query endpoint accepted an unauthenticated request")
+except error.HTTPError as response:
+    assert response.code == 401
+
+invalid_token_request = request.Request(
+    "http://127.0.0.1:9495/api/query",
+    data=b"{\"sql\":\"SELECT 1\"}",
+    headers={"Authorization": "Bearer invalid", "Content-Type": "application/json"},
+    method="POST",
+)
+try:
+    request.urlopen(invalid_token_request, timeout=10)
+    raise AssertionError("identity query endpoint accepted an invalid access token")
+except error.HTTPError as response:
+    assert response.code == 401
+
+print(f"Quack, Keycloak introspection, and query isolation verified: {hello}; {events} events; no global Unity Catalog attachment")
 '

@@ -12,3 +12,6 @@ spec:
     - name: quack
       port: {{ .Values.service.port }}
       targetPort: quack
+    - name: query-http
+      port: {{ .Values.service.queryPort }}
+      targetPort: query-http

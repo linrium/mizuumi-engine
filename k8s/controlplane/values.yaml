@@ -19,8 +19,10 @@ service:
 
 unityCatalog:
   url: http://unitycatalog-server.tower.svc.cluster.local:8080
-  tokenUrl: http://keycloak.auth.svc.cluster.local:8080/realms/sovico/protocol/openid-connect/token
+  tokenUrl: https://keycloak.auth.svc.cluster.local:8080/realms/sovico/protocol/openid-connect/token
+  caCertificatePath: /etc/controlplane/trust/keycloak-ca.crt
   credentialsSecretName: unitycatalog-credentials
+  trustSecretName: controlplane-trust
   clientIdKey: CONTROLPLANE_CLIENT_ID
   clientSecretKey: CONTROLPLANE_CLIENT_SECRET
 

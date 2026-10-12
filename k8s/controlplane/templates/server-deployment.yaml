@@ -56,6 +56,9 @@ spec:
             - name: config
               mountPath: {{ dir .Values.server.configPath }}
               readOnly: true
+            - name: trust
+              mountPath: {{ dir .Values.unityCatalog.caCertificatePath }}
+              readOnly: true
           readinessProbe:
             httpGet:
               path: /health/readyz
@@ -73,4 +76,7 @@ spec:
         - name: config
           configMap:
             name: {{ include "controlplane.serverName" . }}-config
+        - name: trust
+          secret:
+            secretName: {{ .Values.unityCatalog.trustSecretName | quote }}
 

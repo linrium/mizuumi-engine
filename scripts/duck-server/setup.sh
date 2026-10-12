@@ -62,23 +62,24 @@ if ! kubectl -n "$namespace" get secret "$credentials_secret" >/dev/null 2>&1; t
   echo "Missing $namespace/$credentials_secret. Run ./scripts/duck-server/bootstrap.sh first." >&2
   exit 1
 fi
-uc_principal="$(kubectl -n "$namespace" get secret "$credentials_secret" \
+duck_client="$(kubectl -n "$namespace" get secret "$credentials_secret" \
   -o jsonpath='{.data.KEYCLOAK_CLIENT_ID}' | base64 --decode)"
-[[ -n "$uc_principal" ]] || {
+[[ -n "$duck_client" ]] || {
   echo "Missing KEYCLOAK_CLIENT_ID in $namespace/$credentials_secret; rerun bootstrap." >&2
   exit 1
 }
 SPARK_UNITY_CATALOG="$uc_catalog" SPARK_UNITY_SCHEMAS="$uc_schema" \
-  UNITYCATALOG_PRINCIPAL="$uc_principal" \
   "$repo_root/scripts/spark/init-catalog.sh"
 for ca in "$repo_root/k8s/storage/tls/ca.crt" "$repo_root/k8s/auth/tls/ca.crt"; do
   [[ -f "$ca" ]] || { echo "Missing local CA: $ca" >&2; exit 1; }
 done
 
-if ! kubectl -n auth get configmap keycloak-gateway -o jsonpath='{.data.Caddyfile}' 2>/dev/null | grep -q 'query.mizuumi.test'; then
+gateway_config="$(kubectl -n auth get configmap keycloak-gateway -o jsonpath='{.data.Caddyfile}' 2>/dev/null || true)"
+if [[ "$gateway_config" != *"query.mizuumi.test"* || "$gateway_config" != *"handle /api/query"* ]]; then
   echo "Updating the shared gateway and certificate for query.mizuumi.test."
   "$repo_root/scripts/auth/setup.sh"
 fi
+unset gateway_config
 
 image="$image_repository:$image_tag"
 if [[ "$skip_image_build" != 1 ]]; then
@@ -126,4 +127,4 @@ kubectl -n "$namespace" rollout restart deployment/"$release"
 kubectl -n "$namespace" rollout status deployment/"$release" --timeout=5m
 "$repo_root/scripts/duck-server/test.sh"
 
-echo "DuckDB Quack is ready at quack:query.mizuumi.test:443 (HTTPS via the shared gateway)."
+echo "DuckDB Quack and the identity-aware query API are ready at query.mizuumi.test."

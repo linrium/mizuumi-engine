@@ -1,17 +1,26 @@
 #!/usr/bin/env python3
-"""Run one persistent DuckDB catalog and expose it through Quack."""
+"""Run DuckDB's local Quack endpoint and an identity-aware Unity query API."""
 
 from __future__ import annotations
 
 import json
+import math
 import os
 import signal
 import ssl
 import sys
 import threading
+from datetime import date, datetime, time
+from decimal import Decimal
+from http import HTTPStatus
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib import error, parse, request
+from uuid import UUID
 
 import duckdb
+
+MAX_RESULT_ROWS = 10_000
+QUERY_TIMEOUT_SECONDS = 60
 
 
 def required_env(name: str) -> str:
@@ -25,50 +34,49 @@ def sql_string(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
 
 
-def service_principal_token() -> tuple[str, int]:
-    token_url = required_env("KEYCLOAK_TOKEN_URL")
-    if not token_url.startswith("https://"):
-        raise RuntimeError("KEYCLOAK_TOKEN_URL must use https://")
-
+def keycloak_ssl_context() -> ssl.SSLContext:
     ca_certificate = required_env("KEYCLOAK_CA_CERT")
     if not os.path.isfile(ca_certificate):
         raise RuntimeError(f"KEYCLOAK_CA_CERT does not exist: {ca_certificate}")
+    return ssl.create_default_context(cafile=ca_certificate)
+
+
+def introspect_access_token(token: str) -> dict[str, object]:
+    introspection_url = required_env("KEYCLOAK_INTROSPECTION_URL")
+    if not introspection_url.startswith("https://"):
+        raise RuntimeError("KEYCLOAK_INTROSPECTION_URL must use https://")
 
     payload = parse.urlencode(
         {
-            "grant_type": "client_credentials",
+            "token": token,
             "client_id": required_env("KEYCLOAK_CLIENT_ID"),
             "client_secret": required_env("KEYCLOAK_CLIENT_SECRET"),
         }
     ).encode("ascii")
-    token_request = request.Request(
-        token_url,
+    introspection_request = request.Request(
+        introspection_url,
         data=payload,
         headers={"Content-Type": "application/x-www-form-urlencoded"},
         method="POST",
     )
     try:
         with request.urlopen(
-            token_request,
-            context=ssl.create_default_context(cafile=ca_certificate),
+            introspection_request,
+            context=keycloak_ssl_context(),
             timeout=15,
         ) as response:
             token_response = json.load(response)
     except error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")
         raise RuntimeError(
-            f"Keycloak token request failed with HTTP {exc.code}: {detail}"
+            f"Keycloak token introspection failed with HTTP {exc.code}: {detail}"
         ) from exc
     except (error.URLError, OSError, ValueError) as exc:
-        raise RuntimeError(f"Keycloak token request failed: {exc}") from exc
+        raise RuntimeError(f"Keycloak token introspection failed: {exc}") from exc
 
-    token = token_response.get("access_token")
-    if not isinstance(token, str) or not token:
-        raise RuntimeError("Keycloak token response did not contain an access_token")
-    expires_in = token_response.get("expires_in", 300)
-    if not isinstance(expires_in, int) or expires_in <= 0:
-        raise RuntimeError("Keycloak token response contained an invalid expires_in")
-    return token, expires_in
+    if not isinstance(token_response, dict):
+        raise RuntimeError("Keycloak introspection returned an invalid response")
+    return token_response
 
 
 def configure_rustfs(connection: duckdb.DuckDBPyConnection) -> str:
@@ -104,8 +112,8 @@ def configure_rustfs(connection: duckdb.DuckDBPyConnection) -> str:
 
 
 def configure_unity_catalog(
-    connection: duckdb.DuckDBPyConnection, *, replace: bool = False
-) -> tuple[str, int]:
+    connection: duckdb.DuckDBPyConnection, access_token: str
+) -> str:
     extension_dir = os.environ.get("DUCKDB_EXTENSION_DIR", "/opt/duckdb/extensions")
     catalog = os.environ.get("UNITY_CATALOG_NAME", "unity")
     default_schema = os.environ.get("UNITY_CATALOG_DEFAULT_SCHEMA", "demo")
@@ -113,19 +121,21 @@ def configure_unity_catalog(
     s3_endpoint = required_env("S3_ENDPOINT")
     region = os.environ.get("S3_REGION", "us-east-1")
 
-    if not replace:
-        connection.execute(
-            f"LOAD {sql_string(os.path.join(extension_dir, 'delta.duckdb_extension'))}"
-        )
-        connection.execute(
-            f"LOAD {sql_string(os.path.join(extension_dir, 'unity_catalog.duckdb_extension'))}"
-        )
-    token, expires_in = service_principal_token()
+    connection.execute(
+        f"LOAD {sql_string(os.path.join(extension_dir, 'delta.duckdb_extension'))}"
+    )
+    connection.execute(
+        f"LOAD {sql_string(os.path.join(extension_dir, 'unity_catalog.duckdb_extension'))}"
+    )
+    connection.execute(
+        f"SET ca_cert_file = {sql_string(os.environ.get('S3_CA_FILE', '/etc/duck-server/trust/rustfs-ca.crt'))}"
+    )
+    connection.execute("SET enable_server_cert_verification = true")
     connection.execute(
         f"""
         CREATE OR REPLACE TEMPORARY SECRET unity_catalog_auth (
           TYPE unity_catalog,
-          TOKEN {sql_string(token)},
+          TOKEN {sql_string(access_token)},
           ENDPOINT {sql_string(endpoint)},
           AWS_REGION {sql_string(region)},
           S3_ENDPOINT {sql_string(s3_endpoint)},
@@ -134,11 +144,6 @@ def configure_unity_catalog(
         )
         """
     )
-    unity_is_attached = connection.execute(
-        "SELECT count(*) FROM duckdb_databases() WHERE database_name = 'unity'"
-    ).fetchone()[0]
-    if replace and unity_is_attached:
-        connection.execute("DETACH unity")
     connection.execute(
         f"""
         ATTACH {sql_string(catalog)} AS unity (
@@ -148,7 +153,143 @@ def configure_unity_catalog(
         )
         """
     )
-    return catalog, expires_in
+    return catalog
+
+
+def json_value(value: object) -> object:
+    if isinstance(value, (datetime, date, time)):
+        return value.isoformat()
+    if isinstance(value, (Decimal, UUID)):
+        return str(value)
+    if isinstance(value, bytes):
+        return value.hex()
+    if isinstance(value, float) and not math.isfinite(value):
+        return str(value)
+    if isinstance(value, (list, tuple)):
+        return [json_value(item) for item in value]
+    if isinstance(value, dict):
+        return {str(key): json_value(item) for key, item in value.items()}
+    return value
+
+
+def ensure_read_only(connection: duckdb.DuckDBPyConnection, query: str) -> None:
+    statements = connection.extract_statements(query)
+    if len(statements) != 1:
+        raise ValueError("Exactly one read-only SQL statement is required")
+    statement_type = str(statements[0].type).rsplit(".", 1)[-1].upper()
+    if statement_type not in {"SELECT", "EXPLAIN", "SHOW", "DESCRIBE"}:
+        raise ValueError("Only read-only SELECT, EXPLAIN, SHOW, and DESCRIBE queries are allowed")
+
+
+def execute_identity_query(query: str, access_token: str) -> dict[str, object]:
+    connection = duckdb.connect(":memory:", config={"allow_unsigned_extensions": "true"})
+    timeout = threading.Timer(QUERY_TIMEOUT_SECONDS, connection.interrupt)
+    try:
+        ensure_read_only(connection, query)
+        configure_unity_catalog(connection, access_token)
+        timeout.start()
+        result = connection.execute(query)
+        description = result.description or []
+        raw_rows = result.fetchmany(MAX_RESULT_ROWS + 1)
+        if len(raw_rows) > MAX_RESULT_ROWS:
+            raise ValueError(f"Query results are limited to {MAX_RESULT_ROWS:,} rows")
+        rows = [[json_value(value) for value in row] for row in raw_rows]
+        return {
+            "columns": [column[0] for column in description],
+            "columnTypes": [str(column[1]) for column in description],
+            "rows": rows,
+        }
+    finally:
+        timeout.cancel()
+        connection.close()
+
+
+class QueryHandler(BaseHTTPRequestHandler):
+    server_version = "MizuumiDuckQuery/1.0"
+
+    def send_json(self, status: HTTPStatus, payload: dict[str, object]) -> None:
+        body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_GET(self) -> None:
+        if self.path == "/health":
+            self.send_json(HTTPStatus.OK, {"status": "ok"})
+        else:
+            self.send_json(HTTPStatus.NOT_FOUND, {"error": "Not found"})
+
+    def do_POST(self) -> None:
+        if self.path != "/api/query":
+            self.send_json(HTTPStatus.NOT_FOUND, {"error": "Not found"})
+            return
+
+        authorization = self.headers.get("Authorization", "")
+        if not authorization.startswith("Bearer "):
+            self.send_json(HTTPStatus.UNAUTHORIZED, {"error": "Bearer token required"})
+            return
+        access_token = authorization.removeprefix("Bearer ").strip()
+        try:
+            token_details = introspect_access_token(access_token)
+        except RuntimeError as exc:
+            print(f"Token introspection error: {exc}", file=sys.stderr)
+            self.send_json(HTTPStatus.BAD_GATEWAY, {"error": "Unable to validate access token"})
+            return
+        if token_details.get("active") is not True:
+            self.send_json(
+                HTTPStatus.UNAUTHORIZED,
+                {
+                    "error": (
+                        "Access token is invalid, expired, or missing the "
+                        "Duck server audience"
+                    )
+                },
+            )
+            return
+        audience_claim = token_details.get("aud", [])
+        audiences = (
+            {audience_claim}
+            if isinstance(audience_claim, str)
+            else set(audience_claim) if isinstance(audience_claim, list) else set()
+        )
+        if required_env("KEYCLOAK_CLIENT_ID") not in audiences:
+            self.send_json(
+                HTTPStatus.FORBIDDEN,
+                {"error": "Access token is not intended for the Duck query service"},
+            )
+            return
+
+        try:
+            content_length = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            content_length = 0
+        if content_length <= 0 or content_length > 1_000_000:
+            self.send_json(HTTPStatus.BAD_REQUEST, {"error": "Invalid request body size"})
+            return
+        try:
+            payload = json.loads(self.rfile.read(content_length))
+            query = payload.get("sql", "") if isinstance(payload, dict) else ""
+            if not isinstance(query, str) or not query.strip():
+                raise ValueError("A non-empty sql string is required")
+            if len(query) > 100_000:
+                raise ValueError("SQL is limited to 100,000 characters")
+            result = execute_identity_query(query.strip(), access_token)
+        except (ValueError, json.JSONDecodeError) as exc:
+            self.send_json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+            return
+        except duckdb.Error as exc:
+            self.send_json(HTTPStatus.FORBIDDEN, {"error": str(exc)})
+            return
+        except Exception as exc:
+            print(f"Query execution error: {exc}", file=sys.stderr)
+            self.send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": "Unable to execute SQL"})
+            return
+        self.send_json(HTTPStatus.OK, result)
+
+    def log_message(self, format: str, *args: object) -> None:
+        print(f"query-api: {format % args}")
 
 
 def seed_example(connection: duckdb.DuckDBPyConnection, bucket: str) -> None:
@@ -205,7 +346,6 @@ def main() -> int:
         database_path, config={"allow_unsigned_extensions": "true"}
     )
     bucket = configure_rustfs(connection)
-    unity_catalog, token_expires_in = configure_unity_catalog(connection)
     seed_example(connection, bucket)
     connection.execute("LOAD quack")
     result = connection.execute(
@@ -218,7 +358,7 @@ def main() -> int:
         """
     ).fetchone()
 
-    # DuckDB 1.5.3's beta Quack dispatcher has its own global-setting slot.
+    # Quack's dispatcher has its own global-setting slot.
     # Apply the CA through a loopback Quack request so every later request
     # connection inherits it. The RustFS secret itself is already process-wide.
     ca_file = os.environ.get("S3_CA_FILE", "/etc/duck-server/trust/rustfs-ca.crt")
@@ -244,32 +384,19 @@ def main() -> int:
 
     print(
         f"DuckDB Quack is listening at {result[0]}; RustFS bucket: {bucket}; "
-        f"Unity Catalog: {unity_catalog} (attached as unity)"
+        "Unity Catalog is attached only for authenticated user requests"
     )
 
     stopped = threading.Event()
-
-    def refresh_unity_catalog() -> None:
-        refresh_after = max(30, token_expires_in - 60)
-        while not stopped.wait(refresh_after):
-            try:
-                _, expires_in = configure_unity_catalog(connection, replace=True)
-                refresh_after = max(30, expires_in - 60)
-                print("Unity Catalog principal token refreshed")
-            except Exception as refresh_error:
-                print(
-                    f"Unity Catalog token refresh failed; retrying in 10s: "
-                    f"{refresh_error}",
-                    file=sys.stderr,
-                )
-                refresh_after = 10
-
-    refresh_thread = threading.Thread(
-        target=refresh_unity_catalog,
-        name="unity-catalog-token-refresh",
-        daemon=True,
+    query_listen = os.environ.get("QUERY_HTTP_LISTEN", "0.0.0.0:9495")
+    query_host, query_port = query_listen.rsplit(":", 1)
+    query_server = ThreadingHTTPServer((query_host, int(query_port)), QueryHandler)
+    query_server.daemon_threads = True
+    query_thread = threading.Thread(
+        target=query_server.serve_forever, name="identity-query-api", daemon=True
     )
-    refresh_thread.start()
+    query_thread.start()
+    print(f"Identity-aware query API is listening at http://{query_listen}/api/query")
 
     def stop(_signum: int, _frame: object) -> None:
         stopped.set()
@@ -277,7 +404,9 @@ def main() -> int:
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
     stopped.wait()
-    refresh_thread.join(timeout=15)
+    query_server.shutdown()
+    query_server.server_close()
+    query_thread.join(timeout=15)
     connection.execute(f"CALL quack_stop({sql_string(listen_uri)})")
     connection.close()
     return 0
