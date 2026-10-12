@@ -7,8 +7,8 @@ broker.
 ```bash
 ./scripts/synthetics/bootstrap.sh
 ./scripts/synthetics/setup.sh
-kubectl -n synthetics port-forward service/synthetics 4020:4020
-curl -X POST http://127.0.0.1:4020/api/v1/generate \
+sudo ./scripts/configure_workstation_dns.sh
+curl -X POST https://api.synthetics.mizuumi.test/api/v1/generate \
   -H 'content-type: application/json' \
   -d '{"region":"vn","count":10,"seed":42}'
 ```
@@ -16,6 +16,7 @@ curl -X POST http://127.0.0.1:4020/api/v1/generate \
 Use `"region":"th"` to generate Thai identities and THB amounts. `bootstrap.sh` creates the
 namespace and all six `vn.synthetics.*` and `th.synthetics.*` Redpanda topics. `setup.sh` builds and
 loads the local image, installs the chart, and waits for the deployment and service endpoint.
+It also updates the shared gateway and TLS certificate when the synthetics route is not installed.
 
 Delete only the six regional synthetics topics with:
 

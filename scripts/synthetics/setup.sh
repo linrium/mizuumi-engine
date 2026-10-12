@@ -118,6 +118,11 @@ if [[ "$skip_image_build" != 1 ]]; then
 fi
 kubectl -n "$namespace" rollout status deployment/"$release" --timeout=3m
 
+if ! kubectl -n auth get configmap keycloak-gateway -o jsonpath='{.data.Caddyfile}' 2>/dev/null | grep -q 'api.synthetics.mizuumi.test'; then
+  echo "Updating the shared gateway and certificate for api.synthetics.mizuumi.test."
+  "$repo_root/scripts/auth/setup.sh"
+fi
+
 for attempt in $(seq 1 30); do
   ready_addresses="$(kubectl -n "$namespace" get endpoints "$release" \
     -o jsonpath='{.subsets[0].addresses[*].ip}' 2>/dev/null || true)"
@@ -133,5 +138,6 @@ for attempt in $(seq 1 30); do
 done
 
 echo "Synthetics API is ready in namespace '$namespace'."
+echo "API: https://api.synthetics.mizuumi.test"
 echo "Port-forward: kubectl -n $namespace port-forward service/$release 4020:4020"
-echo "Generate: curl -X POST http://127.0.0.1:4020/api/v1/generate -H 'content-type: application/json' -d '{\"region\":\"vn\",\"count\":10,\"seed\":42}'"
+echo "Generate: curl -X POST https://api.synthetics.mizuumi.test/api/v1/generate -H 'content-type: application/json' -d '{\"region\":\"vn\",\"count\":10,\"seed\":42}'"

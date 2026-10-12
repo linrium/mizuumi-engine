@@ -32,5 +32,6 @@ DNS.14 = mcp.mizuumi.test
 DNS.15 = api.controlplane.mizuumi.test
 DNS.16 = console.dagster.mizuumi.test
 DNS.17 = api.dagster.mizuumi.test
-DNS.18 = localhost
+DNS.18 = api.synthetics.mizuumi.test
+DNS.19 = localhost
 IP.1 = 127.0.0.1

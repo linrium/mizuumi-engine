@@ -42,6 +42,9 @@ curl -X POST http://localhost:4020/api/v1/generate \
   -d '{"region":"vn","count":10,"seed":42}'
 ```
 
+When deployed locally with `scripts/synthetics/setup.sh`, the same endpoint is available at
+`https://api.synthetics.mizuumi.test/api/v1/generate` through the shared gateway.
+
 `region` accepts `vn` or `th` and defaults to `vn`. The Vietnam engine generates Vietnamese names,
 CCCDs, `+84` phone numbers, Vietnamese addresses, and VND amounts. The Thailand engine generates
 Thai-script names, Thai national IDs, `+66` phone numbers, Thai addresses, and THB amounts. `count`
