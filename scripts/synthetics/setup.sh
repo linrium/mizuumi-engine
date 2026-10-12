@@ -12,9 +12,11 @@ redpanda_brokers="${REDPANDA_BROKERS:-redpanda.redpanda.svc.cluster.local:9092}"
 topic_vn_hdbank="${SYNTHETICS_TOPIC_VN_HDBANK:-vn.synthetics.hdbank}"
 topic_vn_vikki="${SYNTHETICS_TOPIC_VN_VIKKI:-vn.synthetics.vikki}"
 topic_vn_vietjetair="${SYNTHETICS_TOPIC_VN_VIETJETAIR:-vn.synthetics.vietjetair}"
+topic_vn_crm="${SYNTHETICS_TOPIC_VN_CRM:-vn.synthetics.crm}"
 topic_th_hdbank="${SYNTHETICS_TOPIC_TH_HDBANK:-th.synthetics.hdbank}"
 topic_th_vikki="${SYNTHETICS_TOPIC_TH_VIKKI:-th.synthetics.vikki}"
 topic_th_vietjetair="${SYNTHETICS_TOPIC_TH_VIETJETAIR:-th.synthetics.vietjetair}"
+topic_th_crm="${SYNTHETICS_TOPIC_TH_CRM:-th.synthetics.crm}"
 
 if [[ -n "${SYNTHETICS_IMAGE_TAG:-}" ]]; then
   image_tag="$SYNTHETICS_IMAGE_TAG"
@@ -43,9 +45,11 @@ Environment overrides:
   SYNTHETICS_TOPIC_VN_HDBANK       Vietnam HDBank topic
   SYNTHETICS_TOPIC_VN_VIKKI        Vietnam Vikki topic
   SYNTHETICS_TOPIC_VN_VIETJETAIR   Vietnam VietJet Air topic
+  SYNTHETICS_TOPIC_VN_CRM            Vietnam CRM topic
   SYNTHETICS_TOPIC_TH_HDBANK       Thailand HDBank topic
   SYNTHETICS_TOPIC_TH_VIKKI        Thailand Vikki topic
   SYNTHETICS_TOPIC_TH_VIETJETAIR   Thailand VietJet Air topic
+  SYNTHETICS_TOPIC_TH_CRM            Thailand CRM topic
 EOF
 }
 
@@ -108,9 +112,11 @@ helm upgrade --install "$release" "$chart" \
   --set-string "redpanda.topics.vn.hdbank=$topic_vn_hdbank" \
   --set-string "redpanda.topics.vn.vikki=$topic_vn_vikki" \
   --set-string "redpanda.topics.vn.vietjetAir=$topic_vn_vietjetair" \
+  --set-string "redpanda.topics.vn.crm=$topic_vn_crm" \
   --set-string "redpanda.topics.th.hdbank=$topic_th_hdbank" \
   --set-string "redpanda.topics.th.vikki=$topic_th_vikki" \
   --set-string "redpanda.topics.th.vietjetAir=$topic_th_vietjetair" \
+  --set-string "redpanda.topics.th.crm=$topic_th_crm" \
   --wait --timeout 5m "$@"
 
 if [[ "$skip_image_build" != 1 ]]; then

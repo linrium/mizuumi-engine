@@ -1,6 +1,10 @@
 import { randomUUID } from "node:crypto"
 import { Kafka, logLevel, type Producer, type SASLOptions } from "kafkajs"
-import type { GeneratedPersonRecords, GeneratedSyntheticData } from "./generator.js"
+import type {
+  GeneratedPersonRecords,
+  GeneratedSyntheticData,
+  SourceName,
+} from "./generator.js"
 import type { RegionCode } from "./generators/index.js"
 
 export type PublishSummary = {
@@ -9,11 +13,13 @@ export type PublishSummary = {
     hdbank: string
     vikkiBank: string
     vietjetAir: string
+    crm: string
   }
   messages: {
     hdbank: number
     vikkiBank: number
     vietjetAir: number
+    crm: number
     total: number
   }
 }
@@ -23,7 +29,7 @@ export interface SyntheticPublisher {
   close(): Promise<void>
 }
 
-type OrganizationName = "hdbank" | "vikkiBank" | "vietjetAir"
+type OrganizationName = SourceName
 
 type SyntheticCloudEvent<T> = {
   specversion: "1.0"
@@ -51,7 +57,12 @@ function event<T>(input: {
   generatedAt: string
   data: T
 }): SyntheticCloudEvent<T> {
-  const organizationSlug = input.organization === "vikkiBank" ? "vikki" : input.organization
+  const organizationSlug =
+    input.organization === "vikkiBank"
+      ? "vikki"
+      : input.organization === "vietjetAir"
+        ? "vietjetair"
+        : input.organization
   return {
     specversion: "1.0",
     id: randomUUID(),
@@ -70,15 +81,32 @@ function kafkaMessage(
   record: GeneratedPersonRecords,
   generatedAt: string,
 ) {
+  const sourceRecord = record[organization]
+  if (!sourceRecord) return undefined
+  let sourceRecordId: string
+  switch (organization) {
+    case "hdbank":
+      sourceRecordId = record.hdbank!.customer.header.id
+      break
+    case "vikkiBank":
+      sourceRecordId = record.vikkiBank!.customer.header.id
+      break
+    case "vietjetAir":
+      sourceRecordId = record.vietjetAir!.customer.customerId
+      break
+    case "crm":
+      sourceRecordId = record.crm!.contact.contactId
+      break
+  }
   const payload = event({
     organization,
     region,
-    personId: record.person.personId,
+    personId: sourceRecordId,
     generatedAt,
-    data: record[organization],
+    data: sourceRecord,
   })
   return {
-    key: record.person.personId,
+    key: sourceRecordId,
     value: JSON.stringify(payload),
     headers: {
       "ce-id": payload.id,
@@ -141,6 +169,10 @@ export class RedpandaPublisher implements SyntheticPublisher {
           options.topics?.vn?.vietjetAir ??
           process.env.REDPANDA_TOPIC_VN_VIETJETAIR ??
           "vn.synthetics.vietjetair",
+        crm:
+          options.topics?.vn?.crm ??
+          process.env.REDPANDA_TOPIC_VN_CRM ??
+          "vn.synthetics.crm",
       },
       th: {
         hdbank:
@@ -155,6 +187,10 @@ export class RedpandaPublisher implements SyntheticPublisher {
           options.topics?.th?.vietjetAir ??
           process.env.REDPANDA_TOPIC_TH_VIETJETAIR ??
           "th.synthetics.vietjetair",
+        crm:
+          options.topics?.th?.crm ??
+          process.env.REDPANDA_TOPIC_TH_CRM ??
+          "th.synthetics.crm",
       },
     }
   }
@@ -170,27 +206,32 @@ export class RedpandaPublisher implements SyntheticPublisher {
   }
 
   async publish(generated: GeneratedSyntheticData): Promise<PublishSummary> {
-    await this.connect()
     const generatedAt = generated.dataset.generatedAt
     const region = generated.dataset.region
     const topics = this.topics[region]
-    const hdbankMessages = generated.records.map((record) =>
-      kafkaMessage("hdbank", region, record, generatedAt),
-    )
-    const vikkiMessages = generated.records.map((record) =>
-      kafkaMessage("vikkiBank", region, record, generatedAt),
-    )
-    const vietjetMessages = generated.records.map((record) =>
-      kafkaMessage("vietjetAir", region, record, generatedAt),
-    )
+    const hdbankMessages = generated.records
+      .map((record) => kafkaMessage("hdbank", region, record, generatedAt))
+      .filter((message) => message !== undefined)
+    const vikkiMessages = generated.records
+      .map((record) => kafkaMessage("vikkiBank", region, record, generatedAt))
+      .filter((message) => message !== undefined)
+    const vietjetMessages = generated.records
+      .map((record) => kafkaMessage("vietjetAir", region, record, generatedAt))
+      .filter((message) => message !== undefined)
+    const crmMessages = generated.records
+      .map((record) => kafkaMessage("crm", region, record, generatedAt))
+      .filter((message) => message !== undefined)
 
-    await this.producer.sendBatch({
-      topicMessages: [
-        { topic: topics.hdbank, messages: hdbankMessages },
-        { topic: topics.vikkiBank, messages: vikkiMessages },
-        { topic: topics.vietjetAir, messages: vietjetMessages },
-      ],
-    })
+    const topicMessages = [
+      { topic: topics.hdbank, messages: hdbankMessages },
+      { topic: topics.vikkiBank, messages: vikkiMessages },
+      { topic: topics.vietjetAir, messages: vietjetMessages },
+      { topic: topics.crm, messages: crmMessages },
+    ].filter((topic) => topic.messages.length > 0)
+    if (topicMessages.length > 0) {
+      await this.connect()
+      await this.producer.sendBatch({ topicMessages })
+    }
 
     return {
       region,
@@ -199,7 +240,12 @@ export class RedpandaPublisher implements SyntheticPublisher {
         hdbank: hdbankMessages.length,
         vikkiBank: vikkiMessages.length,
         vietjetAir: vietjetMessages.length,
-        total: hdbankMessages.length + vikkiMessages.length + vietjetMessages.length,
+        crm: crmMessages.length,
+        total:
+          hdbankMessages.length +
+          vikkiMessages.length +
+          vietjetMessages.length +
+          crmMessages.length,
       },
     }
   }

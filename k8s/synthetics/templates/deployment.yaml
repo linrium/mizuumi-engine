@@ -47,12 +47,16 @@ spec:
               value: {{ .Values.redpanda.topics.vn.vikki | quote }}
             - name: REDPANDA_TOPIC_VN_VIETJETAIR
               value: {{ .Values.redpanda.topics.vn.vietjetAir | quote }}
+            - name: REDPANDA_TOPIC_VN_CRM
+              value: {{ .Values.redpanda.topics.vn.crm | quote }}
             - name: REDPANDA_TOPIC_TH_HDBANK
               value: {{ .Values.redpanda.topics.th.hdbank | quote }}
             - name: REDPANDA_TOPIC_TH_VIKKI
               value: {{ .Values.redpanda.topics.th.vikki | quote }}
             - name: REDPANDA_TOPIC_TH_VIETJETAIR
               value: {{ .Values.redpanda.topics.th.vietjetAir | quote }}
+            - name: REDPANDA_TOPIC_TH_CRM
+              value: {{ .Values.redpanda.topics.th.crm | quote }}
             {{- with .Values.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

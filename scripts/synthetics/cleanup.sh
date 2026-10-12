@@ -8,16 +8,18 @@ topics=(
   "${SYNTHETICS_TOPIC_VN_HDBANK:-vn.synthetics.hdbank}"
   "${SYNTHETICS_TOPIC_VN_VIKKI:-vn.synthetics.vikki}"
   "${SYNTHETICS_TOPIC_VN_VIETJETAIR:-vn.synthetics.vietjetair}"
+  "${SYNTHETICS_TOPIC_VN_CRM:-vn.synthetics.crm}"
   "${SYNTHETICS_TOPIC_TH_HDBANK:-th.synthetics.hdbank}"
   "${SYNTHETICS_TOPIC_TH_VIKKI:-th.synthetics.vikki}"
   "${SYNTHETICS_TOPIC_TH_VIETJETAIR:-th.synthetics.vietjetair}"
+  "${SYNTHETICS_TOPIC_TH_CRM:-th.synthetics.crm}"
 )
 
 usage() {
   cat <<'EOF'
 Usage: ./scripts/synthetics/cleanup.sh [--dry-run]
 
-Deletes only the Vietnam and Thailand HDBank, Vikki, and VietJet Air topics
+Deletes only the Vietnam and Thailand HDBank, Vikki, VietJet Air, and CRM topics
 used by the synthetics service. The Helm release and namespace are not changed.
 
 Options:
@@ -30,9 +32,11 @@ Environment overrides:
   SYNTHETICS_TOPIC_VN_HDBANK       Vietnam HDBank topic
   SYNTHETICS_TOPIC_VN_VIKKI        Vietnam Vikki topic
   SYNTHETICS_TOPIC_VN_VIETJETAIR   Vietnam VietJet Air topic
+  SYNTHETICS_TOPIC_VN_CRM            Vietnam CRM topic
   SYNTHETICS_TOPIC_TH_HDBANK       Thailand HDBank topic
   SYNTHETICS_TOPIC_TH_VIKKI        Thailand Vikki topic
   SYNTHETICS_TOPIC_TH_VIETJETAIR   Thailand VietJet Air topic
+  SYNTHETICS_TOPIC_TH_CRM            Thailand CRM topic
 EOF
 }
 

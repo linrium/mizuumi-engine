@@ -72,7 +72,7 @@ function t24Customer(id: string, company: string) {
 
 function dataset() {
   return {
-    schemaVersion: "1.0.0",
+    schemaVersion: "2.0.0",
     region: "vn",
     generatedAt: "2026-10-12T01:00:00.000Z",
     seed: 42,
@@ -149,14 +149,10 @@ describe("SyntheticDatasetSchema", () => {
     assert.equal(SyntheticDatasetSchema.safeParse(dataset()).success, true)
   })
 
-  it("rejects identity drift between services", () => {
+  it("allows structurally valid identity drift between source systems", () => {
     const input = dataset()
     input.organizations.vietjetAir.customers[0].phoneNumber = "+84909999999"
 
-    const result = SyntheticDatasetSchema.safeParse(input)
-    assert.equal(result.success, false)
-    if (!result.success) {
-      assert.match(result.error.issues[0]?.message ?? "", /canonical Vietnamese person/)
-    }
+    assert.equal(SyntheticDatasetSchema.safeParse(input).success, true)
   })
 })

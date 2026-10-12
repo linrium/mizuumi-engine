@@ -9,15 +9,21 @@ class TestPublisher implements SyntheticPublisher {
 
   async publish(generated: GeneratedSyntheticData) {
     this.published.push(generated)
-    const count = generated.records.length
+    const messages = {
+      hdbank: generated.coverage.hdbank,
+      vikkiBank: generated.coverage.vikkiBank,
+      vietjetAir: generated.coverage.vietjetAir,
+      crm: generated.coverage.crm,
+    }
     return {
       region: generated.dataset.region,
       topics: {
         hdbank: `${generated.dataset.region}.test.hdbank`,
         vikkiBank: `${generated.dataset.region}.test.vikki`,
         vietjetAir: `${generated.dataset.region}.test.vietjetair`,
+        crm: `${generated.dataset.region}.test.crm`,
       },
-      messages: { hdbank: count, vikkiBank: count, vietjetAir: count, total: count * 3 },
+      messages: { ...messages, total: Object.values(messages).reduce((sum, count) => sum + count, 0) },
     }
   }
 
@@ -25,14 +31,22 @@ class TestPublisher implements SyntheticPublisher {
 }
 
 describe("POST /api/v1/generate", () => {
-  it("generates and publishes one message per person per organization", async () => {
+  it("generates selected scenarios and returns coverage and anomaly metadata", async () => {
     const publisher = new TestPublisher()
     const server = buildServer({ publisher, logger: false })
 
     const response = await server.inject({
       method: "POST",
       url: "/api/v1/generate",
-      payload: { region: "th", count: 2, seed: 42 },
+      payload: {
+        region: "th",
+        count: 2,
+        seed: 42,
+        generatedAt: "2026-10-13T01:00:00.000Z",
+        scenario: "clean",
+        sourceMode: "all",
+        includeManifest: true,
+      },
     })
     await server.close()
 
@@ -41,7 +55,10 @@ describe("POST /api/v1/generate", () => {
     assert.equal(body.seed, 42)
     assert.equal(body.region, "th")
     assert.equal(body.peopleGenerated, 2)
-    assert.equal(body.published.messages.total, 6)
+    assert.equal(body.published.messages.total, 8)
+    assert.deepEqual(body.coverage, { hdbank: 2, vikkiBank: 2, vietjetAir: 2, crm: 2 })
+    assert.equal(body.anomalies.total, 0)
+    assert.deepEqual(body.anomalies.manifest, [])
     assert.equal(publisher.published.length, 1)
     assert.equal(publisher.published[0]?.dataset.region, "th")
   })

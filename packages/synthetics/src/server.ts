@@ -3,6 +3,7 @@ import { pathToFileURL } from "node:url"
 import Fastify from "fastify"
 import { z } from "zod"
 import { generateSyntheticData } from "./generator.js"
+import { sourceNames } from "./generator.js"
 import {
   RedpandaPublisher,
   type PublishSummary,
@@ -13,6 +14,13 @@ const GenerateRequestSchema = z.object({
   region: z.enum(["vn", "th"]).default("vn"),
   count: z.number().int().min(1).max(100).default(1),
   seed: z.number().int().min(0).max(2_147_483_647).optional(),
+  generatedAt: z.string().datetime().optional(),
+  scenario: z.enum(["clean", "realistic", "matcher-demo", "stress"]).default("realistic"),
+  sourceMode: z.enum(["sampled", "all"]).default("sampled"),
+  sources: z.array(z.enum(sourceNames)).min(1).max(sourceNames.length).optional(),
+  anomalyRate: z.number().min(0).max(1).optional(),
+  maxAnomaliesPerPerson: z.number().int().min(1).max(3).default(3),
+  includeManifest: z.boolean().default(false),
 })
 
 export type GenerateResponse = {
@@ -20,6 +28,11 @@ export type GenerateResponse = {
   generatedAt: string
   seed: number
   peopleGenerated: number
+  coverage: Record<(typeof sourceNames)[number], number>
+  anomalies: {
+    total: number
+    manifest?: ReturnType<typeof generateSyntheticData>["manifest"]
+  }
   published: PublishSummary
 }
 
@@ -43,6 +56,12 @@ export function buildServer(
       region: parsed.data.region,
       count: parsed.data.count,
       seed,
+      generatedAt: parsed.data.generatedAt ? new Date(parsed.data.generatedAt) : undefined,
+      scenario: parsed.data.scenario,
+      sourceMode: parsed.data.sourceMode,
+      sources: parsed.data.sources,
+      anomalyRate: parsed.data.anomalyRate,
+      maxAnomaliesPerPerson: parsed.data.maxAnomaliesPerPerson,
     })
 
     try {
@@ -52,6 +71,11 @@ export function buildServer(
         generatedAt: generated.dataset.generatedAt,
         seed,
         peopleGenerated: generated.records.length,
+        coverage: generated.coverage,
+        anomalies: {
+          total: generated.manifest.length,
+          manifest: parsed.data.includeManifest ? generated.manifest : undefined,
+        },
         published,
       }
       return reply.send(response)

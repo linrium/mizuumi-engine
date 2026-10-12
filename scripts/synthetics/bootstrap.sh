@@ -10,9 +10,11 @@ topics=(
   "${SYNTHETICS_TOPIC_VN_HDBANK:-vn.synthetics.hdbank}"
   "${SYNTHETICS_TOPIC_VN_VIKKI:-vn.synthetics.vikki}"
   "${SYNTHETICS_TOPIC_VN_VIETJETAIR:-vn.synthetics.vietjetair}"
+  "${SYNTHETICS_TOPIC_VN_CRM:-vn.synthetics.crm}"
   "${SYNTHETICS_TOPIC_TH_HDBANK:-th.synthetics.hdbank}"
   "${SYNTHETICS_TOPIC_TH_VIKKI:-th.synthetics.vikki}"
   "${SYNTHETICS_TOPIC_TH_VIETJETAIR:-th.synthetics.vietjetair}"
+  "${SYNTHETICS_TOPIC_TH_CRM:-th.synthetics.crm}"
 )
 
 command -v kubectl >/dev/null 2>&1 || { echo "Missing required command: kubectl" >&2; exit 1; }
@@ -46,5 +48,5 @@ for topic in "${topics[@]}"; do
   fi
 done
 
-echo "Synthetics bootstrap complete: namespace '$namespace' and six regional Redpanda topics are ready."
+echo "Synthetics bootstrap complete: namespace '$namespace' and eight regional Redpanda topics are ready."
 echo "Run ./scripts/synthetics/setup.sh."

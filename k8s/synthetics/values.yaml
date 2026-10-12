@@ -19,10 +19,12 @@ redpanda:
       hdbank: vn.synthetics.hdbank
       vikki: vn.synthetics.vikki
       vietjetAir: vn.synthetics.vietjetair
+      crm: vn.synthetics.crm
     th:
       hdbank: th.synthetics.hdbank
       vikki: th.synthetics.vikki
       vietjetAir: th.synthetics.vietjetair
+      crm: th.synthetics.crm
 
 resources:
   requests:
