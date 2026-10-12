@@ -1,0 +1,40 @@
+replicas: 1
+
+image:
+  repository: mizuumi/synthetics
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 4020
+
+redpanda:
+  brokers: redpanda.redpanda.svc.cluster.local:9092
+  clientId: mizuumi-synthetics
+  tls: false
+  saslSecretName: ""
+  topics:
+    vn:
+      hdbank: vn.synthetics.hdbank
+      vikki: vn.synthetics.vikki
+      vietjetAir: vn.synthetics.vietjetair
+    th:
+      hdbank: th.synthetics.hdbank
+      vikki: th.synthetics.vikki
+      vietjetAir: th.synthetics.vietjetair
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+serviceAccount:
+  create: true
+  automount: false
+  name: ""
+
+extraEnv: []
