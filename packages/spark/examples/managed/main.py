@@ -8,7 +8,6 @@ import re
 import ssl
 from urllib import error, parse, request
 
-from dagster_pipes import open_dagster_pipes
 from pyspark.sql import SparkSession
 
 
@@ -70,7 +69,7 @@ def service_principal_token() -> str:
     return token
 
 
-def verify_managed_table(catalog_uri: str, table_name: str) -> str:
+def verify_managed_table(catalog_uri: str, table_name: str) -> None:
     table_url = (
         f"{catalog_uri.rstrip('/')}/api/2.1/unity-catalog/tables/"
         f"{parse.quote(table_name, safe='')}"
@@ -89,63 +88,47 @@ def verify_managed_table(catalog_uri: str, table_name: str) -> str:
         raise RuntimeError(
             f"Expected a MANAGED table, got {metadata.get('table_type')!r}"
         )
-    return metadata["storage_location"]
 
 
 def main() -> None:
-    with open_dagster_pipes() as pipes:
-        catalog = required_env("UNITY_CATALOG_NAME")
-        if not IDENTIFIER.fullmatch(catalog):
-            raise RuntimeError(f"Invalid catalog name: {catalog!r}")
-        token_url = keycloak_token_url()
-        client_id = required_env("KEYCLOAK_CLIENT_ID")
-        client_secret = required_env("KEYCLOAK_CLIENT_SECRET")
+    catalog = required_env("UNITY_CATALOG_NAME")
+    if not IDENTIFIER.fullmatch(catalog):
+        raise RuntimeError(f"Invalid catalog name: {catalog!r}")
+    token_url = keycloak_token_url()
+    client_id = required_env("KEYCLOAK_CLIENT_ID")
+    client_secret = required_env("KEYCLOAK_CLIENT_SECRET")
 
-        spark = SparkSession.builder.appName("unity-catalog-managed-example").getOrCreate()
-        try:
-            spark.sparkContext.setLogLevel("WARN")
-            catalog_conf = f"spark.sql.catalog.{catalog}.auth"
-            spark.conf.set(f"{catalog_conf}.type", "oauth")
-            spark.conf.set(f"{catalog_conf}.oauth.uri", token_url)
-            spark.conf.set(f"{catalog_conf}.oauth.clientId", client_id)
-            spark.conf.set(f"{catalog_conf}.oauth.clientSecret", client_secret)
-            spark.conf.set(f"{catalog_conf}.oauth.scope", "openid")
+    spark = SparkSession.builder.appName("unity-catalog-managed-example").getOrCreate()
+    try:
+        spark.sparkContext.setLogLevel("WARN")
+        catalog_conf = f"spark.sql.catalog.{catalog}.auth"
+        spark.conf.set(f"{catalog_conf}.type", "oauth")
+        spark.conf.set(f"{catalog_conf}.oauth.uri", token_url)
+        spark.conf.set(f"{catalog_conf}.oauth.clientId", client_id)
+        spark.conf.set(f"{catalog_conf}.oauth.clientSecret", client_secret)
+        spark.conf.set(f"{catalog_conf}.oauth.scope", "openid")
 
-            table_name = f"{catalog}.demo.orders"
-            # Omitting LOCATION asks Unity Catalog to allocate managed storage.
-            spark.sql(
-                f"CREATE TABLE IF NOT EXISTS {table_name} ("
-                "order_id BIGINT, product STRING, quantity INT) USING DELTA"
-            )
-            location = verify_managed_table(
-                spark.conf.get(f"spark.sql.catalog.{catalog}.uri"), table_name
-            )
+        table_name = f"{catalog}.demo.orders"
+        # Omitting LOCATION asks Unity Catalog to allocate managed storage.
+        spark.sql(
+            f"CREATE TABLE IF NOT EXISTS {table_name} ("
+            "order_id BIGINT, product STRING, quantity INT) USING DELTA"
+        )
+        verify_managed_table(
+            spark.conf.get(f"spark.sql.catalog.{catalog}.uri"), table_name
+        )
 
-            spark.sql(
-                f"INSERT OVERWRITE TABLE {table_name} VALUES "
-                "(1, 'tea', 2), (2, 'rice', 1), (3, 'tea', 3)"
-            )
-            result = spark.table(table_name)
-            row_count = result.count()
-            quantity_sum = result.agg({"quantity": "sum"}).first()[0]
-            if row_count != 3 or quantity_sum != 6:
-                raise RuntimeError("Managed table validation failed")
-
-            pipes.log.info(f"Managed table validation passed: {table_name}")
-            pipes.log.info(f"Unity Catalog storage location: {location}")
-            result.orderBy("order_id").show(truncate=False)
-
-            pipes.report_asset_materialization(
-                asset_key="unity/demo/orders",
-                metadata={
-                    "table_name": table_name,
-                    "row_count": int(row_count),
-                    "quantity_sum": int(quantity_sum),
-                    "storage_location": location,
-                },
-            )
-        finally:
-            spark.stop()
+        spark.sql(
+            f"INSERT OVERWRITE TABLE {table_name} VALUES "
+            "(1, 'tea', 2), (2, 'rice', 1), (3, 'tea', 3)"
+        )
+        result = spark.table(table_name)
+        row_count = result.count()
+        quantity_sum = result.agg({"quantity": "sum"}).first()[0]
+        if row_count != 3 or quantity_sum != 6:
+            raise RuntimeError("Managed table validation failed")
+    finally:
+        spark.stop()
 
 
 if __name__ == "__main__":

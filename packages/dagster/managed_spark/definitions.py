@@ -1,33 +1,22 @@
-"""Dagster asset that runs the managed Unity Catalog Spark job via spark-submit,
-orchestrated with Dagster Pipes.
+"""Dagster asset that runs the managed Unity Catalog Spark job via spark-submit.
 
 Each materialization launches a short-lived Kubernetes Job (via
-``PipesK8sClient``) in the Spark namespace running the ``mizuumi/spark``
+``execute_k8s_job``) in the Spark namespace running the ``mizuumi/spark``
 image. The Job executes ``spark-submit --deploy-mode cluster`` against the
 in-cluster API server, which spawns the Spark driver pod and blocks until
 the application finishes (``spark.kubernetes.submission.waitAppCompletion``).
-
-Pipes injects ``DAGSTER_PIPES_CONTEXT`` and ``DAGSTER_PIPES_MESSAGES`` into
-the submission pod; the submit wrapper propagates them to the driver pod via
-``spark.kubernetes.driverEnv.*`` so the Spark driver's ``main.py`` can
-``open_dagster_pipes()`` and report the asset materialization + metadata
-back. Dagster streams the submission pod's stdout — which includes the
-driver's stdout thanks to ``waitAppCompletion`` — into the run log, so both
-driver logs and Pipes messages flow through one channel.
 """
 
 import os
 
 from dagster import (
-    AssetExecutionContext,
     AssetSelection,
     Definitions,
-    MaterializeResult,
     ScheduleDefinition,
-    asset,
     define_asset_job,
+    graph_asset,
 )
-from dagster_k8s import PipesK8sClient
+from dagster_k8s import k8s_job_op
 
 
 SPARK_NAMESPACE = os.environ.get("SPARK_NAMESPACE", "spark")
@@ -159,15 +148,7 @@ def _driver_pod_template() -> str:
 
 
 def _submit_shell_command() -> str:
-    """Shell wrapper for the submission pod.
-
-    Pipes injects DAGSTER_PIPES_CONTEXT and DAGSTER_PIPES_MESSAGES into the
-    submit container's environment. We forward both to the driver via
-    `spark.kubernetes.driverEnv.*` so the driver can `open_dagster_pipes()`.
-    We also render a driver pod template at startup so the Spark driver pod
-    mounts the script ConfigMap (Spark's `spark.kubernetes.driver.volumes.*`
-    does not support `configMap` as a volume type).
-    """
+    """Render the driver pod template, then run the blocking Spark submission."""
     main_py = f"local://{SPARK_SCRIPT_MOUNT_PATH}/{SPARK_SCRIPT_FILENAME}"
     conf_flags = " ".join(
         f'--conf "{key}={value}"' for key, value in _spark_conf().items()
@@ -182,39 +163,46 @@ def _submit_shell_command() -> str:
         "--master k8s://https://kubernetes.default.svc "
         "--deploy-mode cluster "
         f"--name {SPARK_APP_NAME} "
-        '--conf "spark.kubernetes.driverEnv.DAGSTER_PIPES_CONTEXT=${DAGSTER_PIPES_CONTEXT:-}" '
-        '--conf "spark.kubernetes.driverEnv.DAGSTER_PIPES_MESSAGES=${DAGSTER_PIPES_MESSAGES:-}" '
         f"{conf_flags} "
         f"{main_py}"
     )
 
 
-@asset(
+spark_submit_op = k8s_job_op.configured(
+    {
+        "namespace": SPARK_NAMESPACE,
+        "image": SPARK_IMAGE,
+        "command": ["/bin/bash", "-c", _submit_shell_command()],
+        "image_pull_policy": "Always",
+        "service_account_name": SPARK_SERVICE_ACCOUNT,
+        "labels": {"app.kubernetes.io/name": f"{SPARK_APP_NAME}-submit"},
+        # The Dagster run pod inherits namespace-local env/envFrom entries from
+        # the user-code deployment. Do not copy those references into the
+        # Spark namespace, where their ConfigMaps do not exist.
+        "container_config": {"env": [], "envFrom": []},
+        "merge_behavior": "SHALLOW",
+        # execute_k8s_job deliberately skips pod-log streaming for OnFailure.
+        "pod_spec_config": {
+            "automountServiceAccountToken": True,
+            "restartPolicy": "OnFailure",
+        },
+    },
+    name="submit_managed_orders_spark_job",
+)
+
+
+@graph_asset(
     key=["unity", "demo", "orders"],
-    compute_kind="spark",
+    kinds={"spark"},
     group_name="unity_catalog",
     description=(
         "Managed Delta table in Unity Catalog. Each materialization launches "
-        "a `spark-submit` Kubernetes Job via Dagster Pipes; the Spark driver "
-        "reports its materialization + metadata back through the Pipes channel."
+        "a blocking `spark-submit` Kubernetes Job and succeeds when Spark "
+        "finishes successfully."
     ),
 )
-def unity_catalog_managed_orders(
-    context: AssetExecutionContext,
-    pipes_k8s_client: PipesK8sClient,
-) -> MaterializeResult:
-    return pipes_k8s_client.run(
-        context=context,
-        namespace=SPARK_NAMESPACE,
-        image=SPARK_IMAGE,
-        command=["/bin/bash", "-c", _submit_shell_command()],
-        base_pod_meta={"generate_name": f"{SPARK_APP_NAME}-submit-"},
-        base_pod_spec={
-            "serviceAccountName": SPARK_SERVICE_ACCOUNT,
-            "automountServiceAccountToken": True,
-        },
-        extras={"spark_app": SPARK_APP_NAME, "spark_image": SPARK_IMAGE},
-    ).get_materialize_result()
+def unity_catalog_managed_orders():
+    return spark_submit_op()
 
 
 unity_catalog_managed_orders_job = define_asset_job(
@@ -235,5 +223,4 @@ defs = Definitions(
     assets=[unity_catalog_managed_orders],
     jobs=[unity_catalog_managed_orders_job],
     schedules=[unity_catalog_managed_orders_schedule],
-    resources={"pipes_k8s_client": PipesK8sClient()},
 )

@@ -4,19 +4,18 @@ metadata:
   name: {{ include "dagster-umbrella.sparkAccessRoleName" . }}
   namespace: {{ .Values.sparkJobNamespace | quote }}
 rules:
-  # PipesK8sClient creates the spark-submit pod directly (not a Job) in the
-  # Spark namespace. We grant pods create/delete + batch/jobs for completeness
-  # (future-proof if we switch to Job-backed launches) and pods/log for
-  # tailing driver stdout via `read_namespaced_pod_log(follow=True)`.
+  # The Dagster k8s job op creates and waits for the spark-submit Job. Pod log
+  # access is intentionally omitted because this asset only needs completion
+  # status; Spark driver output remains available through Kubernetes itself.
   - apiGroups: ["batch"]
     resources: ["jobs"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["batch"]
+    resources: ["jobs/status"]
+    verbs: ["get", "list", "watch"]
   - apiGroups: [""]
     resources: ["pods"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-  - apiGroups: [""]
-    resources: ["pods/log"]
-    verbs: ["get", "list", "watch"]
   - apiGroups: [""]
     resources: ["pods/status"]
     verbs: ["get", "list", "watch"]
