@@ -148,6 +148,7 @@ def configure_unity_catalog(
         f"""
         ATTACH {sql_string(catalog)} AS unity (
           TYPE unity_catalog,
+          READ_ONLY,
           SECRET unity_catalog_auth,
           DEFAULT_SCHEMA {sql_string(default_schema)}
         )

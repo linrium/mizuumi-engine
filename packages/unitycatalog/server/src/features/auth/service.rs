@@ -354,11 +354,13 @@ impl AuthService {
                 "permission management requires the Unity Catalog admin role".to_owned(),
             ));
         }
-        let allowed = matches!(*method, Method::GET | Method::HEAD | Method::OPTIONS)
+        let reader_access_allowed = matches!(*method, Method::GET | Method::HEAD | Method::OPTIONS)
+            || (*method == Method::POST
+                && path == "/api/2.1/unity-catalog/temporary-table-credentials");
+        let allowed = reader_access_allowed
             && (principal.roles.contains(&self.inner.reader_role)
                 || principal.roles.contains(&self.inner.writer_role))
-            || !matches!(*method, Method::GET | Method::HEAD | Method::OPTIONS)
-                && principal.roles.contains(&self.inner.writer_role);
+            || !reader_access_allowed && principal.roles.contains(&self.inner.writer_role);
         if allowed {
             Ok(())
         } else {
@@ -580,6 +582,14 @@ mod tests {
                 "/api/catalogs"
             )
             .is_err()
+        );
+        assert!(
+            auth.authorize(
+                &principal("unitycatalog-reader"),
+                &Method::POST,
+                "/api/2.1/unity-catalog/temporary-table-credentials"
+            )
+            .is_ok()
         );
         assert!(
             auth.authorize(

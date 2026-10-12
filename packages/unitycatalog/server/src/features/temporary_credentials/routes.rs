@@ -82,7 +82,15 @@ async fn generate_temporary_table_credentials(
     Extension(principal): Extension<AuthenticatedPrincipal>,
     Valid(Json(request)): Valid<Json<GenerateTemporaryTableCredentialRequest>>,
 ) -> Result<Json<TemporaryCredentials>, AppError> {
-    let read_write = matches!(request.operation, TableOperation::ReadWrite);
+    let read_write = match request.operation {
+        TableOperation::Read => false,
+        TableOperation::ReadWrite => true,
+        TableOperation::UnknownTableOperation => {
+            return Err(AppError::InvalidParameter(
+                "unknown operation in the request: UNKNOWN_TABLE_OPERATION".to_owned(),
+            ));
+        }
+    };
     authorization::require_allowed(
         authorization::can_vend_table_credentials(
             &state,

@@ -6,7 +6,8 @@ from the dedicated `duck-server` RustFS bucket. A separate HTTP query endpoint
 accepts a signed-in user's Keycloak bearer token and attaches Mizuumi Unity
 Catalog as `unity` only for that request. Unity Catalog therefore authorizes
 metadata access and temporary S3 credentials as the user, not as Duck server or
-the Spark writer.
+the Spark writer. The per-request catalog attachment is read-only, so `SELECT`
+queries request read-only temporary credentials and never require `MODIFY`.
 
 The image builds `unity_catalog` and its matching `delta` extension from the
 fork in `packages/duck-uc-extension`. It does not install DuckDB's official
