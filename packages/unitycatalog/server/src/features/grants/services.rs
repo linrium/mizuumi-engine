@@ -77,13 +77,13 @@ impl GrantService for DefaultGrantService {
                    JOIN uc_catalogs c ON c.id = s.catalog_id \
                    WHERE t.id = $2 \
                      AND (\
-                       EXISTS (SELECT 1 FROM uc_permissions p WHERE p.principal = $1 AND p.resource_id = c.id AND p.privilege IN ('OWNER', 'USE CATALOG')) \
+                       EXISTS (SELECT 1 FROM uc_permissions p WHERE p.principal = $1 AND p.resource_id = c.id AND p.privilege IN ('OWNER', 'USE CATALOG') AND (p.expires_at IS NULL OR p.expires_at > ((EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::bigint))) \
                      ) \
-                     AND EXISTS (SELECT 1 FROM uc_permissions p WHERE p.principal = $1 AND p.resource_id = s.id AND p.privilege IN ('OWNER', 'USE SCHEMA')) \
+                     AND EXISTS (SELECT 1 FROM uc_permissions p WHERE p.principal = $1 AND p.resource_id = s.id AND p.privilege IN ('OWNER', 'USE SCHEMA') AND (p.expires_at IS NULL OR p.expires_at > ((EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::bigint))) \
                      AND (\
-                       EXISTS (SELECT 1 FROM uc_permissions p WHERE p.principal = $1 AND p.resource_id = t.id AND p.privilege = 'OWNER') \
-                       OR (NOT $3 AND EXISTS (SELECT 1 FROM uc_permissions p WHERE p.principal = $1 AND p.resource_id = t.id AND p.privilege = 'SELECT')) \
-                       OR ($3 AND EXISTS (SELECT 1 FROM uc_permissions p WHERE p.principal = $1 AND p.resource_id = t.id AND p.privilege = 'SELECT') AND EXISTS (SELECT 1 FROM uc_permissions p WHERE p.principal = $1 AND p.resource_id = t.id AND p.privilege = 'MODIFY')) \
+                       EXISTS (SELECT 1 FROM uc_permissions p WHERE p.principal = $1 AND p.resource_id = t.id AND p.privilege = 'OWNER' AND (p.expires_at IS NULL OR p.expires_at > ((EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::bigint))) \
+                       OR (NOT $3 AND EXISTS (SELECT 1 FROM uc_permissions p WHERE p.principal = $1 AND p.resource_id = t.id AND p.privilege = 'SELECT' AND (p.expires_at IS NULL OR p.expires_at > ((EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::bigint)))) \
+                       OR ($3 AND EXISTS (SELECT 1 FROM uc_permissions p WHERE p.principal = $1 AND p.resource_id = t.id AND p.privilege = 'SELECT' AND (p.expires_at IS NULL OR p.expires_at > ((EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::bigint))) AND EXISTS (SELECT 1 FROM uc_permissions p WHERE p.principal = $1 AND p.resource_id = t.id AND p.privilege = 'MODIFY' AND (p.expires_at IS NULL OR p.expires_at > ((EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::bigint)))) \
                      ) \
                  ) AS allowed",
                 &[&principal, &table_id, &read_write],
@@ -112,14 +112,14 @@ impl GrantService for DefaultGrantService {
                    SELECT 1 FROM location l \
                    WHERE EXISTS (\
                      SELECT 1 FROM uc_permissions p \
-                     WHERE p.principal = $1 AND p.resource_id = l.id AND p.privilege = 'OWNER'\
+                     WHERE p.principal = $1 AND p.resource_id = l.id AND p.privilege = 'OWNER' AND (p.expires_at IS NULL OR p.expires_at > ((EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::bigint))\
                    ) OR (\
                      EXISTS (\
                        SELECT 1 FROM uc_permissions p \
-                       WHERE p.principal = $1 AND p.resource_id = l.id AND p.privilege = 'READ FILES'\
+                       WHERE p.principal = $1 AND p.resource_id = l.id AND p.privilege = 'READ FILES' AND (p.expires_at IS NULL OR p.expires_at > ((EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::bigint))\
                      ) AND (NOT $3 OR EXISTS (\
                        SELECT 1 FROM uc_permissions p \
-                       WHERE p.principal = $1 AND p.resource_id = l.id AND p.privilege = 'WRITE FILES'\
+                       WHERE p.principal = $1 AND p.resource_id = l.id AND p.privilege = 'WRITE FILES' AND (p.expires_at IS NULL OR p.expires_at > ((EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::bigint))\
                      ))\
                    )\
                  ) AS allowed",
@@ -179,6 +179,7 @@ impl GrantService for DefaultGrantService {
 
         for change in request.changes {
             changed_principals.insert(change.principal.clone());
+            let expires_at = change.expires_at.unwrap_or_default();
             for privilege in change.add {
                 queries::grant_permission()
                     .bind(
@@ -187,6 +188,7 @@ impl GrantService for DefaultGrantService {
                         &resource_id,
                         &securable_type.as_str(),
                         &privilege.as_str(),
+                        &expires_at,
                     )
                     .opt()
                     .await?;
@@ -239,6 +241,7 @@ impl GrantService for DefaultGrantService {
                  SELECT r.securable_type, r.full_name, p.principal, p.privilege \
                  FROM uc_permissions p \
                  JOIN resource r ON r.id = p.resource_id \
+                 WHERE p.expires_at IS NULL OR p.expires_at > ((EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::bigint) \
                  ORDER BY r.securable_type, r.full_name, p.principal, p.privilege",
                 &[],
             )

@@ -54,7 +54,8 @@ groups:
 ./scripts/auth/bootstrap-organizations.sh
 ```
 
-The default mappings are `hdbank=hdbankGrow=khaosoi` and
+The default mappings also create `sovico/sovicoSecurity` and assign both
+`khaopad` and `khaosoi`, alongside `hdbank=hdbankGrow=khaosoi` and
 `vietjet=vietjetGrow=khaopad`. The script is idempotent, enables Organizations
 for the realm, creates any missing organizations and groups, adds each user to
 the corresponding organization, and assigns the user to the group. Pass

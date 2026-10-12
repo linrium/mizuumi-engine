@@ -1,26 +1,29 @@
---! get_requestable_template
+--! resolve_request_policy
 SELECT
+    versions.template_id,
     versions.version,
+    versions.name,
     versions.approval_strategy,
-    COALESCE(versions.default_duration_seconds, 0) AS default_duration_seconds,
-    COALESCE(versions.max_duration_seconds, 0) AS max_duration_seconds
+    versions.auto_approve
 FROM policy_template_versions versions
-WHERE versions.template_id = :template_id::text
-  AND versions.status = 'PUBLISHED';
-
---! is_template_available_to_team
-SELECT EXISTS (
-    SELECT 1
-    FROM policy_template_affected_teams
-    WHERE template_id = :template_id::text
-      AND template_version = :template_version
-      AND team = :team::text
-) AS available;
+JOIN policy_template_affected_teams affected
+  ON affected.template_id = versions.template_id
+ AND affected.template_version = versions.version
+JOIN policy_template_grants policy_grant
+  ON policy_grant.template_id = versions.template_id
+ AND policy_grant.template_version = versions.version
+WHERE versions.status = 'PUBLISHED'
+  AND affected.team = :team::text
+  AND policy_grant.securable_type = :target_securable_type::text
+  AND policy_grant.target_full_name = :target_full_name::text
+  AND policy_grant.privilege = :privilege::text;
 
 --! create_access_request
 INSERT INTO access_requests (
     template_id,
     template_version,
+    template_name,
+    approval_strategy,
     requested_by,
     requested_for,
     routed_for_team,
@@ -29,20 +32,33 @@ INSERT INTO access_requests (
     reason,
     status,
     requested_duration_seconds,
-    idempotency_key
+    idempotency_key,
+    decided_by,
+    decided_at,
+    decision_comment,
+    access_expires_at
 )
 VALUES (
-    :template_id::text,
-    :template_version,
+    NULLIF(:template_id::text, ''),
+    CASE WHEN :template_id::text = '' THEN NULL ELSE :template_version::integer END,
+    :template_name::text,
+    :approval_strategy::text,
     :requested_by::text,
     :requested_for::text,
     :routed_for_team::text,
     :target_securable_type::text,
     :target_full_name::text,
     :reason::text,
-    'AWAITING_APPROVAL',
-    :requested_duration_seconds,
-    NULLIF(:idempotency_key::text, '')
+    CASE WHEN :auto_approve::boolean THEN 'APPROVED' ELSE 'AWAITING_APPROVAL' END,
+    :requested_duration_seconds::bigint,
+    NULLIF(:idempotency_key::text, ''),
+    CASE WHEN :auto_approve::boolean THEN 'system:auto-approve' END,
+    CASE WHEN :auto_approve::boolean THEN NOW() END,
+    CASE WHEN :auto_approve::boolean THEN 'Automatically approved by policy template' END,
+    CASE
+        WHEN :auto_approve::boolean
+        THEN NOW() + (:requested_duration_seconds::bigint * INTERVAL '1 second')
+    END
 )
 RETURNING id;
 
@@ -58,18 +74,24 @@ INSERT INTO access_request_grants (request_id, securable_type, full_name, privil
 SELECT
     :request_id::text,
     securable_type,
-    CASE
-        WHEN target_kind = 'REQUEST_RESOURCE' THEN :target_full_name::text
-        ELSE target_full_name
-    END,
+    target_full_name,
     privilege
 FROM policy_template_grants
 WHERE template_id = :template_id::text
-  AND template_version = :template_version
-  AND (
-      target_kind = 'FIXED_RESOURCE'
-      OR securable_type = :target_securable_type::text
-  );
+  AND template_version = :template_version;
+
+--! create_access_request_approval_team
+INSERT INTO access_request_approval_teams (request_id, team, required_approvals)
+VALUES (:request_id::text, :team::text, 1);
+
+--! create_access_request_grant
+INSERT INTO access_request_grants (request_id, securable_type, full_name, privilege)
+VALUES (
+    :request_id::text,
+    :securable_type::text,
+    :full_name::text,
+    :privilege::text
+);
 
 --! copy_access_request_guardrails
 INSERT INTO access_request_guardrails (
@@ -115,9 +137,9 @@ VALUES (
 --! list_access_requests
 SELECT
     requests.id,
-    requests.template_id,
-    requests.template_version,
-    versions.name AS template_name,
+    COALESCE(requests.template_id, '') AS template_id,
+    COALESCE(requests.template_version, 0) AS template_version,
+    requests.template_name,
     requests.requested_by,
     requests.requested_for,
     COALESCE(requests.routed_for_team, '') AS routed_for_team,
@@ -131,9 +153,6 @@ SELECT
     COALESCE(requests.decided_at::text, '') AS decided_at,
     COALESCE(requests.decision_comment, '') AS decision_comment
 FROM access_requests requests
-JOIN policy_template_versions versions
-  ON versions.template_id = requests.template_id
- AND versions.version = requests.template_version
 WHERE (:status::text = '' OR requests.status = :status::text)
   AND (:requested_by::text = '' OR requests.requested_by = :requested_by::text)
   AND (:requested_for::text = '' OR requests.requested_for = :requested_for::text)
@@ -148,13 +167,25 @@ WHERE (:status::text = '' OR requests.status = :status::text)
   )
 ORDER BY requests.submitted_at DESC, requests.id;
 
+--! expire_access_requests
+WITH expired AS (
+    UPDATE access_requests
+    SET status = 'EXPIRED'
+    WHERE status IN ('APPROVED', 'FULFILLED')
+      AND access_expires_at <= NOW()
+    RETURNING id
+)
+INSERT INTO access_request_events (request_id, event_type, actor, comment)
+SELECT id, 'EXPIRED', 'system:expiry', 'Requested access duration elapsed'
+FROM expired;
+
 --! get_access_request
 SELECT
     requests.id,
-    requests.template_id,
-    requests.template_version,
-    versions.name AS template_name,
-    versions.approval_strategy,
+    COALESCE(requests.template_id, '') AS template_id,
+    COALESCE(requests.template_version, 0) AS template_version,
+    requests.template_name,
+    requests.approval_strategy,
     requests.requested_by,
     requests.requested_for,
     COALESCE(requests.routed_for_team, '') AS routed_for_team,
@@ -170,19 +201,42 @@ SELECT
     COALESCE(requests.fulfilled_at::text, '') AS fulfilled_at,
     COALESCE(requests.access_expires_at::text, '') AS access_expires_at
 FROM access_requests requests
-JOIN policy_template_versions versions
-  ON versions.template_id = requests.template_id
- AND versions.version = requests.template_version
 WHERE requests.id = :request_id::text;
 
 --! lock_access_request
-SELECT requests.status, versions.approval_strategy
+SELECT requests.status, requests.approval_strategy
 FROM access_requests requests
-JOIN policy_template_versions versions
-  ON versions.template_id = requests.template_id
- AND versions.version = requests.template_version
 WHERE requests.id = :request_id::text
 FOR UPDATE OF requests;
+
+--! lock_owned_access_request
+SELECT status
+FROM access_requests
+WHERE id = :request_id::text
+  AND requested_by = :requested_by::text
+FOR UPDATE;
+
+--! clear_access_request_reviews
+DELETE FROM access_request_reviews
+WHERE request_id = :request_id::text;
+
+--! update_access_request
+UPDATE access_requests
+SET reason = :reason::text,
+    requested_duration_seconds = :requested_duration_seconds::bigint
+WHERE id = :request_id::text;
+
+--! revoke_access_request
+UPDATE access_requests
+SET status = 'CANCELLED',
+    decided_by = :requested_by::text,
+    decided_at = NOW(),
+    decision_comment = 'Access revoked by requester',
+    access_expires_at = CASE
+        WHEN access_expires_at IS NULL THEN NOW()
+        ELSE LEAST(access_expires_at, NOW())
+    END
+WHERE id = :request_id::text;
 
 --! list_access_request_approval_teams
 SELECT
@@ -270,7 +324,7 @@ VALUES (
 );
 
 --! is_access_request_fully_approved
-SELECT CASE versions.approval_strategy
+SELECT CASE requests.approval_strategy
     WHEN 'ALL' THEN NOT EXISTS (
         SELECT 1
         FROM access_request_approval_teams teams
@@ -297,9 +351,6 @@ SELECT CASE versions.approval_strategy
     )
 END AS approved
 FROM access_requests requests
-JOIN policy_template_versions versions
-  ON versions.template_id = requests.template_id
- AND versions.version = requests.template_version
 WHERE requests.id = :request_id::text;
 
 --! approve_access_request
@@ -307,7 +358,8 @@ UPDATE access_requests
 SET status = 'APPROVED',
     decided_by = :reviewer::text,
     decided_at = NOW(),
-    decision_comment = NULLIF(:comment::text, '')
+    decision_comment = NULLIF(:comment::text, ''),
+    access_expires_at = NOW() + (requested_duration_seconds * INTERVAL '1 second')
 WHERE id = :request_id::text;
 
 --! reject_access_request

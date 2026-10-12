@@ -64,6 +64,11 @@ All routes except `/health/livez` and `/health/readyz` require a bearer token. T
 | `unitycatalog-writer` | Read access and API mutations except permission management |
 | `unitycatalog-admin` | Full access, including `/permissions/...` |
 
+Permission additions may include an optional Unix-millisecond `expires_at` value on each change.
+Unity Catalog evaluates that timestamp on every permission and resource authorization check, so an
+expired assignment stops granting access immediately without waiting for a cleanup process. Omit
+`expires_at` for a permanent administrative grant.
+
 Roles may be present as realm roles or as client roles under `resource_access.unitycatalog`. Human principals use their verified token email (then username, then subject) as their ID. Keycloak service-account tokens use the service client ID. Inspect the current mapping with `GET /api/auth/me`.
 
 At first startup the server generates a 256-bit bootstrap token in `/var/run/unitycatalog/bootstrap-token` with mode `0600`. It has admin access and is intended only for initial provisioning. Retrieve it locally when needed:

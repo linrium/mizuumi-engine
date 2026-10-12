@@ -7,11 +7,11 @@ pub struct CreatePolicyTemplateRequest {
     pub name: String,
     pub description: Option<String>,
     pub approval_strategy: String,
-    pub default_duration_seconds: Option<i64>,
-    pub max_duration_seconds: Option<i64>,
+    #[serde(default)]
+    pub auto_approve: bool,
     pub affected_teams: Vec<String>,
     pub approval_teams: Vec<ApprovalTeam>,
-    pub grants: Vec<PolicyGrant>,
+    pub grant: PolicyGrant,
     #[serde(default)]
     pub guardrails: Vec<Guardrail>,
     pub created_by: String,
@@ -26,8 +26,6 @@ pub struct ApprovalTeam {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct PolicyGrant {
     pub securable_type: String,
-    pub target_kind: String,
-    #[serde(default)]
     pub target_full_name: String,
     pub privilege: String,
 }
@@ -55,8 +53,7 @@ pub struct PolicyTemplateSummary {
     pub name: String,
     pub description: Option<String>,
     pub approval_strategy: String,
-    pub default_duration_seconds: Option<i64>,
-    pub max_duration_seconds: Option<i64>,
+    pub auto_approve: bool,
     pub created_by: String,
     pub created_at: String,
 }
@@ -75,13 +72,12 @@ pub struct PolicyTemplate {
     pub description: Option<String>,
     pub status: String,
     pub approval_strategy: String,
+    pub auto_approve: bool,
     pub blast_radius_required: bool,
     pub guardrail_review_required: bool,
-    pub default_duration_seconds: Option<i64>,
-    pub max_duration_seconds: Option<i64>,
     pub affected_teams: Vec<String>,
     pub approval_teams: Vec<ApprovalTeam>,
-    pub grants: Vec<PolicyGrant>,
+    pub grant: PolicyGrant,
     pub guardrails: Vec<Guardrail>,
     pub created_by: String,
     pub created_at: String,

@@ -19,6 +19,7 @@ export function TableNav({
     { href: base, label: "Overview" },
     { href: `${base}/preview`, label: "Preview" },
     { href: `${base}/permissions`, label: "Permissions" },
+    { href: `${base}/requests`, label: "Requests" },
   ]
 
   return (

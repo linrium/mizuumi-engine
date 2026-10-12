@@ -23,22 +23,14 @@ CREATE TABLE IF NOT EXISTS policy_template_versions (
         CHECK (status IN ('DRAFT', 'PUBLISHED', 'RETIRED')),
     approval_strategy TEXT NOT NULL DEFAULT 'ANY'
         CHECK (approval_strategy IN ('ANY', 'ALL')),
+    auto_approve BOOLEAN NOT NULL DEFAULT FALSE,
     blast_radius_required BOOLEAN NOT NULL DEFAULT TRUE,
     guardrail_review_required BOOLEAN NOT NULL DEFAULT TRUE,
-    default_duration_seconds BIGINT
-        CHECK (default_duration_seconds IS NULL OR default_duration_seconds > 0),
-    max_duration_seconds BIGINT
-        CHECK (max_duration_seconds IS NULL OR max_duration_seconds > 0),
     created_by TEXT NOT NULL CHECK (BTRIM(created_by) <> ''),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     published_by TEXT,
     published_at TIMESTAMPTZ,
     PRIMARY KEY (template_id, version),
-    CHECK (
-        default_duration_seconds IS NULL
-        OR max_duration_seconds IS NULL
-        OR default_duration_seconds <= max_duration_seconds
-    ),
     CHECK (
         (status = 'PUBLISHED' AND published_by IS NOT NULL AND published_at IS NOT NULL)
         OR status <> 'PUBLISHED'
@@ -65,9 +57,7 @@ CREATE TABLE IF NOT EXISTS policy_template_grants (
             'credential'
         )
     ),
-    target_kind TEXT NOT NULL DEFAULT 'REQUEST_RESOURCE'
-        CHECK (target_kind IN ('REQUEST_RESOURCE', 'FIXED_RESOURCE')),
-    target_full_name TEXT NOT NULL DEFAULT '',
+    target_full_name TEXT NOT NULL CHECK (BTRIM(target_full_name) <> ''),
     privilege TEXT NOT NULL CHECK (
         privilege IN (
             'OWNER',
@@ -92,21 +82,21 @@ CREATE TABLE IF NOT EXISTS policy_template_grants (
             'CREATE STORAGE CREDENTIAL'
         )
     ),
-    PRIMARY KEY (
-        template_id,
-        template_version,
-        securable_type,
-        target_kind,
-        target_full_name,
-        privilege
+    CHECK (
+        (securable_type = 'metastore' AND privilege = 'CREATE CATALOG')
+        OR (securable_type = 'catalog' AND privilege IN ('USE CATALOG', 'CREATE SCHEMA'))
+        OR (securable_type = 'schema' AND privilege IN ('USE SCHEMA', 'CREATE TABLE', 'CREATE FUNCTION', 'CREATE VOLUME', 'CREATE MODEL'))
+        OR (securable_type = 'table' AND privilege IN ('SELECT', 'MODIFY'))
+        OR (securable_type IN ('function', 'registered_model') AND privilege = 'EXECUTE')
+        OR (securable_type = 'volume' AND privilege = 'READ VOLUME')
+        OR (securable_type = 'external_location' AND privilege IN ('READ FILES', 'WRITE FILES', 'CREATE EXTERNAL TABLE', 'CREATE EXTERNAL VOLUME', 'CREATE MANAGED STORAGE'))
+        OR (securable_type = 'credential' AND privilege IN ('CREATE EXTERNAL LOCATION', 'CREATE STORAGE CREDENTIAL'))
     ),
+    PRIMARY KEY (template_id, template_version),
+    UNIQUE (securable_type, target_full_name, privilege),
     FOREIGN KEY (template_id, template_version)
         REFERENCES policy_template_versions(template_id, version)
-        ON DELETE CASCADE,
-    CHECK (
-        (target_kind = 'REQUEST_RESOURCE' AND target_full_name = '')
-        OR (target_kind = 'FIXED_RESOURCE' AND BTRIM(target_full_name) <> '')
-    )
+        ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS policy_template_affected_teams (
@@ -151,8 +141,11 @@ CREATE TABLE IF NOT EXISTS policy_template_guardrails (
 
 CREATE TABLE IF NOT EXISTS access_requests (
     id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-    template_id TEXT NOT NULL,
-    template_version INTEGER NOT NULL,
+    template_id TEXT,
+    template_version INTEGER,
+    template_name TEXT NOT NULL,
+    approval_strategy TEXT NOT NULL DEFAULT 'ANY'
+        CHECK (approval_strategy IN ('ANY', 'ALL')),
     requested_by TEXT NOT NULL CHECK (BTRIM(requested_by) <> ''),
     requested_for TEXT NOT NULL CHECK (BTRIM(requested_for) <> ''),
     routed_for_team TEXT CHECK (routed_for_team IS NULL OR BTRIM(routed_for_team) <> ''),
@@ -189,7 +182,10 @@ CREATE TABLE IF NOT EXISTS access_requests (
     ),
     requested_duration_seconds BIGINT NOT NULL
         CONSTRAINT access_requests_duration_required
-        CHECK (requested_duration_seconds > 0),
+        CHECK (
+            requested_duration_seconds > 0
+            AND requested_duration_seconds % 3600 = 0
+        ),
     idempotency_key TEXT,
     submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     decided_by TEXT,
@@ -199,6 +195,10 @@ CREATE TABLE IF NOT EXISTS access_requests (
     access_expires_at TIMESTAMPTZ,
     FOREIGN KEY (template_id, template_version)
         REFERENCES policy_template_versions(template_id, version),
+    CHECK (
+        (template_id IS NULL AND template_version IS NULL)
+        OR (template_id IS NOT NULL AND template_version IS NOT NULL)
+    ),
     CHECK (idempotency_key IS NULL OR BTRIM(idempotency_key) <> '')
 );
 
@@ -226,6 +226,7 @@ BEGIN
             CHECK (
                 requested_duration_seconds IS NOT NULL
                 AND requested_duration_seconds > 0
+                AND requested_duration_seconds % 3600 = 0
             ) NOT VALID;
     END IF;
 END
@@ -311,6 +312,16 @@ CREATE TABLE IF NOT EXISTS access_request_grants (
             'CREATE MANAGED STORAGE',
             'CREATE STORAGE CREDENTIAL'
         )
+    ),
+    CHECK (
+        (securable_type = 'metastore' AND privilege = 'CREATE CATALOG')
+        OR (securable_type = 'catalog' AND privilege IN ('USE CATALOG', 'CREATE SCHEMA'))
+        OR (securable_type = 'schema' AND privilege IN ('USE SCHEMA', 'CREATE TABLE', 'CREATE FUNCTION', 'CREATE VOLUME', 'CREATE MODEL'))
+        OR (securable_type = 'table' AND privilege IN ('SELECT', 'MODIFY'))
+        OR (securable_type IN ('function', 'registered_model') AND privilege = 'EXECUTE')
+        OR (securable_type = 'volume' AND privilege = 'READ VOLUME')
+        OR (securable_type = 'external_location' AND privilege IN ('READ FILES', 'WRITE FILES', 'CREATE EXTERNAL TABLE', 'CREATE EXTERNAL VOLUME', 'CREATE MANAGED STORAGE'))
+        OR (securable_type = 'credential' AND privilege IN ('CREATE EXTERNAL LOCATION', 'CREATE STORAGE CREDENTIAL'))
     ),
     fulfillment_status TEXT NOT NULL DEFAULT 'PENDING'
         CHECK (fulfillment_status IN ('PENDING', 'GRANTED', 'FAILED', 'REVOKED')),
@@ -469,6 +480,7 @@ CREATE TABLE IF NOT EXISTS access_request_events (
     event_type TEXT NOT NULL CHECK (
         event_type IN (
             'SUBMITTED',
+            'UPDATED',
             'APPROVAL_RECORDED',
             'APPROVED',
             'REJECTED',
@@ -492,8 +504,8 @@ CREATE INDEX IF NOT EXISTS idx_access_request_events_request
 
 COMMENT ON TABLE policy_template_versions IS
     'Immutable policy definitions; publish a new version instead of editing a published version.';
-COMMENT ON COLUMN policy_template_grants.target_kind IS
-    'REQUEST_RESOURCE applies to the resource named by an access request; FIXED_RESOURCE uses target_full_name.';
+COMMENT ON TABLE policy_template_grants IS
+    'Exactly one fixed securable and privilege belongs to each policy template version.';
 COMMENT ON TABLE policy_template_affected_teams IS
     'External team identifiers whose members are eligible to discover and request a template.';
 COMMENT ON TABLE policy_template_approval_teams IS

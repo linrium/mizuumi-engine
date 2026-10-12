@@ -8,7 +8,7 @@ use crate::error::AppError;
 use super::dtos::{
     AccessRequest, AccessRequestSummary, CreateAccessRequest, ListAccessRequestsRequest,
     ListAccessRequestsResponse, RequestApprovalTeam, RequestEvent, RequestGrant, RequestGuardrail,
-    RequestReview, ReviewAccessRequest,
+    RequestReview, ReviewAccessRequest, RevokeAccessRequest, UpdateAccessRequest,
 };
 
 const REQUEST_STATUSES: &[&str] = &[
@@ -35,6 +35,33 @@ const SECURABLE_TYPES: &[&str] = &[
     "external_location",
     "credential",
 ];
+const DEFAULT_APPROVAL_TEAM: &str = "sovicoSecurity";
+
+fn privileges_for(securable_type: &str) -> &'static [&'static str] {
+    match securable_type {
+        "metastore" => &["CREATE CATALOG"],
+        "catalog" => &["USE CATALOG", "CREATE SCHEMA"],
+        "schema" => &[
+            "USE SCHEMA",
+            "CREATE TABLE",
+            "CREATE FUNCTION",
+            "CREATE VOLUME",
+            "CREATE MODEL",
+        ],
+        "table" => &["SELECT", "MODIFY"],
+        "function" | "registered_model" => &["EXECUTE"],
+        "volume" => &["READ VOLUME"],
+        "external_location" => &[
+            "READ FILES",
+            "WRITE FILES",
+            "CREATE EXTERNAL TABLE",
+            "CREATE EXTERNAL VOLUME",
+            "CREATE MANAGED STORAGE",
+        ],
+        "credential" => &["CREATE EXTERNAL LOCATION", "CREATE STORAGE CREDENTIAL"],
+        _ => &[],
+    }
+}
 
 #[async_trait]
 pub trait AccessRequestService: Send + Sync {
@@ -56,6 +83,16 @@ pub trait AccessRequestService: Send + Sync {
         &self,
         request_id: String,
         review: ReviewAccessRequest,
+    ) -> Result<AccessRequest, AppError>;
+    async fn update_access_request(
+        &self,
+        request_id: String,
+        request: UpdateAccessRequest,
+    ) -> Result<AccessRequest, AppError>;
+    async fn revoke_access_request(
+        &self,
+        request_id: String,
+        request: RevokeAccessRequest,
     ) -> Result<AccessRequest, AppError>;
 }
 
@@ -157,35 +194,35 @@ impl AccessRequestService for DefaultAccessRequestService {
 
         let mut client = self.pool.get().await?;
         let transaction = client.transaction().await?;
-        let template = queries::get_requestable_template()
-            .bind(&transaction, &request.template_id)
-            .opt()
-            .await?
-            .ok_or_else(|| {
-                AppError::NotFound(format!("published policy template {}", request.template_id))
-            })?;
-        if !queries::is_template_available_to_team()
+        let template = queries::resolve_request_policy()
             .bind(
                 &transaction,
-                &request.template_id,
-                &template.version,
                 &request.routed_for_team,
+                &request.target_securable_type,
+                &request.target_full_name,
+                &request.requested_privilege,
             )
-            .one()
-            .await?
-        {
-            return Err(AppError::Forbidden(format!(
-                "policy template is not available to team {}",
-                request.routed_for_team
-            )));
-        }
+            .opt()
+            .await?;
+        let template_id = template
+            .as_ref()
+            .map(|item| item.template_id.as_str())
+            .unwrap_or_default();
+        let template_version = template
+            .as_ref()
+            .map(|item| item.version)
+            .unwrap_or_default();
+        let template_name = template
+            .as_ref()
+            .map(|item| item.name.as_str())
+            .unwrap_or("Default security review");
+        let approval_strategy = template
+            .as_ref()
+            .map(|item| item.approval_strategy.as_str())
+            .unwrap_or("ANY");
+        let auto_approve = template.as_ref().is_some_and(|item| item.auto_approve);
 
         let requested_duration = request.requested_duration_seconds;
-        if template.max_duration_seconds > 0 && requested_duration > template.max_duration_seconds {
-            return Err(AppError::InvalidParameter(
-                "requested duration exceeds the policy template limit".to_owned(),
-            ));
-        }
 
         let requested_for = request
             .requested_for
@@ -196,14 +233,17 @@ impl AccessRequestService for DefaultAccessRequestService {
         let request_id = queries::create_access_request()
             .bind(
                 &transaction,
-                &request.template_id,
-                &template.version,
+                &template_id,
+                &template_version,
+                &template_name,
+                &approval_strategy,
                 &request.requested_by,
                 &requested_for,
                 &request.routed_for_team,
                 &request.target_securable_type,
                 &request.target_full_name,
                 &reason,
+                &auto_approve,
                 &requested_duration,
                 &idempotency_key,
             )
@@ -211,38 +251,54 @@ impl AccessRequestService for DefaultAccessRequestService {
             .await
             .map_err(map_request_write_error)?;
 
-        queries::copy_access_request_approval_teams()
-            .bind(
-                &transaction,
-                &request_id,
-                &request.template_id,
-                &template.version,
-            )
-            .await?;
-        queries::copy_access_request_grants()
-            .bind(
-                &transaction,
-                &request_id,
-                &request.target_full_name,
-                &request.template_id,
-                &template.version,
-                &request.target_securable_type,
-            )
-            .await?;
-        queries::copy_access_request_guardrails()
-            .bind(
-                &transaction,
-                &request_id,
-                &request.template_id,
-                &template.version,
-            )
-            .await?;
+        if let Some(template) = &template {
+            if !template.auto_approve {
+                queries::copy_access_request_approval_teams()
+                    .bind(
+                        &transaction,
+                        &request_id,
+                        &template.template_id,
+                        &template.version,
+                    )
+                    .await?;
+            }
+            queries::copy_access_request_grants()
+                .bind(
+                    &transaction,
+                    &request_id,
+                    &template.template_id,
+                    &template.version,
+                )
+                .await?;
+            queries::copy_access_request_guardrails()
+                .bind(
+                    &transaction,
+                    &request_id,
+                    &template.template_id,
+                    &template.version,
+                )
+                .await?;
+        } else {
+            queries::create_access_request_approval_team()
+                .bind(&transaction, &request_id, &DEFAULT_APPROVAL_TEAM)
+                .await?;
+            queries::create_access_request_grant()
+                .bind(
+                    &transaction,
+                    &request_id,
+                    &request.target_securable_type,
+                    &request.target_full_name,
+                    &request.requested_privilege,
+                )
+                .await?;
+        }
 
-        if queries::count_access_request_approval_teams()
-            .bind(&transaction, &request_id)
-            .one()
-            .await?
-            == 0
+        if !auto_approve
+            && queries::count_access_request_approval_teams()
+                .bind(&transaction, &request_id)
+                .one()
+                .await?
+                == 0
         {
             return Err(AppError::InvalidParameter(
                 "policy template has no approval teams".to_owned(),
@@ -268,6 +324,17 @@ impl AccessRequestService for DefaultAccessRequestService {
                 &reason,
             )
             .await?;
+        if auto_approve {
+            queries::create_access_request_event()
+                .bind(
+                    &transaction,
+                    &request_id,
+                    &"APPROVED",
+                    &"system:auto-approve",
+                    &"Automatically approved by policy template",
+                )
+                .await?;
+        }
         transaction.commit().await?;
         load_access_request(&client, &request_id).await
     }
@@ -284,6 +351,7 @@ impl AccessRequestService for DefaultAccessRequestService {
             )));
         }
         let client = self.pool.get().await?;
+        queries::expire_access_requests().bind(&client).await?;
         let rows = queries::list_access_requests()
             .bind(
                 &client,
@@ -302,6 +370,7 @@ impl AccessRequestService for DefaultAccessRequestService {
 
     async fn get_access_request(&self, request_id: String) -> Result<AccessRequest, AppError> {
         let client = self.pool.get().await?;
+        queries::expire_access_requests().bind(&client).await?;
         load_access_request(&client, &request_id).await
     }
 
@@ -321,6 +390,90 @@ impl AccessRequestService for DefaultAccessRequestService {
     ) -> Result<AccessRequest, AppError> {
         self.review_access_request(request_id, review, "REJECTED")
             .await
+    }
+
+    async fn update_access_request(
+        &self,
+        request_id: String,
+        request: UpdateAccessRequest,
+    ) -> Result<AccessRequest, AppError> {
+        require_text("request_id", &request_id)?;
+        require_text("requested_by", &request.requested_by)?;
+        require_text("reason", &request.reason)?;
+        validate_duration(request.requested_duration_seconds)?;
+
+        let mut client = self.pool.get().await?;
+        let transaction = client.transaction().await?;
+        let status = queries::lock_owned_access_request()
+            .bind(&transaction, &request_id, &request.requested_by)
+            .opt()
+            .await?
+            .ok_or_else(|| AppError::NotFound(format!("access request {request_id}")))?;
+        if status != "AWAITING_APPROVAL" {
+            return Err(AppError::Conflict(format!(
+                "access request is {status}, not editable"
+            )));
+        }
+
+        queries::clear_access_request_reviews()
+            .bind(&transaction, &request_id)
+            .await?;
+        queries::update_access_request()
+            .bind(
+                &transaction,
+                &request.reason,
+                &request.requested_duration_seconds,
+                &request_id,
+            )
+            .await?;
+        queries::create_access_request_event()
+            .bind(
+                &transaction,
+                &request_id,
+                &"UPDATED",
+                &request.requested_by,
+                &"Request details updated; previous reviews cleared",
+            )
+            .await?;
+        transaction.commit().await?;
+        load_access_request(&client, &request_id).await
+    }
+
+    async fn revoke_access_request(
+        &self,
+        request_id: String,
+        request: RevokeAccessRequest,
+    ) -> Result<AccessRequest, AppError> {
+        require_text("request_id", &request_id)?;
+        require_text("requested_by", &request.requested_by)?;
+
+        let mut client = self.pool.get().await?;
+        let transaction = client.transaction().await?;
+        let status = queries::lock_owned_access_request()
+            .bind(&transaction, &request_id, &request.requested_by)
+            .opt()
+            .await?
+            .ok_or_else(|| AppError::NotFound(format!("access request {request_id}")))?;
+        if matches!(status.as_str(), "REJECTED" | "CANCELLED" | "EXPIRED") {
+            return Err(AppError::Conflict(format!(
+                "access request is already {status}"
+            )));
+        }
+
+        queries::revoke_access_request()
+            .bind(&transaction, &request.requested_by, &request_id)
+            .await?;
+        queries::create_access_request_event()
+            .bind(
+                &transaction,
+                &request_id,
+                &"ACCESS_REVOKED",
+                &request.requested_by,
+                &"Access revoked by requester",
+            )
+            .await?;
+        transaction.commit().await?;
+        load_access_request(&client, &request_id).await
     }
 }
 
@@ -444,13 +597,13 @@ fn summary_from_row(row: queries::ListAccessRequests) -> AccessRequestSummary {
 }
 
 fn validate_create_request(request: &CreateAccessRequest) -> Result<(), AppError> {
-    require_text("template_id", &request.template_id)?;
     require_text("requested_by", &request.requested_by)?;
     if let Some(requested_for) = request.requested_for.as_deref() {
         require_text("requested_for", requested_for)?;
     }
     require_text("routed_for_team", &request.routed_for_team)?;
     require_text("target_full_name", &request.target_full_name)?;
+    require_text("requested_privilege", &request.requested_privilege)?;
     require_text("reason", &request.reason)?;
     if !SECURABLE_TYPES.contains(&request.target_securable_type.as_str()) {
         return Err(AppError::InvalidParameter(format!(
@@ -458,13 +611,26 @@ fn validate_create_request(request: &CreateAccessRequest) -> Result<(), AppError
             request.target_securable_type
         )));
     }
-    if request.requested_duration_seconds <= 0 {
-        return Err(AppError::InvalidParameter(
-            "requested_duration_seconds must be positive".to_owned(),
-        ));
+    if !privileges_for(&request.target_securable_type)
+        .contains(&request.requested_privilege.as_str())
+    {
+        return Err(AppError::InvalidParameter(format!(
+            "privilege {} is not valid for target_securable_type {}",
+            request.requested_privilege, request.target_securable_type
+        )));
     }
+    validate_duration(request.requested_duration_seconds)?;
     if let Some(key) = request.idempotency_key.as_deref() {
         require_text("idempotency_key", key)?;
+    }
+    Ok(())
+}
+
+fn validate_duration(duration: i64) -> Result<(), AppError> {
+    if duration <= 0 || duration % 3600 != 0 {
+        return Err(AppError::InvalidParameter(
+            "requested_duration_seconds must be a positive whole number of hours".to_owned(),
+        ));
     }
     Ok(())
 }
@@ -501,12 +667,12 @@ mod tests {
 
     fn valid_request() -> CreateAccessRequest {
         CreateAccessRequest {
-            template_id: "template-id".to_owned(),
             requested_by: "alice".to_owned(),
             requested_for: None,
             routed_for_team: "analytics".to_owned(),
             target_securable_type: "table".to_owned(),
             target_full_name: "main.analytics.orders".to_owned(),
+            requested_privilege: "SELECT".to_owned(),
             reason: "Investigate a customer incident".to_owned(),
             requested_duration_seconds: 3600,
             idempotency_key: None,
@@ -526,16 +692,28 @@ mod tests {
     }
 
     #[test]
-    fn create_request_rejects_non_positive_duration() {
-        for duration in [-1, 0] {
+    fn create_request_requires_positive_whole_hours() {
+        for duration in [-3600, 0, 1, 3599, 3601] {
             let mut request = valid_request();
             request.requested_duration_seconds = duration;
 
             let error = validate_create_request(&request).unwrap_err();
             assert_eq!(
                 error.to_string(),
-                "invalid parameter: requested_duration_seconds must be positive"
+                "invalid parameter: requested_duration_seconds must be a positive whole number of hours"
             );
         }
+    }
+
+    #[test]
+    fn create_request_rejects_privilege_for_another_securable_type() {
+        let mut request = valid_request();
+        request.requested_privilege = "USE CATALOG".to_owned();
+
+        let error = validate_create_request(&request).unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "invalid parameter: privilege USE CATALOG is not valid for target_securable_type table"
+        );
     }
 }

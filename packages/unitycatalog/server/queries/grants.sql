@@ -26,9 +26,19 @@ WHERE resource.securable_type = :securable_type
   AND resource.full_name = :full_name;
 
 --! grant_permission
-INSERT INTO uc_permissions (principal, resource_id, securable_type, privilege)
-VALUES (:principal, :resource_id, :securable_type, :privilege)
-ON CONFLICT DO NOTHING
+INSERT INTO uc_permissions (principal, resource_id, securable_type, privilege, expires_at)
+VALUES (
+    :principal,
+    :resource_id,
+    :securable_type,
+    :privilege,
+    NULLIF(:expires_at::bigint, 0)
+)
+ON CONFLICT (principal, resource_id, privilege) DO UPDATE
+SET expires_at = CASE
+    WHEN uc_permissions.expires_at IS NULL OR EXCLUDED.expires_at IS NULL THEN NULL
+    ELSE GREATEST(uc_permissions.expires_at, EXCLUDED.expires_at)
+END
 RETURNING privilege;
 
 --! revoke_permission
@@ -43,4 +53,8 @@ SELECT principal, privilege
 FROM uc_permissions
 WHERE resource_id = :resource_id
   AND (:principal = '' OR principal = :principal)
+  AND (
+      expires_at IS NULL
+      OR expires_at > ((EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::bigint)
+  )
 ORDER BY principal, privilege;

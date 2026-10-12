@@ -7,6 +7,7 @@ import { auth } from "@/lib/auth"
 import type {
   AccessRequest,
   ActionResult,
+  CreateAccessRequestInput,
   CreatePolicyTemplateInput,
   PolicyTemplate,
   PolicyTemplateSummary,
@@ -164,8 +165,6 @@ export async function createPolicyTemplate(
         body: JSON.stringify({
           ...input,
           description: input.description || null,
-          default_duration_seconds: input.default_duration_seconds ?? null,
-          max_duration_seconds: input.max_duration_seconds ?? null,
           guardrails: [],
           created_by: principal(user),
         }),
@@ -173,6 +172,133 @@ export async function createPolicyTemplate(
     )
     revalidatePath("/review/policy-templates")
     return { ok: true, data: template }
+  } catch (error) {
+    return errorResult(error)
+  }
+}
+
+export async function listRequestTeams(): Promise<ActionResult<string[]>> {
+  const { requestHeaders, user } = await currentUser()
+  try {
+    const teams = await currentApprovalTeams(requestHeaders, user.id)
+    return { ok: true, data: teams }
+  } catch (error) {
+    return errorResult(error)
+  }
+}
+
+export async function createAccessRequest(
+  input: CreateAccessRequestInput,
+): Promise<ActionResult<AccessRequest>> {
+  const { requestHeaders, user } = await currentUser()
+  try {
+    const teams = await currentApprovalTeams(requestHeaders, user.id)
+    if (!teams.includes(input.routed_for_team)) {
+      return { ok: false, error: "You are not a member of that request team." }
+    }
+    if (!Number.isInteger(input.duration_hours) || input.duration_hours <= 0) {
+      return {
+        ok: false,
+        error: "Duration must be a positive whole number of hours.",
+      }
+    }
+
+    const requestedBy = principal(user)
+    const request = await controlPlaneRequest<AccessRequest>(
+      "/api/access-requests",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          requested_by: requestedBy,
+          requested_for: requestedBy,
+          routed_for_team: input.routed_for_team,
+          target_securable_type: input.target_securable_type,
+          target_full_name: input.target_full_name,
+          requested_privilege: input.requested_privilege,
+          reason: input.reason,
+          requested_duration_seconds: input.duration_hours * 3600,
+          idempotency_key: null,
+        }),
+      },
+    )
+    revalidatePath("/review/requests")
+    return { ok: true, data: request }
+  } catch (error) {
+    return errorResult(error)
+  }
+}
+
+export async function listMyAccessRequests(
+  fullName: string,
+): Promise<ActionResult<AccessRequest[]>> {
+  const { user } = await currentUser()
+  try {
+    const result = await controlPlaneRequest<{
+      access_requests: AccessRequestSummary[]
+    }>("/api/access-requests", undefined, { requested_by: principal(user) })
+    const requests = await Promise.all(
+      result.access_requests.map((request) =>
+        controlPlaneRequest<AccessRequest>(
+          `/api/access-requests/${encodeURIComponent(request.id)}`,
+        ),
+      ),
+    )
+    return {
+      ok: true,
+      data: requests.filter((request) =>
+        request.grants.some((grant) => grant.full_name === fullName),
+      ),
+    }
+  } catch (error) {
+    return errorResult(error)
+  }
+}
+
+export async function updateAccessRequest(input: {
+  requestId: string
+  reason: string
+  durationHours: number
+}): Promise<ActionResult<AccessRequest>> {
+  const { user } = await currentUser()
+  try {
+    if (!Number.isInteger(input.durationHours) || input.durationHours <= 0) {
+      return {
+        ok: false,
+        error: "Duration must be a positive whole number of hours.",
+      }
+    }
+    const request = await controlPlaneRequest<AccessRequest>(
+      `/api/access-requests/${encodeURIComponent(input.requestId)}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({
+          requested_by: principal(user),
+          reason: input.reason,
+          requested_duration_seconds: input.durationHours * 3600,
+        }),
+      },
+    )
+    revalidatePath("/review/requests")
+    return { ok: true, data: request }
+  } catch (error) {
+    return errorResult(error)
+  }
+}
+
+export async function revokeAccessRequest(
+  requestId: string,
+): Promise<ActionResult<AccessRequest>> {
+  const { user } = await currentUser()
+  try {
+    const request = await controlPlaneRequest<AccessRequest>(
+      `/api/access-requests/${encodeURIComponent(requestId)}/revoke`,
+      {
+        method: "POST",
+        body: JSON.stringify({ requested_by: principal(user) }),
+      },
+    )
+    revalidatePath("/review/requests")
+    return { ok: true, data: request }
   } catch (error) {
     return errorResult(error)
   }

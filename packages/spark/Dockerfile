@@ -13,6 +13,10 @@ LABEL org.opencontainers.image.title="mizuumi-engine Spark base" \
       org.opencontainers.image.source="https://github.com/linrium/mizuumi-engine"
 
 USER root
+# Dagster Pipes lets the Spark driver stream logs and asset metadata back to
+# Dagster when the job is launched via dagster_k8s.PipesK8sClient.
+RUN python3 -m pip install --no-cache-dir "dagster-pipes>=1.9,<2.0" \
+    && python3 -c "import dagster_pipes, sys; print('dagster_pipes OK at', dagster_pipes.__file__, 'py', sys.executable)"
 COPY dependency_warmup.py /tmp/dependency_warmup.py
 RUN ivy_dir=/tmp/spark-ivy && \
     dependency_root=/opt/spark/dependencies && \

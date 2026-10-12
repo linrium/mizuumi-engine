@@ -1,5 +1,25 @@
 sparkJobNamespace: spark
 sparkApplicationName: unity-catalog-managed
+sparkSubmitServiceAccount: dagster-spark-submit
+
+# Default spark-submit configuration for the managed-orders asset. These
+# values flow into the user-code pod as env vars; the Dagster asset in
+# `managed_spark/definitions.py` reads them to assemble the --conf flags.
+sparkJob:
+  image: mizuumi/spark:4.0.1-uc-kafka-rustfs-baked
+  credentialsSecret: spark-runtime-credentials
+  trustSecret: spark-rustfs-trust
+  scriptConfigMap: managed-orders-spark-script
+  scriptFilename: main.py
+  scriptMountPath: /opt/spark/work-dir/managed
+  catalog: unity
+  catalogUri: http://unitycatalog-server.tower.svc.cluster.local:8080
+  storageRoot: s3://unitycatalog/spark
+  s3Endpoint: https://rustfs-svc.storage.svc.cluster.local:9000
+  s3Region: us-east-1
+  keycloakTokenUrl: https://auth.mizuumi.test/realms/sovico/protocol/openid-connect/token
+  keycloakCaPath: /opt/spark/trust/keycloak-ca.crt
+  dependenciesPath: /opt/spark/dependencies/0.6.0/*
 
 # Values forwarded to the upstream `dagster` subchart.
 dagster:
@@ -40,20 +60,46 @@ dagster:
       - name: mizuumi-user-code
         image:
           repository: mizuumi/dagster-user-code
-          tag: "0.1.3"
+          tag: "0.3.3"
           pullPolicy: IfNotPresent
         dagsterApiGrpcArgs:
           - "-m"
-          - "mizuumi_dagster"
+          - "managed_spark"
         port: 4000
         includeConfigInLaunchedRuns:
           enabled: true
         env:
           - name: SPARK_NAMESPACE
             value: spark
-          - name: SPARK_APPLICATION_NAME
+          - name: SPARK_APP_NAME
             value: unity-catalog-managed
-          - name: DAGSTER_SERVICE_ACCOUNT
-            value: mizuumi-dagster
-          - name: DAGSTER_KUBECTL_IMAGE
-            value: alpine/k8s:1.31.2
+          - name: SPARK_IMAGE
+            value: mizuumi/spark:4.0.1-uc-kafka-rustfs-baked
+          - name: SPARK_SERVICE_ACCOUNT
+            value: dagster-spark-submit
+          - name: SPARK_CREDENTIALS_SECRET
+            value: spark-runtime-credentials
+          - name: SPARK_TRUST_SECRET
+            value: spark-rustfs-trust
+          - name: SPARK_SCRIPT_CONFIGMAP
+            value: managed-orders-spark-script
+          - name: SPARK_SCRIPT_FILENAME
+            value: main.py
+          - name: SPARK_SCRIPT_MOUNT_PATH
+            value: /opt/spark/work-dir/managed
+          - name: UNITY_CATALOG_NAME
+            value: unity
+          - name: UNITY_CATALOG_URI
+            value: http://unitycatalog-server.tower.svc.cluster.local:8080
+          - name: UNITY_STORAGE_ROOT
+            value: s3://unitycatalog/spark
+          - name: S3_ENDPOINT
+            value: https://rustfs-svc.storage.svc.cluster.local:9000
+          - name: S3_REGION
+            value: us-east-1
+          - name: KEYCLOAK_TOKEN_URL
+            value: https://auth.mizuumi.test/realms/sovico/protocol/openid-connect/token
+          - name: KEYCLOAK_CA_PATH
+            value: /opt/spark/trust/keycloak-ca.crt
+          - name: SPARK_DEPENDENCIES_PATH
+            value: /opt/spark/dependencies/0.6.0/*

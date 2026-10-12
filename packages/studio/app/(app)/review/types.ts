@@ -5,7 +5,6 @@ export type ApprovalTeam = {
 
 export type PolicyGrant = {
   securable_type: string
-  target_kind: "REQUEST_RESOURCE" | "FIXED_RESOURCE"
   target_full_name: string
   privilege: string
 }
@@ -25,8 +24,7 @@ export type PolicyTemplateSummary = {
   name: string
   description?: string | null
   approval_strategy: "ANY" | "ALL"
-  default_duration_seconds?: number | null
-  max_duration_seconds?: number | null
+  auto_approve: boolean
   created_by: string
   created_at: string
 }
@@ -37,7 +35,7 @@ export type PolicyTemplate = PolicyTemplateSummary & {
   guardrail_review_required: boolean
   affected_teams: string[]
   approval_teams: ApprovalTeam[]
-  grants: PolicyGrant[]
+  grant: PolicyGrant
   guardrails: Guardrail[]
   published_by?: string | null
   published_at?: string | null
@@ -107,11 +105,19 @@ export type CreatePolicyTemplateInput = {
   name: string
   description?: string
   approval_strategy: "ANY" | "ALL"
-  default_duration_seconds?: number
-  max_duration_seconds?: number
+  auto_approve: boolean
   affected_teams: string[]
   approval_teams: ApprovalTeam[]
-  grants: PolicyGrant[]
+  grant: PolicyGrant
+}
+
+export type CreateAccessRequestInput = {
+  routed_for_team: string
+  target_securable_type: string
+  target_full_name: string
+  requested_privilege: string
+  reason: string
+  duration_hours: number
 }
 
 export type ActionResult<T> =

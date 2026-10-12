@@ -4,9 +4,22 @@ metadata:
   name: {{ include "dagster-umbrella.sparkAccessRoleName" . }}
   namespace: {{ .Values.sparkJobNamespace | quote }}
 rules:
-  - apiGroups: ["sparkoperator.k8s.io"]
-    resources: ["sparkapplications"]
+  # PipesK8sClient creates the spark-submit pod directly (not a Job) in the
+  # Spark namespace. We grant pods create/delete + batch/jobs for completeness
+  # (future-proof if we switch to Job-backed launches) and pods/log for
+  # tailing driver stdout via `read_namespaced_pod_log(follow=True)`.
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods/status"]
+    verbs: ["get", "list", "watch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding

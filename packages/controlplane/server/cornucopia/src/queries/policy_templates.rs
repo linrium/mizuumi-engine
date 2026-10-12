@@ -17,8 +17,7 @@ pub struct CreatePolicyTemplateVersionParams<
     pub name: T2,
     pub description: T3,
     pub approval_strategy: T4,
-    pub default_duration_seconds: i64,
-    pub max_duration_seconds: i64,
+    pub auto_approve: bool,
     pub created_by: T5,
 }
 #[derive(Debug)]
@@ -27,13 +26,11 @@ pub struct CreatePolicyTemplateGrantParams<
     T2: crate::StringSql,
     T3: crate::StringSql,
     T4: crate::StringSql,
-    T5: crate::StringSql,
 > {
     pub template_id: T1,
     pub securable_type: T2,
-    pub target_kind: T3,
-    pub target_full_name: T4,
-    pub privilege: T5,
+    pub target_full_name: T3,
+    pub privilege: T4,
 }
 #[derive(Debug)]
 pub struct CreatePolicyTemplateAffectedTeamParams<T1: crate::StringSql, T2: crate::StringSql> {
@@ -92,8 +89,7 @@ pub struct ListPolicyTemplates {
     pub name: String,
     pub description: String,
     pub approval_strategy: String,
-    pub default_duration_seconds: i64,
-    pub max_duration_seconds: i64,
+    pub auto_approve: bool,
     pub created_by: String,
     pub created_at: String,
 }
@@ -104,8 +100,7 @@ pub struct ListPolicyTemplatesBorrowed<'a> {
     pub name: &'a str,
     pub description: &'a str,
     pub approval_strategy: &'a str,
-    pub default_duration_seconds: i64,
-    pub max_duration_seconds: i64,
+    pub auto_approve: bool,
     pub created_by: &'a str,
     pub created_at: &'a str,
 }
@@ -118,8 +113,7 @@ impl<'a> From<ListPolicyTemplatesBorrowed<'a>> for ListPolicyTemplates {
             name,
             description,
             approval_strategy,
-            default_duration_seconds,
-            max_duration_seconds,
+            auto_approve,
             created_by,
             created_at,
         }: ListPolicyTemplatesBorrowed<'a>,
@@ -131,8 +125,7 @@ impl<'a> From<ListPolicyTemplatesBorrowed<'a>> for ListPolicyTemplates {
             name: name.into(),
             description: description.into(),
             approval_strategy: approval_strategy.into(),
-            default_duration_seconds,
-            max_duration_seconds,
+            auto_approve,
             created_by: created_by.into(),
             created_at: created_at.into(),
         }
@@ -147,10 +140,9 @@ pub struct GetPolicyTemplate {
     pub description: String,
     pub status: String,
     pub approval_strategy: String,
+    pub auto_approve: bool,
     pub blast_radius_required: bool,
     pub guardrail_review_required: bool,
-    pub default_duration_seconds: i64,
-    pub max_duration_seconds: i64,
     pub created_by: String,
     pub created_at: String,
     pub published_by: String,
@@ -164,10 +156,9 @@ pub struct GetPolicyTemplateBorrowed<'a> {
     pub description: &'a str,
     pub status: &'a str,
     pub approval_strategy: &'a str,
+    pub auto_approve: bool,
     pub blast_radius_required: bool,
     pub guardrail_review_required: bool,
-    pub default_duration_seconds: i64,
-    pub max_duration_seconds: i64,
     pub created_by: &'a str,
     pub created_at: &'a str,
     pub published_by: &'a str,
@@ -183,10 +174,9 @@ impl<'a> From<GetPolicyTemplateBorrowed<'a>> for GetPolicyTemplate {
             description,
             status,
             approval_strategy,
+            auto_approve,
             blast_radius_required,
             guardrail_review_required,
-            default_duration_seconds,
-            max_duration_seconds,
             created_by,
             created_at,
             published_by,
@@ -201,10 +191,9 @@ impl<'a> From<GetPolicyTemplateBorrowed<'a>> for GetPolicyTemplate {
             description: description.into(),
             status: status.into(),
             approval_strategy: approval_strategy.into(),
+            auto_approve,
             blast_radius_required,
             guardrail_review_required,
-            default_duration_seconds,
-            max_duration_seconds,
             created_by: created_by.into(),
             created_at: created_at.into(),
             published_by: published_by.into(),
@@ -215,13 +204,11 @@ impl<'a> From<GetPolicyTemplateBorrowed<'a>> for GetPolicyTemplate {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ListPolicyTemplateGrants {
     pub securable_type: String,
-    pub target_kind: String,
     pub target_full_name: String,
     pub privilege: String,
 }
 pub struct ListPolicyTemplateGrantsBorrowed<'a> {
     pub securable_type: &'a str,
-    pub target_kind: &'a str,
     pub target_full_name: &'a str,
     pub privilege: &'a str,
 }
@@ -229,14 +216,12 @@ impl<'a> From<ListPolicyTemplateGrantsBorrowed<'a>> for ListPolicyTemplateGrants
     fn from(
         ListPolicyTemplateGrantsBorrowed {
             securable_type,
-            target_kind,
             target_full_name,
             privilege,
         }: ListPolicyTemplateGrantsBorrowed<'a>,
     ) -> Self {
         Self {
             securable_type: securable_type.into(),
-            target_kind: target_kind.into(),
             target_full_name: target_full_name.into(),
             privilege: privilege.into(),
         }
@@ -757,7 +742,7 @@ impl<'c, 'a, 's, C: GenericClient, T1: crate::StringSql, T2: crate::StringSql>
 pub struct CreatePolicyTemplateVersionStmt(&'static str, Option<tokio_postgres::Statement>);
 pub fn create_policy_template_version() -> CreatePolicyTemplateVersionStmt {
     CreatePolicyTemplateVersionStmt(
-        "INSERT INTO policy_template_versions ( template_id, version, name, description, status, approval_strategy, blast_radius_required, guardrail_review_required, default_duration_seconds, max_duration_seconds, created_by, published_by, published_at ) VALUES ( $1::text, 1, $2::text, NULLIF($3::text, ''), 'PUBLISHED', $4::text, FALSE, FALSE, NULLIF($5::bigint, 0), NULLIF($6::bigint, 0), $7::text, $7::text, NOW() )",
+        "INSERT INTO policy_template_versions ( template_id, version, name, description, status, approval_strategy, auto_approve, blast_radius_required, guardrail_review_required, created_by, published_by, published_at ) VALUES ( $1::text, 1, $2::text, NULLIF($3::text, ''), 'PUBLISHED', $4::text, $5::boolean, FALSE, FALSE, $6::text, $6::text, NOW() )",
         None,
     )
 }
@@ -786,8 +771,7 @@ impl CreatePolicyTemplateVersionStmt {
         name: &'a T2,
         description: &'a T3,
         approval_strategy: &'a T4,
-        default_duration_seconds: &'a i64,
-        max_duration_seconds: &'a i64,
+        auto_approve: &'a bool,
         created_by: &'a T5,
     ) -> Result<u64, tokio_postgres::Error> {
         client
@@ -798,8 +782,7 @@ impl CreatePolicyTemplateVersionStmt {
                     name,
                     description,
                     approval_strategy,
-                    default_duration_seconds,
-                    max_duration_seconds,
+                    auto_approve,
                     created_by,
                 ],
             )
@@ -839,8 +822,7 @@ impl<
             &params.name,
             &params.description,
             &params.approval_strategy,
-            &params.default_duration_seconds,
-            &params.max_duration_seconds,
+            &params.auto_approve,
             &params.created_by,
         ))
     }
@@ -848,7 +830,7 @@ impl<
 pub struct CreatePolicyTemplateGrantStmt(&'static str, Option<tokio_postgres::Statement>);
 pub fn create_policy_template_grant() -> CreatePolicyTemplateGrantStmt {
     CreatePolicyTemplateGrantStmt(
-        "INSERT INTO policy_template_grants ( template_id, template_version, securable_type, target_kind, target_full_name, privilege ) VALUES ( $1::text, 1, $2::text, $3::text, $4::text, $5::text )",
+        "INSERT INTO policy_template_grants ( template_id, template_version, securable_type, target_full_name, privilege ) VALUES ( $1::text, 1, $2::text, $3::text, $4::text )",
         None,
     )
 }
@@ -869,26 +851,18 @@ impl CreatePolicyTemplateGrantStmt {
         T2: crate::StringSql,
         T3: crate::StringSql,
         T4: crate::StringSql,
-        T5: crate::StringSql,
     >(
         &'s self,
         client: &'c C,
         template_id: &'a T1,
         securable_type: &'a T2,
-        target_kind: &'a T3,
-        target_full_name: &'a T4,
-        privilege: &'a T5,
+        target_full_name: &'a T3,
+        privilege: &'a T4,
     ) -> Result<u64, tokio_postgres::Error> {
         client
             .execute(
                 self.0,
-                &[
-                    template_id,
-                    securable_type,
-                    target_kind,
-                    target_full_name,
-                    privilege,
-                ],
+                &[template_id, securable_type, target_full_name, privilege],
             )
             .await
     }
@@ -900,13 +874,12 @@ impl<
     T2: crate::StringSql,
     T3: crate::StringSql,
     T4: crate::StringSql,
-    T5: crate::StringSql,
 >
     crate::client::async_::Params<
         'a,
         'a,
         'a,
-        CreatePolicyTemplateGrantParams<T1, T2, T3, T4, T5>,
+        CreatePolicyTemplateGrantParams<T1, T2, T3, T4>,
         std::pin::Pin<
             Box<dyn futures::Future<Output = Result<u64, tokio_postgres::Error>> + Send + 'a>,
         >,
@@ -916,7 +889,7 @@ impl<
     fn params(
         &'a self,
         client: &'a C,
-        params: &'a CreatePolicyTemplateGrantParams<T1, T2, T3, T4, T5>,
+        params: &'a CreatePolicyTemplateGrantParams<T1, T2, T3, T4>,
     ) -> std::pin::Pin<
         Box<dyn futures::Future<Output = Result<u64, tokio_postgres::Error>> + Send + 'a>,
     > {
@@ -924,7 +897,6 @@ impl<
             client,
             &params.template_id,
             &params.securable_type,
-            &params.target_kind,
             &params.target_full_name,
             &params.privilege,
         ))
@@ -1128,7 +1100,7 @@ impl<
 pub struct ListPolicyTemplatesStmt(&'static str, Option<tokio_postgres::Statement>);
 pub fn list_policy_templates() -> ListPolicyTemplatesStmt {
     ListPolicyTemplatesStmt(
-        "SELECT templates.id, templates.key, versions.version, versions.name, COALESCE(versions.description, '') AS description, versions.approval_strategy, COALESCE(versions.default_duration_seconds, 0) AS default_duration_seconds, COALESCE(versions.max_duration_seconds, 0) AS max_duration_seconds, templates.created_by, templates.created_at::text AS created_at FROM policy_templates templates JOIN policy_template_versions versions ON versions.template_id = templates.id AND versions.status = 'PUBLISHED' WHERE ( $1::text = '' OR EXISTS ( SELECT 1 FROM policy_template_affected_teams affected WHERE affected.template_id = versions.template_id AND affected.template_version = versions.version AND affected.team = $1::text ) ) ORDER BY templates.key",
+        "SELECT templates.id, templates.key, versions.version, versions.name, COALESCE(versions.description, '') AS description, versions.approval_strategy, versions.auto_approve, templates.created_by, templates.created_at::text AS created_at FROM policy_templates templates JOIN policy_template_versions versions ON versions.template_id = templates.id AND versions.status = 'PUBLISHED' WHERE ( $1::text = '' OR EXISTS ( SELECT 1 FROM policy_template_affected_teams affected WHERE affected.template_id = versions.template_id AND affected.template_version = versions.version AND affected.team = $1::text ) ) ORDER BY templates.key",
         None,
     )
 }
@@ -1160,10 +1132,9 @@ impl ListPolicyTemplatesStmt {
                     name: row.try_get(3)?,
                     description: row.try_get(4)?,
                     approval_strategy: row.try_get(5)?,
-                    default_duration_seconds: row.try_get(6)?,
-                    max_duration_seconds: row.try_get(7)?,
-                    created_by: row.try_get(8)?,
-                    created_at: row.try_get(9)?,
+                    auto_approve: row.try_get(6)?,
+                    created_by: row.try_get(7)?,
+                    created_at: row.try_get(8)?,
                 })
             },
             mapper: |it| ListPolicyTemplates::from(it),
@@ -1173,7 +1144,7 @@ impl ListPolicyTemplatesStmt {
 pub struct GetPolicyTemplateStmt(&'static str, Option<tokio_postgres::Statement>);
 pub fn get_policy_template() -> GetPolicyTemplateStmt {
     GetPolicyTemplateStmt(
-        "SELECT templates.id, templates.key, versions.version, versions.name, COALESCE(versions.description, '') AS description, versions.status, versions.approval_strategy, versions.blast_radius_required, versions.guardrail_review_required, COALESCE(versions.default_duration_seconds, 0) AS default_duration_seconds, COALESCE(versions.max_duration_seconds, 0) AS max_duration_seconds, templates.created_by, templates.created_at::text AS created_at, COALESCE(versions.published_by, '') AS published_by, COALESCE(versions.published_at::text, '') AS published_at FROM policy_templates templates JOIN policy_template_versions versions ON versions.template_id = templates.id WHERE templates.id = $1::text ORDER BY versions.version DESC LIMIT 1",
+        "SELECT templates.id, templates.key, versions.version, versions.name, COALESCE(versions.description, '') AS description, versions.status, versions.approval_strategy, versions.auto_approve, versions.blast_radius_required, versions.guardrail_review_required, templates.created_by, templates.created_at::text AS created_at, COALESCE(versions.published_by, '') AS published_by, COALESCE(versions.published_at::text, '') AS published_at FROM policy_templates templates JOIN policy_template_versions versions ON versions.template_id = templates.id WHERE templates.id = $1::text ORDER BY versions.version DESC LIMIT 1",
         None,
     )
 }
@@ -1206,14 +1177,13 @@ impl GetPolicyTemplateStmt {
                     description: row.try_get(4)?,
                     status: row.try_get(5)?,
                     approval_strategy: row.try_get(6)?,
-                    blast_radius_required: row.try_get(7)?,
-                    guardrail_review_required: row.try_get(8)?,
-                    default_duration_seconds: row.try_get(9)?,
-                    max_duration_seconds: row.try_get(10)?,
-                    created_by: row.try_get(11)?,
-                    created_at: row.try_get(12)?,
-                    published_by: row.try_get(13)?,
-                    published_at: row.try_get(14)?,
+                    auto_approve: row.try_get(7)?,
+                    blast_radius_required: row.try_get(8)?,
+                    guardrail_review_required: row.try_get(9)?,
+                    created_by: row.try_get(10)?,
+                    created_at: row.try_get(11)?,
+                    published_by: row.try_get(12)?,
+                    published_at: row.try_get(13)?,
                 })
             },
             mapper: |it| GetPolicyTemplate::from(it),
@@ -1223,7 +1193,7 @@ impl GetPolicyTemplateStmt {
 pub struct ListPolicyTemplateGrantsStmt(&'static str, Option<tokio_postgres::Statement>);
 pub fn list_policy_template_grants() -> ListPolicyTemplateGrantsStmt {
     ListPolicyTemplateGrantsStmt(
-        "SELECT securable_type, target_kind, target_full_name, privilege FROM policy_template_grants WHERE template_id = $1::text AND template_version = $2 ORDER BY securable_type, target_kind, target_full_name, privilege",
+        "SELECT securable_type, target_full_name, privilege FROM policy_template_grants WHERE template_id = $1::text AND template_version = $2 LIMIT 1",
         None,
     )
 }
@@ -1251,9 +1221,8 @@ impl ListPolicyTemplateGrantsStmt {
             | -> Result<ListPolicyTemplateGrantsBorrowed, tokio_postgres::Error> {
                 Ok(ListPolicyTemplateGrantsBorrowed {
                     securable_type: row.try_get(0)?,
-                    target_kind: row.try_get(1)?,
-                    target_full_name: row.try_get(2)?,
-                    privilege: row.try_get(3)?,
+                    target_full_name: row.try_get(1)?,
+                    privilege: row.try_get(2)?,
                 })
             },
             mapper: |it| ListPolicyTemplateGrants::from(it),

@@ -16,6 +16,8 @@ these defaults are used:
 
   hdbank=hdbankGrow=khaosoi
   vietjet=vietjetGrow=khaopad
+  sovico=sovicoSecurity=khaopad
+  sovico=sovicoSecurity=khaosoi
 
 Set KEYCLOAK_REALM to target a realm other than sovico.
 EOF
@@ -34,6 +36,8 @@ else
   organization_groups=(
     hdbank=hdbankGrow=khaosoi
     vietjet=vietjetGrow=khaopad
+    sovico=sovicoSecurity=khaopad
+    sovico=sovicoSecurity=khaosoi
   )
 fi
 

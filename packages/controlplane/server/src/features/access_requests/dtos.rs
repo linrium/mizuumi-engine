@@ -3,12 +3,12 @@ use serde_json::Value;
 
 #[derive(Debug, Deserialize)]
 pub struct CreateAccessRequest {
-    pub template_id: String,
     pub requested_by: String,
     pub requested_for: Option<String>,
     pub routed_for_team: String,
     pub target_securable_type: String,
     pub target_full_name: String,
+    pub requested_privilege: String,
     pub reason: String,
     pub requested_duration_seconds: i64,
     pub idempotency_key: Option<String>,
@@ -27,6 +27,18 @@ pub struct ReviewAccessRequest {
     pub approval_team: String,
     pub reviewer: String,
     pub comment: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateAccessRequest {
+    pub requested_by: String,
+    pub reason: String,
+    pub requested_duration_seconds: i64,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RevokeAccessRequest {
+    pub requested_by: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -133,11 +145,11 @@ mod tests {
 
     fn valid_request() -> serde_json::Value {
         json!({
-            "template_id": "template-id",
             "requested_by": "alice",
             "routed_for_team": "analytics",
             "target_securable_type": "table",
             "target_full_name": "main.analytics.orders",
+            "requested_privilege": "SELECT",
             "reason": "Investigate a customer incident",
             "requested_duration_seconds": 3600
         })

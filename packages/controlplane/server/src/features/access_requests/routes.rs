@@ -9,7 +9,7 @@ use crate::{app_state::AppState, error::AppError};
 
 use super::dtos::{
     AccessRequest, CreateAccessRequest, ListAccessRequestsRequest, ListAccessRequestsResponse,
-    ReviewAccessRequest,
+    ReviewAccessRequest, RevokeAccessRequest, UpdateAccessRequest,
 };
 
 const ACCESS_REQUESTS_PATH: &str = "/api/access-requests";
@@ -22,7 +22,7 @@ pub fn access_request_router() -> Router<AppState> {
         )
         .route(
             &format!("{ACCESS_REQUESTS_PATH}/{{request_id}}"),
-            get(get_access_request),
+            get(get_access_request).patch(update_access_request),
         )
         .route(
             &format!("{ACCESS_REQUESTS_PATH}/{{request_id}}/approve"),
@@ -31,6 +31,10 @@ pub fn access_request_router() -> Router<AppState> {
         .route(
             &format!("{ACCESS_REQUESTS_PATH}/{{request_id}}/reject"),
             post(reject_access_request),
+        )
+        .route(
+            &format!("{ACCESS_REQUESTS_PATH}/{{request_id}}/revoke"),
+            post(revoke_access_request),
         )
         .route(
             "/api/approval-teams/{approval_team}/access-requests",
@@ -72,6 +76,32 @@ async fn get_access_request(
 ) -> Result<Json<AccessRequest>, AppError> {
     Ok(Json(
         state.access_requests.get_access_request(request_id).await?,
+    ))
+}
+
+async fn update_access_request(
+    State(state): State<AppState>,
+    Path(request_id): Path<String>,
+    Json(request): Json<UpdateAccessRequest>,
+) -> Result<Json<AccessRequest>, AppError> {
+    Ok(Json(
+        state
+            .access_requests
+            .update_access_request(request_id, request)
+            .await?,
+    ))
+}
+
+async fn revoke_access_request(
+    State(state): State<AppState>,
+    Path(request_id): Path<String>,
+    Json(request): Json<RevokeAccessRequest>,
+) -> Result<Json<AccessRequest>, AppError> {
+    Ok(Json(
+        state
+            .access_requests
+            .revoke_access_request(request_id, request)
+            .await?,
     ))
 }
 

@@ -150,6 +150,8 @@ pub struct PermissionsChange {
     pub principal: String,
     pub add: Vec<Privilege>,
     pub remove: Vec<Privilege>,
+    #[serde(default)]
+    pub expires_at: Option<i64>,
 }
 
 #[derive(Debug, Serialize)]
@@ -177,7 +179,7 @@ pub struct SecurableAssignments {
 
 #[cfg(test)]
 mod tests {
-    use super::Privilege;
+    use super::{PermissionsChange, Privilege};
 
     #[test]
     fn privilege_values_match_openapi() {
@@ -222,5 +224,25 @@ mod tests {
                 privilege
             );
         }
+    }
+
+    #[test]
+    fn permission_expiry_is_optional_and_deserializes_as_unix_milliseconds() {
+        let permanent: PermissionsChange = serde_json::from_value(serde_json::json!({
+            "principal": "reader@example.com",
+            "add": ["SELECT"],
+            "remove": []
+        }))
+        .unwrap();
+        assert_eq!(permanent.expires_at, None);
+
+        let temporary: PermissionsChange = serde_json::from_value(serde_json::json!({
+            "principal": "reader@example.com",
+            "add": ["SELECT"],
+            "remove": [],
+            "expires_at": 1_900_000_000_000_i64
+        }))
+        .unwrap();
+        assert_eq!(temporary.expires_at, Some(1_900_000_000_000));
     }
 }

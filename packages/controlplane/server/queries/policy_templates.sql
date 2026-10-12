@@ -11,10 +11,9 @@ INSERT INTO policy_template_versions (
     description,
     status,
     approval_strategy,
+    auto_approve,
     blast_radius_required,
     guardrail_review_required,
-    default_duration_seconds,
-    max_duration_seconds,
     created_by,
     published_by,
     published_at
@@ -26,10 +25,9 @@ VALUES (
     NULLIF(:description::text, ''),
     'PUBLISHED',
     :approval_strategy::text,
+    :auto_approve::boolean,
     FALSE,
     FALSE,
-    NULLIF(:default_duration_seconds::bigint, 0),
-    NULLIF(:max_duration_seconds::bigint, 0),
     :created_by::text,
     :created_by::text,
     NOW()
@@ -40,7 +38,6 @@ INSERT INTO policy_template_grants (
     template_id,
     template_version,
     securable_type,
-    target_kind,
     target_full_name,
     privilege
 )
@@ -48,7 +45,6 @@ VALUES (
     :template_id::text,
     1,
     :securable_type::text,
-    :target_kind::text,
     :target_full_name::text,
     :privilege::text
 );
@@ -96,8 +92,7 @@ SELECT
     versions.name,
     COALESCE(versions.description, '') AS description,
     versions.approval_strategy,
-    COALESCE(versions.default_duration_seconds, 0) AS default_duration_seconds,
-    COALESCE(versions.max_duration_seconds, 0) AS max_duration_seconds,
+    versions.auto_approve,
     templates.created_by,
     templates.created_at::text AS created_at
 FROM policy_templates templates
@@ -125,10 +120,9 @@ SELECT
     COALESCE(versions.description, '') AS description,
     versions.status,
     versions.approval_strategy,
+    versions.auto_approve,
     versions.blast_radius_required,
     versions.guardrail_review_required,
-    COALESCE(versions.default_duration_seconds, 0) AS default_duration_seconds,
-    COALESCE(versions.max_duration_seconds, 0) AS max_duration_seconds,
     templates.created_by,
     templates.created_at::text AS created_at,
     COALESCE(versions.published_by, '') AS published_by,
@@ -140,11 +134,11 @@ ORDER BY versions.version DESC
 LIMIT 1;
 
 --! list_policy_template_grants
-SELECT securable_type, target_kind, target_full_name, privilege
+SELECT securable_type, target_full_name, privilege
 FROM policy_template_grants
 WHERE template_id = :template_id::text
   AND template_version = :template_version
-ORDER BY securable_type, target_kind, target_full_name, privilege;
+LIMIT 1;
 
 --! list_policy_template_affected_teams
 SELECT team

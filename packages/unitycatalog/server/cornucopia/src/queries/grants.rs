@@ -16,6 +16,7 @@ pub struct GrantPermissionParams<
     pub resource_id: T2,
     pub securable_type: T3,
     pub privilege: T4,
+    pub expires_at: i64,
 }
 #[derive(Debug)]
 pub struct RevokePermissionParams<T1: crate::StringSql, T2: crate::StringSql, T3: crate::StringSql>
@@ -236,7 +237,7 @@ impl<'c, 'a, 's, C: GenericClient, T1: crate::StringSql, T2: crate::StringSql>
 pub struct GrantPermissionStmt(&'static str, Option<tokio_postgres::Statement>);
 pub fn grant_permission() -> GrantPermissionStmt {
     GrantPermissionStmt(
-        "INSERT INTO uc_permissions (principal, resource_id, securable_type, privilege) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING RETURNING privilege",
+        "INSERT INTO uc_permissions (principal, resource_id, securable_type, privilege, expires_at) VALUES ( $1, $2, $3, $4, NULLIF($5::bigint, 0) ) ON CONFLICT (principal, resource_id, privilege) DO UPDATE SET expires_at = CASE WHEN uc_permissions.expires_at IS NULL OR EXCLUDED.expires_at IS NULL THEN NULL ELSE GREATEST(uc_permissions.expires_at, EXCLUDED.expires_at) END RETURNING privilege",
         None,
     )
 }
@@ -264,10 +265,17 @@ impl GrantPermissionStmt {
         resource_id: &'a T2,
         securable_type: &'a T3,
         privilege: &'a T4,
-    ) -> StringQuery<'c, 'a, 's, C, String, 4> {
+        expires_at: &'a i64,
+    ) -> StringQuery<'c, 'a, 's, C, String, 5> {
         StringQuery {
             client,
-            params: [principal, resource_id, securable_type, privilege],
+            params: [
+                principal,
+                resource_id,
+                securable_type,
+                privilege,
+                expires_at,
+            ],
             query: self.0,
             cached: self.1.as_ref(),
             extractor: |row| Ok(row.try_get(0)?),
@@ -290,7 +298,7 @@ impl<
         'a,
         's,
         GrantPermissionParams<T1, T2, T3, T4>,
-        StringQuery<'c, 'a, 's, C, String, 4>,
+        StringQuery<'c, 'a, 's, C, String, 5>,
         C,
     > for GrantPermissionStmt
 {
@@ -298,13 +306,14 @@ impl<
         &'s self,
         client: &'c C,
         params: &'a GrantPermissionParams<T1, T2, T3, T4>,
-    ) -> StringQuery<'c, 'a, 's, C, String, 4> {
+    ) -> StringQuery<'c, 'a, 's, C, String, 5> {
         self.bind(
             client,
             &params.principal,
             &params.resource_id,
             &params.securable_type,
             &params.privilege,
+            &params.expires_at,
         )
     }
 }
@@ -374,7 +383,7 @@ impl<'c, 'a, 's, C: GenericClient, T1: crate::StringSql, T2: crate::StringSql, T
 pub struct ListPermissionsStmt(&'static str, Option<tokio_postgres::Statement>);
 pub fn list_permissions() -> ListPermissionsStmt {
     ListPermissionsStmt(
-        "SELECT principal, privilege FROM uc_permissions WHERE resource_id = $1 AND ($2 = '' OR principal = $2) ORDER BY principal, privilege",
+        "SELECT principal, privilege FROM uc_permissions WHERE resource_id = $1 AND ($2 = '' OR principal = $2) AND ( expires_at IS NULL OR expires_at > ((EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::bigint) ) ORDER BY principal, privilege",
         None,
     )
 }

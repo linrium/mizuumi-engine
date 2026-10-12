@@ -3,7 +3,6 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 api_url="${CONTROLPLANE_URL:-https://api.controlplane.mizuumi.test}"
-template_key="${CONTROLPLANE_TEST_TEMPLATE_KEY:-vietjet-grow-table-read}"
 approval_team="${CONTROLPLANE_TEST_APPROVAL_TEAM:-vietjetGrow}"
 target_full_name="${CONTROLPLANE_TEST_TARGET:-mizuumi.demo.orders}"
 requested_by="${CONTROLPLANE_TEST_REQUESTED_BY:-test:access-request}"
@@ -16,34 +15,27 @@ for command in curl jq; do
   }
 done
 
-if ! [[ "$duration_seconds" =~ ^[1-9][0-9]*$ ]]; then
-  echo "CONTROLPLANE_TEST_DURATION_SECONDS must be a positive integer." >&2
+if ! [[ "$duration_seconds" =~ ^[1-9][0-9]*$ ]] || (( duration_seconds % 3600 != 0 )); then
+  echo "CONTROLPLANE_TEST_DURATION_SECONDS must be a positive whole number of hours." >&2
   exit 1
 fi
 
 api_url="${api_url%/}"
 CONTROLPLANE_URL="$api_url" "$repo_root/scripts/controlplane/seed.sh" >/dev/null
 
-templates="$(curl --fail-with-body --silent --show-error \
-  "$api_url/api/policy-templates")"
-template_id="$(jq -er --arg key "$template_key" \
-  '.policy_templates[] | select(.key == $key) | .id' \
-  <<<"$templates")"
-
 payload="$(jq -n \
-  --arg template_id "$template_id" \
   --arg requested_by "$requested_by" \
   --arg routed_for_team "$approval_team" \
   --arg target_full_name "$target_full_name" \
   --arg reason "Automated access-request smoke test for $target_full_name" \
   --argjson duration "$duration_seconds" \
   '{
-    template_id: $template_id,
     requested_by: $requested_by,
     requested_for: $requested_by,
     routed_for_team: $routed_for_team,
     target_securable_type: "table",
     target_full_name: $target_full_name,
+    requested_privilege: "SELECT",
     reason: $reason,
     requested_duration_seconds: $duration,
     idempotency_key: null

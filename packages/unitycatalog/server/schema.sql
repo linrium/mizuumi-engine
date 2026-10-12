@@ -169,5 +169,9 @@ CREATE TABLE IF NOT EXISTS uc_permissions (
     securable_type TEXT NOT NULL,
     privilege TEXT NOT NULL,
     created_at BIGINT NOT NULL DEFAULT ((EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::bigint),
+    expires_at BIGINT CHECK (expires_at IS NULL OR expires_at > 0),
     PRIMARY KEY (principal, resource_id, privilege)
 );
+
+ALTER TABLE uc_permissions
+    ADD COLUMN IF NOT EXISTS expires_at BIGINT;

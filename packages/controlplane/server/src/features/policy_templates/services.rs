@@ -21,28 +21,31 @@ const SECURABLE_TYPES: &[&str] = &[
     "external_location",
     "credential",
 ];
-const PRIVILEGES: &[&str] = &[
-    "OWNER",
-    "CREATE CATALOG",
-    "USE CATALOG",
-    "CREATE SCHEMA",
-    "USE SCHEMA",
-    "CREATE TABLE",
-    "SELECT",
-    "MODIFY",
-    "CREATE FUNCTION",
-    "EXECUTE",
-    "CREATE VOLUME",
-    "READ VOLUME",
-    "CREATE MODEL",
-    "CREATE EXTERNAL LOCATION",
-    "READ FILES",
-    "WRITE FILES",
-    "CREATE EXTERNAL TABLE",
-    "CREATE EXTERNAL VOLUME",
-    "CREATE MANAGED STORAGE",
-    "CREATE STORAGE CREDENTIAL",
-];
+fn privileges_for(securable_type: &str) -> &'static [&'static str] {
+    match securable_type {
+        "metastore" => &["CREATE CATALOG"],
+        "catalog" => &["USE CATALOG", "CREATE SCHEMA"],
+        "schema" => &[
+            "USE SCHEMA",
+            "CREATE TABLE",
+            "CREATE FUNCTION",
+            "CREATE VOLUME",
+            "CREATE MODEL",
+        ],
+        "table" => &["SELECT", "MODIFY"],
+        "function" | "registered_model" => &["EXECUTE"],
+        "volume" => &["READ VOLUME"],
+        "external_location" => &[
+            "READ FILES",
+            "WRITE FILES",
+            "CREATE EXTERNAL TABLE",
+            "CREATE EXTERNAL VOLUME",
+            "CREATE MANAGED STORAGE",
+        ],
+        "credential" => &["CREATE EXTERNAL LOCATION", "CREATE STORAGE CREDENTIAL"],
+        _ => &[],
+    }
+}
 
 #[async_trait]
 pub trait PolicyTemplateService: Send + Sync {
@@ -90,8 +93,7 @@ impl PolicyTemplateService for DefaultPolicyTemplateService {
                 &request.name,
                 &request.description.clone().unwrap_or_default(),
                 &request.approval_strategy,
-                &request.default_duration_seconds.unwrap_or_default(),
-                &request.max_duration_seconds.unwrap_or_default(),
+                &request.auto_approve,
                 &request.created_by,
             )
             .await?;
@@ -113,19 +115,16 @@ impl PolicyTemplateService for DefaultPolicyTemplateService {
                 .await
                 .map_err(map_policy_write_error)?;
         }
-        for grant in &request.grants {
-            queries::create_policy_template_grant()
-                .bind(
-                    &transaction,
-                    &template_id,
-                    &grant.securable_type,
-                    &grant.target_kind,
-                    &grant.target_full_name,
-                    &grant.privilege,
-                )
-                .await
-                .map_err(map_policy_write_error)?;
-        }
+        queries::create_policy_template_grant()
+            .bind(
+                &transaction,
+                &template_id,
+                &request.grant.securable_type,
+                &request.grant.target_full_name,
+                &request.grant.privilege,
+            )
+            .await
+            .map_err(map_policy_write_error)?;
         for guardrail in &request.guardrails {
             queries::create_policy_template_guardrail()
                 .bind(
@@ -164,8 +163,7 @@ impl PolicyTemplateService for DefaultPolicyTemplateService {
                 name: row.name,
                 description: non_empty(row.description),
                 approval_strategy: row.approval_strategy,
-                default_duration_seconds: non_zero(row.default_duration_seconds),
-                max_duration_seconds: non_zero(row.max_duration_seconds),
+                auto_approve: row.auto_approve,
                 created_by: row.created_by,
                 created_at: row.created_at,
             })
@@ -190,18 +188,16 @@ async fn load_policy_template(
         .await?
         .ok_or_else(|| AppError::NotFound(format!("policy template {template_id}")))?;
     let version = row.version;
-    let grants = queries::list_policy_template_grants()
+    let grant = queries::list_policy_template_grants()
         .bind(client, &template_id, &version)
-        .all()
+        .opt()
         .await?
-        .into_iter()
         .map(|grant| PolicyGrant {
             securable_type: grant.securable_type,
-            target_kind: grant.target_kind,
             target_full_name: grant.target_full_name,
             privilege: grant.privilege,
         })
-        .collect();
+        .ok_or_else(|| AppError::Conflict(format!("policy template {template_id} has no grant")))?;
     let affected_teams = queries::list_policy_template_affected_teams()
         .bind(client, &template_id, &version)
         .all()
@@ -238,13 +234,12 @@ async fn load_policy_template(
         description: non_empty(row.description),
         status: row.status,
         approval_strategy: row.approval_strategy,
+        auto_approve: row.auto_approve,
         blast_radius_required: row.blast_radius_required,
         guardrail_review_required: row.guardrail_review_required,
-        default_duration_seconds: non_zero(row.default_duration_seconds),
-        max_duration_seconds: non_zero(row.max_duration_seconds),
         affected_teams,
         approval_teams,
-        grants,
+        grant,
         guardrails,
         created_by: row.created_by,
         created_at: row.created_at,
@@ -267,37 +262,9 @@ fn validate_create_request(request: &CreatePolicyTemplateRequest) -> Result<(), 
             "affected_teams must not be empty".to_owned(),
         ));
     }
-    if request.approval_teams.is_empty() {
+    if !request.auto_approve && request.approval_teams.is_empty() {
         return Err(AppError::InvalidParameter(
-            "approval_teams must not be empty".to_owned(),
-        ));
-    }
-    if request.grants.is_empty() {
-        return Err(AppError::InvalidParameter(
-            "grants must not be empty".to_owned(),
-        ));
-    }
-    if let Some(duration) = request.default_duration_seconds
-        && duration <= 0
-    {
-        return Err(AppError::InvalidParameter(
-            "default_duration_seconds must be positive".to_owned(),
-        ));
-    }
-    if let Some(duration) = request.max_duration_seconds
-        && duration <= 0
-    {
-        return Err(AppError::InvalidParameter(
-            "max_duration_seconds must be positive".to_owned(),
-        ));
-    }
-    if let (Some(default), Some(max)) = (
-        request.default_duration_seconds,
-        request.max_duration_seconds,
-    ) && default > max
-    {
-        return Err(AppError::InvalidParameter(
-            "default_duration_seconds must not exceed max_duration_seconds".to_owned(),
+            "approval_teams must not be empty when manual approval is required".to_owned(),
         ));
     }
     for team in &request.affected_teams {
@@ -311,29 +278,19 @@ fn validate_create_request(request: &CreatePolicyTemplateRequest) -> Result<(), 
             ));
         }
     }
-    for grant in &request.grants {
-        if !SECURABLE_TYPES.contains(&grant.securable_type.as_str()) {
-            return Err(AppError::InvalidParameter(format!(
-                "unsupported securable_type: {}",
-                grant.securable_type
-            )));
-        }
-        if !PRIVILEGES.contains(&grant.privilege.as_str()) {
-            return Err(AppError::InvalidParameter(format!(
-                "unsupported privilege: {}",
-                grant.privilege
-            )));
-        }
-        match grant.target_kind.as_str() {
-            "REQUEST_RESOURCE" if grant.target_full_name.is_empty() => {}
-            "FIXED_RESOURCE" if !grant.target_full_name.trim().is_empty() => {}
-            _ => {
-                return Err(AppError::InvalidParameter(
-                    "REQUEST_RESOURCE grants require an empty target_full_name; FIXED_RESOURCE grants require one"
-                        .to_owned(),
-                ));
-            }
-        }
+    let grant = &request.grant;
+    if !SECURABLE_TYPES.contains(&grant.securable_type.as_str()) {
+        return Err(AppError::InvalidParameter(format!(
+            "unsupported securable_type: {}",
+            grant.securable_type
+        )));
+    }
+    require_text("target_full_name", &grant.target_full_name)?;
+    if !privileges_for(&grant.securable_type).contains(&grant.privilege.as_str()) {
+        return Err(AppError::InvalidParameter(format!(
+            "privilege {} is not valid for securable_type {}",
+            grant.privilege, grant.securable_type
+        )));
     }
     for guardrail in &request.guardrails {
         require_text("guardrail_key", &guardrail.guardrail_key)?;
@@ -379,6 +336,61 @@ fn non_empty(value: String) -> Option<String> {
     (!value.is_empty()).then_some(value)
 }
 
-fn non_zero(value: i64) -> Option<i64> {
-    (value != 0).then_some(value)
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn valid_request(auto_approve: bool) -> CreatePolicyTemplateRequest {
+        CreatePolicyTemplateRequest {
+            key: "analytics-read".to_owned(),
+            name: "Analytics read".to_owned(),
+            description: None,
+            approval_strategy: "ANY".to_owned(),
+            auto_approve,
+            affected_teams: vec!["analytics".to_owned()],
+            approval_teams: if auto_approve {
+                Vec::new()
+            } else {
+                vec![ApprovalTeam {
+                    team: "data-owner".to_owned(),
+                    required_approvals: 1,
+                }]
+            },
+            grant: PolicyGrant {
+                securable_type: "table".to_owned(),
+                target_full_name: "main.analytics.orders".to_owned(),
+                privilege: "SELECT".to_owned(),
+            },
+            guardrails: Vec::new(),
+            created_by: "alice".to_owned(),
+        }
+    }
+
+    #[test]
+    fn auto_approval_accepts_fixed_resource_without_approval_teams() {
+        assert!(validate_create_request(&valid_request(true)).is_ok());
+    }
+
+    #[test]
+    fn table_rejects_non_table_privilege() {
+        let mut request = valid_request(false);
+        request.grant.privilege = "USE CATALOG".to_owned();
+        let error = validate_create_request(&request).unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "invalid parameter: privilege USE CATALOG is not valid for securable_type table"
+        );
+    }
+
+    #[test]
+    fn manual_approval_requires_an_approval_team() {
+        let mut request = valid_request(false);
+        request.approval_teams.clear();
+
+        let error = validate_create_request(&request).unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "invalid parameter: approval_teams must not be empty when manual approval is required"
+        );
+    }
 }

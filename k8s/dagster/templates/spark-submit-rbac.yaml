@@ -1,0 +1,41 @@
+{{- /*
+Permissions required by `spark-submit --deploy-mode cluster` and the driver
+pod it spawns: it creates/watches/deletes pods, services, configmaps, and
+persistent volume claims in the Spark namespace. See
+https://spark.apache.org/docs/latest/running-on-kubernetes.html#rbac
+*/ -}}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Values.sparkSubmitServiceAccount | quote }}
+  namespace: {{ .Values.sparkJobNamespace | quote }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ .Values.sparkSubmitServiceAccount | quote }}
+  namespace: {{ .Values.sparkJobNamespace | quote }}
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "services", "configmaps", "persistentvolumeclaims"]
+    verbs: ["create", "get", "list", "watch", "update", "patch", "delete", "deletecollection"]
+  - apiGroups: [""]
+    resources: ["pods/log", "pods/status"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ .Values.sparkSubmitServiceAccount | quote }}
+  namespace: {{ .Values.sparkJobNamespace | quote }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Values.sparkSubmitServiceAccount | quote }}
+    namespace: {{ .Values.sparkJobNamespace | quote }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ .Values.sparkSubmitServiceAccount | quote }}

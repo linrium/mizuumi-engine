@@ -263,7 +263,7 @@ export function RequestQueue({
               </DialogHeader>
 
               <div className="max-h-[60vh] space-y-5 overflow-y-auto py-2 pr-1">
-                <div className="grid gap-3 sm:grid-cols-3">
+                <div className="grid gap-3 sm:grid-cols-4">
                   <div className="rounded-md bg-muted/50 p-3">
                     <div className="text-xs text-muted-foreground">Policy</div>
                     <div className="mt-1 font-medium">
@@ -284,6 +284,14 @@ export function RequestQueue({
                     </div>
                     <div className="mt-1 font-medium">
                       {selected.approval_strategy}
+                    </div>
+                  </div>
+                  <div className="rounded-md bg-muted/50 p-3">
+                    <div className="text-xs text-muted-foreground">Expires</div>
+                    <div className="mt-1 font-medium">
+                      {selected.access_expires_at
+                        ? formatDate(selected.access_expires_at)
+                        : "After approval"}
                     </div>
                   </div>
                 </div>

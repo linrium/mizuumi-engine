@@ -6,6 +6,18 @@ import { useState, useTransition } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
+  Combobox,
+  ComboboxChip,
+  ComboboxChips,
+  ComboboxChipsInput,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+  ComboboxValue,
+} from "@/components/ui/combobox"
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -37,7 +49,6 @@ import { createPolicyTemplate } from "../actions"
 import type { ApprovalTeam, PolicyGrant, PolicyTemplate } from "../types"
 
 type DraftApprovalTeam = ApprovalTeam & { rowId: number }
-type DraftGrant = PolicyGrant & { rowId: number }
 
 const SECURABLE_TYPES = [
   "metastore",
@@ -51,47 +62,43 @@ const SECURABLE_TYPES = [
   "credential",
 ]
 
-const PRIVILEGES = [
-  "OWNER",
-  "CREATE CATALOG",
-  "USE CATALOG",
-  "CREATE SCHEMA",
-  "USE SCHEMA",
-  "CREATE TABLE",
-  "SELECT",
-  "MODIFY",
-  "CREATE FUNCTION",
-  "EXECUTE",
-  "CREATE VOLUME",
-  "READ VOLUME",
-  "CREATE MODEL",
-  "CREATE EXTERNAL LOCATION",
-  "READ FILES",
-  "WRITE FILES",
-  "CREATE EXTERNAL TABLE",
-  "CREATE EXTERNAL VOLUME",
-  "CREATE MANAGED STORAGE",
-  "CREATE STORAGE CREDENTIAL",
-]
+const PRIVILEGES_BY_TYPE: Record<string, string[]> = {
+  metastore: ["CREATE CATALOG"],
+  catalog: ["USE CATALOG", "CREATE SCHEMA"],
+  schema: [
+    "USE SCHEMA",
+    "CREATE TABLE",
+    "CREATE FUNCTION",
+    "CREATE VOLUME",
+    "CREATE MODEL",
+  ],
+  table: ["SELECT", "MODIFY"],
+  function: ["EXECUTE"],
+  volume: ["READ VOLUME"],
+  registered_model: ["EXECUTE"],
+  external_location: [
+    "READ FILES",
+    "WRITE FILES",
+    "CREATE EXTERNAL TABLE",
+    "CREATE EXTERNAL VOLUME",
+    "CREATE MANAGED STORAGE",
+  ],
+  credential: ["CREATE EXTERNAL LOCATION", "CREATE STORAGE CREDENTIAL"],
+}
 
 const TEAM_ORGS: { org: string; teams: string[] }[] = [
   { org: "vietjet", teams: ["vietjetGrow"] },
   { org: "hdbank", teams: ["hdbankGrow"] },
+  { org: "sovico", teams: ["sovicoSecurity"] },
 ]
 
 const TEAM_ITEMS = TEAM_ORGS.flatMap(({ teams }) =>
   teams.map((team) => ({ value: team, label: team })),
 )
+const TEAM_NAMES = TEAM_ITEMS.map((item) => item.value)
 
 const selectItems = (values: string[]) =>
   values.map((value) => ({ value, label: value }))
-
-function formatDuration(seconds?: number | null) {
-  if (!seconds) return "—"
-  if (seconds % 86400 === 0) return `${seconds / 86400}d`
-  if (seconds % 3600 === 0) return `${seconds / 3600}h`
-  return `${seconds}s`
-}
 
 export function PolicyTemplates({
   initialTemplates,
@@ -107,20 +114,15 @@ export function PolicyTemplates({
   const [description, setDescription] = useState("")
   const [affectedTeams, setAffectedTeams] = useState<string[]>([])
   const [approvalStrategy, setApprovalStrategy] = useState<"ANY" | "ALL">("ANY")
-  const [defaultDurationHours, setDefaultDurationHours] = useState("8")
-  const [maxDurationHours, setMaxDurationHours] = useState("24")
+  const [autoApprove, setAutoApprove] = useState(false)
   const [approvalTeams, setApprovalTeams] = useState<DraftApprovalTeam[]>([
     { rowId: 1, team: "", required_approvals: 1 },
   ])
-  const [grants, setGrants] = useState<DraftGrant[]>([
-    {
-      rowId: 1,
-      securable_type: "table",
-      target_kind: "REQUEST_RESOURCE",
-      target_full_name: "",
-      privilege: "SELECT",
-    },
-  ])
+  const [grant, setGrant] = useState<PolicyGrant>({
+    securable_type: "table",
+    target_full_name: "",
+    privilege: "SELECT",
+  })
   const [nextRowId, setNextRowId] = useState(2)
   const [message, setMessage] = useState<{
     kind: "success" | "error"
@@ -134,48 +136,21 @@ export function PolicyTemplates({
     setDescription("")
     setAffectedTeams([])
     setApprovalStrategy("ANY")
-    setDefaultDurationHours("8")
-    setMaxDurationHours("24")
+    setAutoApprove(false)
     setApprovalTeams([{ rowId: 1, team: "", required_approvals: 1 }])
-    setGrants([
-      {
-        rowId: 1,
-        securable_type: "table",
-        target_kind: "REQUEST_RESOURCE",
-        target_full_name: "",
-        privilege: "SELECT",
-      },
-    ])
+    setGrant({
+      securable_type: "table",
+      target_full_name: "",
+      privilege: "SELECT",
+    })
     setNextRowId(2)
     setMessage(null)
-  }
-
-  function toggleAffectedTeam(team: string) {
-    setAffectedTeams((teams) =>
-      teams.includes(team)
-        ? teams.filter((item) => item !== team)
-        : [...teams, team],
-    )
   }
 
   function addApprovalTeam() {
     setApprovalTeams((teams) => [
       ...teams,
       { rowId: nextRowId, team: "", required_approvals: 1 },
-    ])
-    setNextRowId((id) => id + 1)
-  }
-
-  function addGrant() {
-    setGrants((items) => [
-      ...items,
-      {
-        rowId: nextRowId,
-        securable_type: "table",
-        target_kind: "REQUEST_RESOURCE",
-        target_full_name: "",
-        privilege: "SELECT",
-      },
     ])
     setNextRowId((id) => id + 1)
   }
@@ -188,32 +163,27 @@ export function PolicyTemplates({
         required_approvals,
       }))
       .filter((team) => team.team)
-    const defaultDuration = Number(defaultDurationHours) * 3600
-    const maxDuration = Number(maxDurationHours) * 3600
 
     if (!key.trim() || !name.trim()) {
       setMessage({ kind: "error", text: "Key and name are required." })
       return
     }
-    if (affectedTeams.length === 0 || parsedApprovalTeams.length === 0) {
-      setMessage({
-        kind: "error",
-        text: "Add at least one affected team and one approval team.",
-      })
-      return
-    }
-    if (!Number.isFinite(defaultDuration) || !Number.isFinite(maxDuration)) {
-      setMessage({ kind: "error", text: "Durations must be valid numbers." })
-      return
-    }
     if (
-      defaultDuration <= 0 ||
-      maxDuration <= 0 ||
-      defaultDuration > maxDuration
+      affectedTeams.length === 0 ||
+      (!autoApprove && parsedApprovalTeams.length === 0)
     ) {
       setMessage({
         kind: "error",
-        text: "Durations must be positive and default cannot exceed maximum.",
+        text: autoApprove
+          ? "Add at least one affected team."
+          : "Add at least one affected team and one approval team.",
+      })
+      return
+    }
+    if (!grant.target_full_name.trim()) {
+      setMessage({
+        kind: "error",
+        text: "A fixed securable full name is required.",
       })
       return
     }
@@ -224,16 +194,13 @@ export function PolicyTemplates({
         name: name.trim(),
         description: description.trim() || undefined,
         approval_strategy: approvalStrategy,
-        default_duration_seconds: defaultDuration,
-        max_duration_seconds: maxDuration,
+        auto_approve: autoApprove,
         affected_teams: affectedTeams,
-        approval_teams: parsedApprovalTeams,
-        grants: grants.map(
-          ({ rowId: _rowId, ...grant }): PolicyGrant => ({
-            ...grant,
-            target_full_name: grant.target_full_name.trim(),
-          }),
-        ),
+        approval_teams: autoApprove ? [] : parsedApprovalTeams,
+        grant: {
+          ...grant,
+          target_full_name: grant.target_full_name.trim(),
+        },
       })
       if (!result.ok) {
         setMessage({ kind: "error", text: result.error })
@@ -324,255 +291,125 @@ export function PolicyTemplates({
                   rows={2}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Explain when this policy should be used so requesters pick the
-                  right one.
+                  Explain the policy scope and intent for reviewers.
                 </p>
               </div>
 
               <div className="grid gap-2">
-                <span className="text-xs font-medium">Affected teams</span>
-                <Select
-                  items={TEAM_ITEMS}
-                  value=""
-                  onValueChange={(value) => value && toggleAffectedTeam(value)}
+                <label className="text-xs font-medium" htmlFor="affected-team">
+                  Affected teams
+                </label>
+                <Combobox
+                  items={TEAM_NAMES}
+                  multiple
+                  value={affectedTeams}
+                  onValueChange={setAffectedTeams}
                 >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Add affected team" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {TEAM_ORGS.map(({ org, teams }) => (
-                      <SelectGroup key={org}>
-                        <SelectLabel>{org}</SelectLabel>
-                        {teams.map((team) => (
-                          <SelectItem key={team} value={team}>
-                            {team}
-                          </SelectItem>
-                        ))}
-                      </SelectGroup>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {affectedTeams.length > 0 ? (
-                  <div className="flex flex-wrap gap-1">
-                    {affectedTeams.map((team) => (
-                      <Badge key={team} variant="secondary" className="gap-1">
-                        {team}
-                        <button
-                          type="button"
-                          onClick={() => toggleAffectedTeam(team)}
-                          aria-label={`Remove ${team}`}
-                          className="text-muted-foreground hover:text-foreground"
-                        >
-                          ×
-                        </button>
-                      </Badge>
-                    ))}
-                  </div>
-                ) : null}
+                  <ComboboxChips>
+                    <ComboboxValue>
+                      {affectedTeams.map((team) => (
+                        <ComboboxChip key={team}>{team}</ComboboxChip>
+                      ))}
+                    </ComboboxValue>
+                    <ComboboxChipsInput
+                      id="affected-team"
+                      placeholder="Add affected team"
+                    />
+                  </ComboboxChips>
+                  <ComboboxContent>
+                    <ComboboxEmpty>No teams found.</ComboboxEmpty>
+                    <ComboboxList>
+                      {(team) => (
+                        <ComboboxItem key={team} value={team}>
+                          {team}
+                        </ComboboxItem>
+                      )}
+                    </ComboboxList>
+                  </ComboboxContent>
+                </Combobox>
                 <p className="text-xs text-muted-foreground">
                   Teams whose members are allowed to submit a request using this
                   policy.
                 </p>
               </div>
 
-              <div className="grid gap-2">
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="grid gap-2">
-                    <label
-                      className="text-xs font-medium"
-                      htmlFor="default-duration"
-                    >
-                      Default hours
-                    </label>
-                    <Input
-                      id="default-duration"
-                      type="number"
-                      min="1"
-                      value={defaultDurationHours}
-                      onChange={(event) =>
-                        setDefaultDurationHours(event.target.value)
-                      }
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <label
-                      className="text-xs font-medium"
-                      htmlFor="max-duration"
-                    >
-                      Maximum hours
-                    </label>
-                    <Input
-                      id="max-duration"
-                      type="number"
-                      min="1"
-                      value={maxDurationHours}
-                      onChange={(event) =>
-                        setMaxDurationHours(event.target.value)
-                      }
-                    />
-                  </div>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  How long granted access lasts. Default is pre-filled on the
-                  request; maximum caps what a requester can ask for.
-                </p>
-              </div>
+              <label className="flex items-start gap-3 rounded-md border p-3">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 size-4"
+                  checked={autoApprove}
+                  onChange={(event) => setAutoApprove(event.target.checked)}
+                />
+                <span className="grid gap-1">
+                  <span className="text-xs font-medium">Auto approve</span>
+                  <span className="text-xs text-muted-foreground">
+                    Immediately approve requests matching this fixed securable
+                    and privilege.
+                  </span>
+                </span>
+              </label>
 
-              <div className="grid gap-2">
-                <label
-                  className="text-xs font-medium"
-                  htmlFor="approval-strategy"
-                >
-                  Approval strategy
-                </label>
-                <Select
-                  items={selectItems(["ANY", "ALL"])}
-                  value={approvalStrategy}
-                  onValueChange={(value) =>
-                    value && setApprovalStrategy(value as "ANY" | "ALL")
-                  }
-                >
-                  <SelectTrigger id="approval-strategy" className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      <SelectItem value="ANY">Any team quorum</SelectItem>
-                      <SelectItem value="ALL">Every team quorum</SelectItem>
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  <strong>Any</strong> approves once one team hits its quorum.{" "}
-                  <strong>Every</strong> requires every listed team to hit its
-                  quorum.
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium">Approval teams</span>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    onClick={addApprovalTeam}
+              {!autoApprove ? (
+                <div className="grid gap-2">
+                  <label
+                    className="text-xs font-medium"
+                    htmlFor="approval-strategy"
                   >
-                    <IconPlus /> Add
-                  </Button>
+                    Approval strategy
+                  </label>
+                  <Select
+                    items={selectItems(["ANY", "ALL"])}
+                    value={approvalStrategy}
+                    onValueChange={(value) =>
+                      value && setApprovalStrategy(value as "ANY" | "ALL")
+                    }
+                  >
+                    <SelectTrigger id="approval-strategy" className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        <SelectItem value="ANY">Any team quorum</SelectItem>
+                        <SelectItem value="ALL">Every team quorum</SelectItem>
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    <strong>Any</strong> approves once one team hits its quorum.{" "}
+                    <strong>Every</strong> requires every listed team to hit its
+                    quorum.
+                  </p>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Teams that review requests, with the number of approvals each
-                  team must collect to reach quorum.
-                </p>
-                {approvalTeams.map((team) => (
-                  <div key={team.rowId} className="flex gap-2">
-                    <Select
-                      items={TEAM_ITEMS}
-                      value={team.team}
-                      onValueChange={(value) =>
-                        value &&
-                        setApprovalTeams((teams) =>
-                          teams.map((item) =>
-                            item.rowId === team.rowId
-                              ? { ...item, team: value }
-                              : item,
-                          ),
-                        )
-                      }
-                    >
-                      <SelectTrigger
-                        className="w-full"
-                        aria-label="Approval team"
-                      >
-                        <SelectValue placeholder="Select team" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {TEAM_ORGS.map(({ org, teams }) => (
-                          <SelectGroup key={org}>
-                            <SelectLabel>{org}</SelectLabel>
-                            {teams.map((item) => (
-                              <SelectItem key={item} value={item}>
-                                {item}
-                              </SelectItem>
-                            ))}
-                          </SelectGroup>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Input
-                      aria-label="Required approvals"
-                      className="w-20"
-                      type="number"
-                      min="1"
-                      value={team.required_approvals}
-                      onChange={(event) =>
-                        setApprovalTeams((teams) =>
-                          teams.map((item) =>
-                            item.rowId === team.rowId
-                              ? {
-                                  ...item,
-                                  required_approvals: Math.max(
-                                    1,
-                                    Number(event.target.value),
-                                  ),
-                                }
-                              : item,
-                          ),
-                        )
-                      }
-                    />
+              ) : null}
+
+              {!autoApprove ? (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium">Approval teams</span>
                     <Button
                       type="button"
-                      size="icon-sm"
+                      size="sm"
                       variant="ghost"
-                      disabled={approvalTeams.length === 1}
-                      onClick={() =>
-                        setApprovalTeams((teams) =>
-                          teams.filter((item) => item.rowId !== team.rowId),
-                        )
-                      }
-                      aria-label="Remove approval team"
+                      onClick={addApprovalTeam}
                     >
-                      <IconTrash />
+                      <IconPlus /> Add
                     </Button>
                   </div>
-                ))}
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium">Privileges</span>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    onClick={addGrant}
-                  >
-                    <IconPlus /> Add
-                  </Button>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Grants issued when a request is approved. Pick{" "}
-                  <strong>Requested resource</strong> to apply to whatever the
-                  requester targets, or <strong>Fixed resource</strong> to
-                  always grant on a specific full name.
-                </p>
-                {grants.map((grant) => (
-                  <div
-                    key={grant.rowId}
-                    className="space-y-2 rounded-md border p-2"
-                  >
-                    <div className="grid grid-cols-2 gap-2">
+                  <p className="text-xs text-muted-foreground">
+                    Teams that review requests, with the number of approvals
+                    each team must collect to reach quorum.
+                  </p>
+                  {approvalTeams.map((team) => (
+                    <div key={team.rowId} className="flex gap-2">
                       <Select
-                        items={selectItems(SECURABLE_TYPES)}
-                        value={grant.securable_type}
+                        items={TEAM_ITEMS}
+                        value={team.team}
                         onValueChange={(value) =>
                           value &&
-                          setGrants((items) =>
-                            items.map((item) =>
-                              item.rowId === grant.rowId
-                                ? { ...item, securable_type: value }
+                          setApprovalTeams((teams) =>
+                            teams.map((item) =>
+                              item.rowId === team.rowId
+                                ? { ...item, team: value }
                                 : item,
                             ),
                           )
@@ -580,130 +417,137 @@ export function PolicyTemplates({
                       >
                         <SelectTrigger
                           className="w-full"
-                          aria-label="Securable type"
+                          aria-label="Approval team"
                         >
-                          <SelectValue />
+                          <SelectValue placeholder="Select team" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectGroup>
-                            {SECURABLE_TYPES.map((type) => (
-                              <SelectItem key={type} value={type}>
-                                {type}
-                              </SelectItem>
-                            ))}
-                          </SelectGroup>
+                          {TEAM_ORGS.map(({ org, teams }) => (
+                            <SelectGroup key={org}>
+                              <SelectLabel>{org}</SelectLabel>
+                              {teams.map((item) => (
+                                <SelectItem key={item} value={item}>
+                                  {item}
+                                </SelectItem>
+                              ))}
+                            </SelectGroup>
+                          ))}
                         </SelectContent>
                       </Select>
-                      <Select
-                        items={selectItems(PRIVILEGES)}
-                        value={grant.privilege}
-                        onValueChange={(value) =>
-                          value &&
-                          setGrants((items) =>
-                            items.map((item) =>
-                              item.rowId === grant.rowId
-                                ? { ...item, privilege: value }
-                                : item,
-                            ),
-                          )
-                        }
-                      >
-                        <SelectTrigger
-                          className="w-full"
-                          aria-label="Privilege"
-                        >
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectGroup>
-                            {PRIVILEGES.map((privilege) => (
-                              <SelectItem key={privilege} value={privilege}>
-                                {privilege}
-                              </SelectItem>
-                            ))}
-                          </SelectGroup>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="flex gap-2">
-                      <Select
-                        items={selectItems([
-                          "REQUEST_RESOURCE",
-                          "FIXED_RESOURCE",
-                        ])}
-                        value={grant.target_kind}
-                        onValueChange={(value) =>
-                          value &&
-                          setGrants((items) =>
-                            items.map((item) =>
-                              item.rowId === grant.rowId
+                      <Input
+                        aria-label="Required approvals"
+                        className="w-20"
+                        type="number"
+                        min="1"
+                        value={team.required_approvals}
+                        onChange={(event) =>
+                          setApprovalTeams((teams) =>
+                            teams.map((item) =>
+                              item.rowId === team.rowId
                                 ? {
                                     ...item,
-                                    target_kind:
-                                      value as PolicyGrant["target_kind"],
-                                    target_full_name:
-                                      value === "REQUEST_RESOURCE"
-                                        ? ""
-                                        : item.target_full_name,
+                                    required_approvals: Math.max(
+                                      1,
+                                      Number(event.target.value),
+                                    ),
                                   }
                                 : item,
                             ),
                           )
                         }
-                      >
-                        <SelectTrigger
-                          className="w-full"
-                          aria-label="Target kind"
-                        >
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectGroup>
-                            <SelectItem value="REQUEST_RESOURCE">
-                              Requested resource
-                            </SelectItem>
-                            <SelectItem value="FIXED_RESOURCE">
-                              Fixed resource
-                            </SelectItem>
-                          </SelectGroup>
-                        </SelectContent>
-                      </Select>
+                      />
                       <Button
                         type="button"
                         size="icon-sm"
                         variant="ghost"
-                        disabled={grants.length === 1}
+                        disabled={approvalTeams.length === 1}
                         onClick={() =>
-                          setGrants((items) =>
-                            items.filter((item) => item.rowId !== grant.rowId),
+                          setApprovalTeams((teams) =>
+                            teams.filter((item) => item.rowId !== team.rowId),
                           )
                         }
-                        aria-label="Remove privilege"
+                        aria-label="Remove approval team"
                       >
                         <IconTrash />
                       </Button>
                     </div>
-                    {grant.target_kind === "FIXED_RESOURCE" ? (
-                      <Input
-                        aria-label="Fixed resource full name"
-                        value={grant.target_full_name}
-                        onChange={(event) =>
-                          setGrants((items) =>
-                            items.map((item) =>
-                              item.rowId === grant.rowId
-                                ? {
-                                    ...item,
-                                    target_full_name: event.target.value,
-                                  }
-                                : item,
-                            ),
-                          )
-                        }
-                        placeholder="main.analytics.orders"
+                  ))}
+                </div>
+              ) : null}
+
+              <div className="space-y-2">
+                <span className="text-xs font-medium">Fixed privilege</span>
+                <p className="text-xs text-muted-foreground">
+                  Each template grants exactly one privilege on one fixed
+                  securable.
+                </p>
+                <div className="space-y-2 rounded-md border p-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <Select
+                      items={selectItems(SECURABLE_TYPES)}
+                      value={grant.securable_type}
+                      onValueChange={(value) => {
+                        if (!value) return
+                        setGrant({
+                          ...grant,
+                          securable_type: value,
+                          privilege: PRIVILEGES_BY_TYPE[value][0],
+                        })
+                      }}
+                    >
+                      <SelectTrigger
+                        className="w-full"
+                        aria-label="Securable type"
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          {SECURABLE_TYPES.map((type) => (
+                            <SelectItem key={type} value={type}>
+                              {type}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                    <Combobox
+                      items={PRIVILEGES_BY_TYPE[grant.securable_type]}
+                      value={grant.privilege}
+                      onValueChange={(value) => {
+                        if (!value) return
+                        setGrant({ ...grant, privilege: value })
+                      }}
+                    >
+                      <ComboboxInput
+                        className="w-full"
+                        aria-label="Privilege"
+                        placeholder="Select privilege"
                       />
-                    ) : null}
+                      <ComboboxContent>
+                        <ComboboxEmpty>No privileges found.</ComboboxEmpty>
+                        <ComboboxList>
+                          {(privilege) => (
+                            <ComboboxItem key={privilege} value={privilege}>
+                              {privilege}
+                            </ComboboxItem>
+                          )}
+                        </ComboboxList>
+                      </ComboboxContent>
+                    </Combobox>
                   </div>
-                ))}
+                  <Input
+                    aria-label="Fixed resource full name"
+                    value={grant.target_full_name}
+                    onChange={(event) =>
+                      setGrant({
+                        ...grant,
+                        target_full_name: event.target.value,
+                      })
+                    }
+                    placeholder="main.analytics.orders"
+                  />
+                </div>
               </div>
 
               {message ? (
@@ -745,8 +589,7 @@ export function PolicyTemplates({
             <TableRow>
               <TableHead className="pl-4">Template</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead>Strategy</TableHead>
-              <TableHead>Default / Max</TableHead>
+              <TableHead>Approval</TableHead>
               <TableHead>Approval teams</TableHead>
               <TableHead>Affected teams</TableHead>
               <TableHead className="pr-4">Privileges</TableHead>
@@ -756,7 +599,7 @@ export function PolicyTemplates({
             {initialTemplates.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={7}
+                  colSpan={6}
                   className="h-24 text-center text-muted-foreground"
                 >
                   No policy templates.
@@ -778,20 +621,24 @@ export function PolicyTemplates({
                   </TableCell>
                   <TableCell>
                     <Badge variant="secondary">
-                      {template.approval_strategy}
+                      {template.auto_approve
+                        ? "Automatic"
+                        : `Manual · ${template.approval_strategy}`}
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    {formatDuration(template.default_duration_seconds)} /{" "}
-                    {formatDuration(template.max_duration_seconds)}
-                  </TableCell>
-                  <TableCell>
                     <div className="flex flex-wrap gap-1">
-                      {template.approval_teams.map((team) => (
-                        <Badge key={team.team} variant="outline">
-                          {team.team} ({team.required_approvals})
-                        </Badge>
-                      ))}
+                      {template.auto_approve ? (
+                        <span className="text-muted-foreground">
+                          Not required
+                        </span>
+                      ) : (
+                        template.approval_teams.map((team) => (
+                          <Badge key={team.team} variant="outline">
+                            {team.team} ({team.required_approvals})
+                          </Badge>
+                        ))
+                      )}
                     </div>
                   </TableCell>
                   <TableCell>
@@ -804,16 +651,10 @@ export function PolicyTemplates({
                     </div>
                   </TableCell>
                   <TableCell className="pr-4">
-                    <div className="flex flex-wrap gap-1">
-                      {template.grants.map((grant) => (
-                        <Badge
-                          key={`${grant.securable_type}:${grant.target_kind}:${grant.target_full_name}:${grant.privilege}`}
-                          variant="outline"
-                        >
-                          {grant.securable_type} · {grant.privilege}
-                        </Badge>
-                      ))}
-                    </div>
+                    <Badge variant="outline">
+                      {template.grant.securable_type} ·{" "}
+                      {template.grant.privilege}
+                    </Badge>
                   </TableCell>
                 </TableRow>
               ))

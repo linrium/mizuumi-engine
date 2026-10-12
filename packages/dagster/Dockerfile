@@ -9,10 +9,10 @@ WORKDIR /opt/dagster/app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY mizuumi_dagster ./mizuumi_dagster
+COPY managed_spark ./managed_spark
 
 RUN mkdir -p "$DAGSTER_HOME"
 
 EXPOSE 4000
 
-CMD ["dagster", "api", "grpc", "-h", "0.0.0.0", "-p", "4000", "-m", "mizuumi_dagster"]
+CMD ["dagster", "api", "grpc", "-h", "0.0.0.0", "-p", "4000", "-m", "managed_spark"]

@@ -53,6 +53,7 @@ else
 fi
 
 run_step auth/bootstrap-sovico.sh
+run_step auth/bootstrap-organizations.sh
 run_step storage/bootstrap.sh
 run_step storage/setup.sh
 run_step duck-server/bootstrap.sh
