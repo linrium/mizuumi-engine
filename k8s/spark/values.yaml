@@ -1,7 +1,7 @@
 image:
   repository: mizuumi/spark
   tag: "4.0.1-uc-kafka-rustfs-baked"
-  pullPolicy: IfNotPresent
+  pullPolicy: Always
 
 serviceAccountName: spark-operator-spark
 credentialsSecretName: spark-runtime-credentials

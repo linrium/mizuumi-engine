@@ -61,7 +61,7 @@ dagster:
         image:
           repository: mizuumi/dagster-user-code
           tag: "0.3.3"
-          pullPolicy: IfNotPresent
+          pullPolicy: Always
         dagsterApiGrpcArgs:
           - "-m"
           - "managed_spark"

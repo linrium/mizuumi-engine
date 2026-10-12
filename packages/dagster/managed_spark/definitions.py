@@ -103,7 +103,7 @@ def _spark_conf():
         # Kubernetes submission
         "spark.kubernetes.namespace": SPARK_NAMESPACE,
         "spark.kubernetes.container.image": SPARK_IMAGE,
-        "spark.kubernetes.container.image.pullPolicy": "Never",
+        "spark.kubernetes.container.image.pullPolicy": "Always",
         "spark.kubernetes.authenticate.driver.serviceAccountName": SPARK_SERVICE_ACCOUNT,
         "spark.kubernetes.submission.waitAppCompletion": "true",
         "spark.kubernetes.executor.deleteOnTermination": "true",
