@@ -16,6 +16,7 @@ export default function TablePermissionsPage({
       securableType="table"
       fullName={fullName}
       callbackURL={callbackURL}
+      tableVariant="columns"
     />
   )
 }

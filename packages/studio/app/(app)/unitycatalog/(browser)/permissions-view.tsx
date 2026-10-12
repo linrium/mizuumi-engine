@@ -3,6 +3,12 @@
 import { IconPlus, IconRefresh } from "@tabler/icons-react"
 import { cn } from "cn"
 import { useCallback, useEffect, useState, useTransition } from "react"
+import {
+  getUnityCatalogPermissions,
+  type PrivilegeAssignment,
+  type SecurableType,
+  updateUnityCatalogPermissions,
+} from "@/app/(app)/unitycatalog/actions"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -23,12 +29,6 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { authClient } from "@/lib/auth-client"
-import {
-  getUnityCatalogPermissions,
-  type PrivilegeAssignment,
-  type SecurableType,
-  updateUnityCatalogPermissions,
-} from "@/app/(app)/unitycatalog/actions"
 
 const PRIVILEGES_BY_TYPE: Record<SecurableType, string[]> = {
   catalog: [
@@ -47,12 +47,15 @@ export function PermissionsView({
   securableType,
   fullName,
   callbackURL,
+  tableVariant = "default",
 }: {
   securableType: SecurableType
   fullName: string
   callbackURL: string
+  tableVariant?: "default" | "columns"
 }) {
   const privileges = PRIVILEGES_BY_TYPE[securableType]
+  const useColumnsTableStyle = tableVariant === "columns"
 
   const [assignments, setAssignments] = useState<PrivilegeAssignment[]>([])
   const [message, setMessage] = useState<
@@ -159,10 +162,6 @@ export function PermissionsView({
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
         <div>
-          <div className="text-sm font-medium">Permissions</div>
-          <div className="font-mono text-xs text-muted-foreground">
-            {fullName}
-          </div>
         </div>
         <div className="flex gap-2">
           <Button
@@ -194,54 +193,122 @@ export function PermissionsView({
         </div>
       ) : null}
 
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Securable</TableHead>
-            <TableHead>Principal</TableHead>
-            <TableHead>Privileges</TableHead>
-            <TableHead className="w-0" />
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {assignments.length === 0 ? (
+      <div
+        className={cn(
+          useColumnsTableStyle &&
+            "overflow-hidden rounded-md ring-1 ring-foreground/10",
+        )}
+      >
+        <Table>
+          <TableHeader
+            className={cn(
+              useColumnsTableStyle && "bg-muted/50 text-muted-foreground",
+            )}
+          >
             <TableRow>
-              <TableCell
-                colSpan={4}
-                className="py-6 text-center text-muted-foreground"
+              <TableHead
+                className={cn(
+                  useColumnsTableStyle &&
+                    "h-auto px-3 py-2 text-muted-foreground",
+                )}
               >
-                {isPending ? "Loading…" : "No assignments."}
-              </TableCell>
+                Securable
+              </TableHead>
+              <TableHead
+                className={cn(
+                  useColumnsTableStyle &&
+                    "h-auto px-3 py-2 text-muted-foreground",
+                )}
+              >
+                Principal
+              </TableHead>
+              <TableHead
+                className={cn(
+                  useColumnsTableStyle &&
+                    "h-auto px-3 py-2 text-muted-foreground",
+                )}
+              >
+                Privileges
+              </TableHead>
+              <TableHead
+                className={cn(
+                  "w-0",
+                  useColumnsTableStyle && "h-auto px-3 py-2",
+                )}
+              />
             </TableRow>
-          ) : (
-            assignments.map((a) => (
-              <TableRow key={a.principal}>
-                <TableCell className="font-mono">{fullName}</TableCell>
-                <TableCell className="font-mono">{a.principal}</TableCell>
-                <TableCell>
-                  <div className="flex flex-wrap gap-1">
-                    {a.privileges.map((p) => (
-                      <Badge key={p} variant="secondary">
-                        {p}
-                      </Badge>
-                    ))}
-                  </div>
-                </TableCell>
-                <TableCell className="text-right">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={isPending}
-                    onClick={() => revoke(a)}
-                  >
-                    Revoke
-                  </Button>
+          </TableHeader>
+          <TableBody>
+            {assignments.length === 0 ? (
+              <TableRow className={cn(useColumnsTableStyle && "border-b-0")}>
+                <TableCell
+                  colSpan={4}
+                  className={cn(
+                    "py-6 text-center text-muted-foreground",
+                    useColumnsTableStyle && "px-3",
+                  )}
+                >
+                  {isPending ? "Loading…" : "No assignments."}
                 </TableCell>
               </TableRow>
-            ))
-          )}
-        </TableBody>
-      </Table>
+            ) : (
+              assignments.map((a, index) => (
+                <TableRow
+                  key={a.principal}
+                  className={cn(
+                    useColumnsTableStyle &&
+                      "border-t border-b-0 hover:bg-muted/30",
+                    useColumnsTableStyle && index % 2 === 1 && "bg-muted/20",
+                  )}
+                >
+                  <TableCell
+                    className={cn(
+                      "font-mono",
+                      useColumnsTableStyle && "px-3 py-1.5",
+                    )}
+                  >
+                    {fullName}
+                  </TableCell>
+                  <TableCell
+                    className={cn(
+                      "font-mono",
+                      useColumnsTableStyle && "px-3 py-1.5",
+                    )}
+                  >
+                    {a.principal}
+                  </TableCell>
+                  <TableCell
+                    className={cn(useColumnsTableStyle && "px-3 py-1.5")}
+                  >
+                    <div className="flex flex-wrap gap-1">
+                      {a.privileges.map((p) => (
+                        <Badge key={p} variant="secondary">
+                          {p}
+                        </Badge>
+                      ))}
+                    </div>
+                  </TableCell>
+                  <TableCell
+                    className={cn(
+                      "text-right",
+                      useColumnsTableStyle && "px-3 py-1.5",
+                    )}
+                  >
+                    <Button
+                      size={useColumnsTableStyle ? "xs" : "sm"}
+                      variant="outline"
+                      disabled={isPending}
+                      onClick={() => revoke(a)}
+                    >
+                      Revoke
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
 
       <Dialog
         open={grantOpen}
@@ -257,8 +324,8 @@ export function PermissionsView({
           <DialogHeader>
             <DialogTitle>Grant permissions</DialogTitle>
             <DialogDescription>
-              Grant privileges on{" "}
-              <span className="font-mono">{fullName}</span> to a principal.
+              Grant privileges on <span className="font-mono">{fullName}</span>{" "}
+              to a principal.
             </DialogDescription>
           </DialogHeader>
 

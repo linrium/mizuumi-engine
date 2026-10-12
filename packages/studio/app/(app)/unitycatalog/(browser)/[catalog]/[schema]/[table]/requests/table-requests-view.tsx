@@ -178,10 +178,6 @@ export function TableRequestsView({
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
         <div>
-          <div className="text-sm font-medium">Access requests</div>
-          <div className="font-mono text-xs text-muted-foreground">
-            {fullName}
-          </div>
         </div>
         <div className="flex gap-2">
           <Button
@@ -212,75 +208,94 @@ export function TableRequestsView({
         </div>
       ) : null}
 
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Policy</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Privileges</TableHead>
-            <TableHead>Duration</TableHead>
-            <TableHead>Expires</TableHead>
-            <TableHead className="w-0" />
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {requests.length === 0 ? (
+      <div className="overflow-hidden rounded-md ring-1 ring-foreground/10">
+        <Table>
+          <TableHeader className="bg-muted/50 text-muted-foreground">
             <TableRow>
-              <TableCell
-                colSpan={6}
-                className="py-6 text-center text-muted-foreground"
-              >
-                No requests for this table.
-              </TableCell>
+              <TableHead className="h-auto px-3 py-2 text-muted-foreground">
+                Policy
+              </TableHead>
+              <TableHead className="h-auto px-3 py-2 text-muted-foreground">
+                Status
+              </TableHead>
+              <TableHead className="h-auto px-3 py-2 text-muted-foreground">
+                Privileges
+              </TableHead>
+              <TableHead className="h-auto px-3 py-2 text-muted-foreground">
+                Duration
+              </TableHead>
+              <TableHead className="h-auto px-3 py-2 text-muted-foreground">
+                Expires
+              </TableHead>
+              <TableHead className="h-auto w-0 px-3 py-2" />
             </TableRow>
-          ) : (
-            requests.map((request) => (
-              <TableRow
-                key={request.id}
-                className="cursor-pointer"
-                onClick={() => openRequest(request)}
-              >
-                <TableCell>{request.template_name}</TableCell>
-                <TableCell>
-                  <Badge variant={statusVariant(request.status)}>
-                    {request.status}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  <div className="flex flex-wrap gap-1">
-                    {request.grants
-                      .filter((grant) => grant.full_name === fullName)
-                      .map((grant) => (
-                        <Badge key={grant.privilege} variant="secondary">
-                          {grant.privilege}
-                        </Badge>
-                      ))}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  {request.requested_duration_seconds / 3600}h
-                </TableCell>
-                <TableCell>{formatDate(request.access_expires_at)}</TableCell>
-                <TableCell className="text-right">
-                  {canCancel(request.status) ? (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={isPending}
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        cancelRequest(request)
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                  ) : null}
+          </TableHeader>
+          <TableBody>
+            {requests.length === 0 ? (
+              <TableRow className="border-b-0">
+                <TableCell
+                  colSpan={6}
+                  className="px-3 py-6 text-center text-muted-foreground"
+                >
+                  No requests for this table.
                 </TableCell>
               </TableRow>
-            ))
-          )}
-        </TableBody>
-      </Table>
+            ) : (
+              requests.map((request, index) => (
+                <TableRow
+                  key={request.id}
+                  className={cn(
+                    "cursor-pointer border-t border-b-0 hover:bg-muted/30",
+                    index % 2 === 1 && "bg-muted/20",
+                  )}
+                  onClick={() => openRequest(request)}
+                >
+                  <TableCell className="px-3 py-1.5 font-medium">
+                    {request.template_name}
+                  </TableCell>
+                  <TableCell className="px-3 py-1.5">
+                    <Badge variant={statusVariant(request.status)}>
+                      {request.status}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="px-3 py-1.5">
+                    <div className="flex flex-wrap gap-1">
+                      {request.grants
+                        .filter((grant) => grant.full_name === fullName)
+                        .map((grant) => (
+                          <Badge key={grant.privilege} variant="secondary">
+                            {grant.privilege}
+                          </Badge>
+                        ))}
+                    </div>
+                  </TableCell>
+                  <TableCell className="px-3 py-1.5 text-muted-foreground">
+                    {request.requested_duration_seconds / 3600}h
+                  </TableCell>
+                  <TableCell className="px-3 py-1.5 text-muted-foreground">
+                    {formatDate(request.access_expires_at)}
+                  </TableCell>
+                  <TableCell className="px-3 py-1.5 text-right">
+                    {canCancel(request.status) ? (
+                      <Button
+                        size="xs"
+                        variant="outline"
+                        disabled={isPending}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          cancelRequest(request)
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                    ) : null}
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
 
       <Dialog
         open={createOpen}
