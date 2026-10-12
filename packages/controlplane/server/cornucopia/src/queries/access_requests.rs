@@ -99,6 +99,41 @@ pub struct ListAccessRequestsParams<
     pub approval_team: T4,
 }
 #[derive(Debug)]
+pub struct SetAccessRequestGrantStatusParams<
+    T1: crate::StringSql,
+    T2: crate::StringSql,
+    T3: crate::StringSql,
+    T4: crate::StringSql,
+    T5: crate::StringSql,
+    T6: crate::StringSql,
+> {
+    pub status: T1,
+    pub failure_message: T2,
+    pub request_id: T3,
+    pub securable_type: T4,
+    pub full_name: T5,
+    pub privilege: T6,
+}
+#[derive(Debug)]
+pub struct FailPendingAccessRequestGrantsParams<T1: crate::StringSql, T2: crate::StringSql> {
+    pub failure_message: T1,
+    pub request_id: T2,
+}
+#[derive(Debug)]
+pub struct HasOtherActiveManagedGrantParams<
+    T1: crate::StringSql,
+    T2: crate::StringSql,
+    T3: crate::StringSql,
+    T4: crate::StringSql,
+    T5: crate::StringSql,
+> {
+    pub request_id: T1,
+    pub requested_for: T2,
+    pub securable_type: T3,
+    pub full_name: T4,
+    pub privilege: T5,
+}
+#[derive(Debug)]
 pub struct LockOwnedAccessRequestParams<T1: crate::StringSql, T2: crate::StringSql> {
     pub request_id: T1,
     pub requested_by: T2,
@@ -266,6 +301,54 @@ impl<'a> From<ListAccessRequestsBorrowed<'a>> for ListAccessRequests {
     }
 }
 #[derive(Debug, Clone, PartialEq)]
+pub struct ListExpiredFulfilledAccessRequests {
+    pub id: String,
+    pub requested_for: String,
+}
+pub struct ListExpiredFulfilledAccessRequestsBorrowed<'a> {
+    pub id: &'a str,
+    pub requested_for: &'a str,
+}
+impl<'a> From<ListExpiredFulfilledAccessRequestsBorrowed<'a>>
+    for ListExpiredFulfilledAccessRequests
+{
+    fn from(
+        ListExpiredFulfilledAccessRequestsBorrowed {
+            id,
+            requested_for,
+        }: ListExpiredFulfilledAccessRequestsBorrowed<'a>,
+    ) -> Self {
+        Self {
+            id: id.into(),
+            requested_for: requested_for.into(),
+        }
+    }
+}
+#[derive(Debug, Clone, PartialEq)]
+pub struct ListAccessRequestsPendingRevocation {
+    pub id: String,
+    pub requested_for: String,
+}
+pub struct ListAccessRequestsPendingRevocationBorrowed<'a> {
+    pub id: &'a str,
+    pub requested_for: &'a str,
+}
+impl<'a> From<ListAccessRequestsPendingRevocationBorrowed<'a>>
+    for ListAccessRequestsPendingRevocation
+{
+    fn from(
+        ListAccessRequestsPendingRevocationBorrowed {
+            id,
+            requested_for,
+        }: ListAccessRequestsPendingRevocationBorrowed<'a>,
+    ) -> Self {
+        Self {
+            id: id.into(),
+            requested_for: requested_for.into(),
+        }
+    }
+}
+#[derive(Debug, Clone, PartialEq)]
 pub struct GetAccessRequest {
     pub id: String,
     pub template_id: String,
@@ -359,12 +442,14 @@ impl<'a> From<GetAccessRequestBorrowed<'a>> for GetAccessRequest {
 pub struct LockAccessRequest {
     pub status: String,
     pub approval_strategy: String,
+    pub requested_for: String,
     pub routed_for_team: String,
     pub decided_by: String,
 }
 pub struct LockAccessRequestBorrowed<'a> {
     pub status: &'a str,
     pub approval_strategy: &'a str,
+    pub requested_for: &'a str,
     pub routed_for_team: &'a str,
     pub decided_by: &'a str,
 }
@@ -373,6 +458,7 @@ impl<'a> From<LockAccessRequestBorrowed<'a>> for LockAccessRequest {
         LockAccessRequestBorrowed {
             status,
             approval_strategy,
+            requested_for,
             routed_for_team,
             decided_by,
         }: LockAccessRequestBorrowed<'a>,
@@ -380,6 +466,7 @@ impl<'a> From<LockAccessRequestBorrowed<'a>> for LockAccessRequest {
         Self {
             status: status.into(),
             approval_strategy: approval_strategy.into(),
+            requested_for: requested_for.into(),
             routed_for_team: routed_for_team.into(),
             decided_by: decided_by.into(),
         }
@@ -763,6 +850,213 @@ where
         mapper: fn(ListAccessRequestsBorrowed) -> R,
     ) -> ListAccessRequestsQuery<'c, 'a, 's, C, R, N> {
         ListAccessRequestsQuery {
+            client: self.client,
+            params: self.params,
+            query: self.query,
+            cached: self.cached,
+            extractor: self.extractor,
+            mapper,
+        }
+    }
+    pub async fn one(self) -> Result<T, tokio_postgres::Error> {
+        let row =
+            crate::client::async_::one(self.client, self.query, &self.params, self.cached).await?;
+        Ok((self.mapper)((self.extractor)(&row)?))
+    }
+    pub async fn all(self) -> Result<Vec<T>, tokio_postgres::Error> {
+        self.iter().await?.try_collect().await
+    }
+    pub async fn opt(self) -> Result<Option<T>, tokio_postgres::Error> {
+        let opt_row =
+            crate::client::async_::opt(self.client, self.query, &self.params, self.cached).await?;
+        Ok(opt_row
+            .map(|row| {
+                let extracted = (self.extractor)(&row)?;
+                Ok((self.mapper)(extracted))
+            })
+            .transpose()?)
+    }
+    pub async fn iter(
+        self,
+    ) -> Result<
+        impl futures::Stream<Item = Result<T, tokio_postgres::Error>> + 'c,
+        tokio_postgres::Error,
+    > {
+        let stream = crate::client::async_::raw(
+            self.client,
+            self.query,
+            crate::slice_iter(&self.params),
+            self.cached,
+        )
+        .await?;
+        let mapped = stream
+            .map(move |res| {
+                res.and_then(|row| {
+                    let extracted = (self.extractor)(&row)?;
+                    Ok((self.mapper)(extracted))
+                })
+            })
+            .into_stream();
+        Ok(mapped)
+    }
+}
+pub struct ListExpiredFulfilledAccessRequestsQuery<'c, 'a, 's, C: GenericClient, T, const N: usize>
+{
+    client: &'c C,
+    params: [&'a (dyn postgres_types::ToSql + Sync); N],
+    query: &'static str,
+    cached: Option<&'s tokio_postgres::Statement>,
+    extractor: fn(
+        &tokio_postgres::Row,
+    ) -> Result<ListExpiredFulfilledAccessRequestsBorrowed, tokio_postgres::Error>,
+    mapper: fn(ListExpiredFulfilledAccessRequestsBorrowed) -> T,
+}
+impl<'c, 'a, 's, C, T: 'c, const N: usize>
+    ListExpiredFulfilledAccessRequestsQuery<'c, 'a, 's, C, T, N>
+where
+    C: GenericClient,
+{
+    pub fn map<R>(
+        self,
+        mapper: fn(ListExpiredFulfilledAccessRequestsBorrowed) -> R,
+    ) -> ListExpiredFulfilledAccessRequestsQuery<'c, 'a, 's, C, R, N> {
+        ListExpiredFulfilledAccessRequestsQuery {
+            client: self.client,
+            params: self.params,
+            query: self.query,
+            cached: self.cached,
+            extractor: self.extractor,
+            mapper,
+        }
+    }
+    pub async fn one(self) -> Result<T, tokio_postgres::Error> {
+        let row =
+            crate::client::async_::one(self.client, self.query, &self.params, self.cached).await?;
+        Ok((self.mapper)((self.extractor)(&row)?))
+    }
+    pub async fn all(self) -> Result<Vec<T>, tokio_postgres::Error> {
+        self.iter().await?.try_collect().await
+    }
+    pub async fn opt(self) -> Result<Option<T>, tokio_postgres::Error> {
+        let opt_row =
+            crate::client::async_::opt(self.client, self.query, &self.params, self.cached).await?;
+        Ok(opt_row
+            .map(|row| {
+                let extracted = (self.extractor)(&row)?;
+                Ok((self.mapper)(extracted))
+            })
+            .transpose()?)
+    }
+    pub async fn iter(
+        self,
+    ) -> Result<
+        impl futures::Stream<Item = Result<T, tokio_postgres::Error>> + 'c,
+        tokio_postgres::Error,
+    > {
+        let stream = crate::client::async_::raw(
+            self.client,
+            self.query,
+            crate::slice_iter(&self.params),
+            self.cached,
+        )
+        .await?;
+        let mapped = stream
+            .map(move |res| {
+                res.and_then(|row| {
+                    let extracted = (self.extractor)(&row)?;
+                    Ok((self.mapper)(extracted))
+                })
+            })
+            .into_stream();
+        Ok(mapped)
+    }
+}
+pub struct ListAccessRequestsPendingRevocationQuery<'c, 'a, 's, C: GenericClient, T, const N: usize>
+{
+    client: &'c C,
+    params: [&'a (dyn postgres_types::ToSql + Sync); N],
+    query: &'static str,
+    cached: Option<&'s tokio_postgres::Statement>,
+    extractor: fn(
+        &tokio_postgres::Row,
+    )
+        -> Result<ListAccessRequestsPendingRevocationBorrowed, tokio_postgres::Error>,
+    mapper: fn(ListAccessRequestsPendingRevocationBorrowed) -> T,
+}
+impl<'c, 'a, 's, C, T: 'c, const N: usize>
+    ListAccessRequestsPendingRevocationQuery<'c, 'a, 's, C, T, N>
+where
+    C: GenericClient,
+{
+    pub fn map<R>(
+        self,
+        mapper: fn(ListAccessRequestsPendingRevocationBorrowed) -> R,
+    ) -> ListAccessRequestsPendingRevocationQuery<'c, 'a, 's, C, R, N> {
+        ListAccessRequestsPendingRevocationQuery {
+            client: self.client,
+            params: self.params,
+            query: self.query,
+            cached: self.cached,
+            extractor: self.extractor,
+            mapper,
+        }
+    }
+    pub async fn one(self) -> Result<T, tokio_postgres::Error> {
+        let row =
+            crate::client::async_::one(self.client, self.query, &self.params, self.cached).await?;
+        Ok((self.mapper)((self.extractor)(&row)?))
+    }
+    pub async fn all(self) -> Result<Vec<T>, tokio_postgres::Error> {
+        self.iter().await?.try_collect().await
+    }
+    pub async fn opt(self) -> Result<Option<T>, tokio_postgres::Error> {
+        let opt_row =
+            crate::client::async_::opt(self.client, self.query, &self.params, self.cached).await?;
+        Ok(opt_row
+            .map(|row| {
+                let extracted = (self.extractor)(&row)?;
+                Ok((self.mapper)(extracted))
+            })
+            .transpose()?)
+    }
+    pub async fn iter(
+        self,
+    ) -> Result<
+        impl futures::Stream<Item = Result<T, tokio_postgres::Error>> + 'c,
+        tokio_postgres::Error,
+    > {
+        let stream = crate::client::async_::raw(
+            self.client,
+            self.query,
+            crate::slice_iter(&self.params),
+            self.cached,
+        )
+        .await?;
+        let mapped = stream
+            .map(move |res| {
+                res.and_then(|row| {
+                    let extracted = (self.extractor)(&row)?;
+                    Ok((self.mapper)(extracted))
+                })
+            })
+            .into_stream();
+        Ok(mapped)
+    }
+}
+pub struct BoolQuery<'c, 'a, 's, C: GenericClient, T, const N: usize> {
+    client: &'c C,
+    params: [&'a (dyn postgres_types::ToSql + Sync); N],
+    query: &'static str,
+    cached: Option<&'s tokio_postgres::Statement>,
+    extractor: fn(&tokio_postgres::Row) -> Result<bool, tokio_postgres::Error>,
+    mapper: fn(bool) -> T,
+}
+impl<'c, 'a, 's, C, T: 'c, const N: usize> BoolQuery<'c, 'a, 's, C, T, N>
+where
+    C: GenericClient,
+{
+    pub fn map<R>(self, mapper: fn(bool) -> R) -> BoolQuery<'c, 'a, 's, C, R, N> {
+        BoolQuery {
             client: self.client,
             params: self.params,
             query: self.query,
@@ -1239,70 +1533,6 @@ where
         mapper: fn(ListAccessRequestEventsBorrowed) -> R,
     ) -> ListAccessRequestEventsQuery<'c, 'a, 's, C, R, N> {
         ListAccessRequestEventsQuery {
-            client: self.client,
-            params: self.params,
-            query: self.query,
-            cached: self.cached,
-            extractor: self.extractor,
-            mapper,
-        }
-    }
-    pub async fn one(self) -> Result<T, tokio_postgres::Error> {
-        let row =
-            crate::client::async_::one(self.client, self.query, &self.params, self.cached).await?;
-        Ok((self.mapper)((self.extractor)(&row)?))
-    }
-    pub async fn all(self) -> Result<Vec<T>, tokio_postgres::Error> {
-        self.iter().await?.try_collect().await
-    }
-    pub async fn opt(self) -> Result<Option<T>, tokio_postgres::Error> {
-        let opt_row =
-            crate::client::async_::opt(self.client, self.query, &self.params, self.cached).await?;
-        Ok(opt_row
-            .map(|row| {
-                let extracted = (self.extractor)(&row)?;
-                Ok((self.mapper)(extracted))
-            })
-            .transpose()?)
-    }
-    pub async fn iter(
-        self,
-    ) -> Result<
-        impl futures::Stream<Item = Result<T, tokio_postgres::Error>> + 'c,
-        tokio_postgres::Error,
-    > {
-        let stream = crate::client::async_::raw(
-            self.client,
-            self.query,
-            crate::slice_iter(&self.params),
-            self.cached,
-        )
-        .await?;
-        let mapped = stream
-            .map(move |res| {
-                res.and_then(|row| {
-                    let extracted = (self.extractor)(&row)?;
-                    Ok((self.mapper)(extracted))
-                })
-            })
-            .into_stream();
-        Ok(mapped)
-    }
-}
-pub struct BoolQuery<'c, 'a, 's, C: GenericClient, T, const N: usize> {
-    client: &'c C,
-    params: [&'a (dyn postgres_types::ToSql + Sync); N],
-    query: &'static str,
-    cached: Option<&'s tokio_postgres::Statement>,
-    extractor: fn(&tokio_postgres::Row) -> Result<bool, tokio_postgres::Error>,
-    mapper: fn(bool) -> T,
-}
-impl<'c, 'a, 's, C, T: 'c, const N: usize> BoolQuery<'c, 'a, 's, C, T, N>
-where
-    C: GenericClient,
-{
-    pub fn map<R>(self, mapper: fn(bool) -> R) -> BoolQuery<'c, 'a, 's, C, R, N> {
-        BoolQuery {
             client: self.client,
             params: self.params,
             query: self.query,
@@ -2065,14 +2295,445 @@ impl<
         )
     }
 }
-pub struct ExpireAccessRequestsStmt(&'static str, Option<tokio_postgres::Statement>);
-pub fn expire_access_requests() -> ExpireAccessRequestsStmt {
-    ExpireAccessRequestsStmt(
-        "WITH expired AS ( UPDATE access_requests SET status = 'EXPIRED' WHERE status IN ('APPROVED', 'FULFILLED') AND access_expires_at <= NOW() RETURNING id ) INSERT INTO access_request_events (request_id, event_type, actor, comment) SELECT id, 'EXPIRED', 'system:expiry', 'Requested access duration elapsed' FROM expired",
+pub struct ListApprovedAccessRequestIdsStmt(&'static str, Option<tokio_postgres::Statement>);
+pub fn list_approved_access_request_ids() -> ListApprovedAccessRequestIdsStmt {
+    ListApprovedAccessRequestIdsStmt(
+        "SELECT id FROM access_requests WHERE status = 'APPROVED' AND access_expires_at > NOW() ORDER BY decided_at, id",
         None,
     )
 }
-impl ExpireAccessRequestsStmt {
+impl ListApprovedAccessRequestIdsStmt {
+    pub async fn prepare<'a, C: GenericClient>(
+        mut self,
+        client: &'a C,
+    ) -> Result<Self, tokio_postgres::Error> {
+        self.1 = Some(client.prepare(self.0).await?);
+        Ok(self)
+    }
+    pub fn bind<'c, 'a, 's, C: GenericClient>(
+        &'s self,
+        client: &'c C,
+    ) -> StringQuery<'c, 'a, 's, C, String, 0> {
+        StringQuery {
+            client,
+            params: [],
+            query: self.0,
+            cached: self.1.as_ref(),
+            extractor: |row| Ok(row.try_get(0)?),
+            mapper: |it| it.into(),
+        }
+    }
+}
+pub struct StartAccessRequestFulfillmentStmt(&'static str, Option<tokio_postgres::Statement>);
+pub fn start_access_request_fulfillment() -> StartAccessRequestFulfillmentStmt {
+    StartAccessRequestFulfillmentStmt(
+        "UPDATE access_requests SET status = 'FULFILLING' WHERE id = $1::text AND status = 'APPROVED' AND access_expires_at > NOW() RETURNING requested_for",
+        None,
+    )
+}
+impl StartAccessRequestFulfillmentStmt {
+    pub async fn prepare<'a, C: GenericClient>(
+        mut self,
+        client: &'a C,
+    ) -> Result<Self, tokio_postgres::Error> {
+        self.1 = Some(client.prepare(self.0).await?);
+        Ok(self)
+    }
+    pub fn bind<'c, 'a, 's, C: GenericClient, T1: crate::StringSql>(
+        &'s self,
+        client: &'c C,
+        request_id: &'a T1,
+    ) -> StringQuery<'c, 'a, 's, C, String, 1> {
+        StringQuery {
+            client,
+            params: [request_id],
+            query: self.0,
+            cached: self.1.as_ref(),
+            extractor: |row| Ok(row.try_get(0)?),
+            mapper: |it| it.into(),
+        }
+    }
+}
+pub struct SetAccessRequestGrantStatusStmt(&'static str, Option<tokio_postgres::Statement>);
+pub fn set_access_request_grant_status() -> SetAccessRequestGrantStatusStmt {
+    SetAccessRequestGrantStatusStmt(
+        "UPDATE access_request_grants SET fulfillment_status = $1::text, fulfilled_at = CASE WHEN $1::text = 'GRANTED' THEN NOW() ELSE fulfilled_at END, failure_message = NULLIF($2::text, '') WHERE request_id = $3::text AND securable_type = $4::text AND full_name = $5::text AND privilege = $6::text",
+        None,
+    )
+}
+impl SetAccessRequestGrantStatusStmt {
+    pub async fn prepare<'a, C: GenericClient>(
+        mut self,
+        client: &'a C,
+    ) -> Result<Self, tokio_postgres::Error> {
+        self.1 = Some(client.prepare(self.0).await?);
+        Ok(self)
+    }
+    pub async fn bind<
+        'c,
+        'a,
+        's,
+        C: GenericClient,
+        T1: crate::StringSql,
+        T2: crate::StringSql,
+        T3: crate::StringSql,
+        T4: crate::StringSql,
+        T5: crate::StringSql,
+        T6: crate::StringSql,
+    >(
+        &'s self,
+        client: &'c C,
+        status: &'a T1,
+        failure_message: &'a T2,
+        request_id: &'a T3,
+        securable_type: &'a T4,
+        full_name: &'a T5,
+        privilege: &'a T6,
+    ) -> Result<u64, tokio_postgres::Error> {
+        client
+            .execute(
+                self.0,
+                &[
+                    status,
+                    failure_message,
+                    request_id,
+                    securable_type,
+                    full_name,
+                    privilege,
+                ],
+            )
+            .await
+    }
+}
+impl<
+    'a,
+    C: GenericClient + Send + Sync,
+    T1: crate::StringSql,
+    T2: crate::StringSql,
+    T3: crate::StringSql,
+    T4: crate::StringSql,
+    T5: crate::StringSql,
+    T6: crate::StringSql,
+>
+    crate::client::async_::Params<
+        'a,
+        'a,
+        'a,
+        SetAccessRequestGrantStatusParams<T1, T2, T3, T4, T5, T6>,
+        std::pin::Pin<
+            Box<dyn futures::Future<Output = Result<u64, tokio_postgres::Error>> + Send + 'a>,
+        >,
+        C,
+    > for SetAccessRequestGrantStatusStmt
+{
+    fn params(
+        &'a self,
+        client: &'a C,
+        params: &'a SetAccessRequestGrantStatusParams<T1, T2, T3, T4, T5, T6>,
+    ) -> std::pin::Pin<
+        Box<dyn futures::Future<Output = Result<u64, tokio_postgres::Error>> + Send + 'a>,
+    > {
+        Box::pin(self.bind(
+            client,
+            &params.status,
+            &params.failure_message,
+            &params.request_id,
+            &params.securable_type,
+            &params.full_name,
+            &params.privilege,
+        ))
+    }
+}
+pub struct CompleteAccessRequestFulfillmentStmt(&'static str, Option<tokio_postgres::Statement>);
+pub fn complete_access_request_fulfillment() -> CompleteAccessRequestFulfillmentStmt {
+    CompleteAccessRequestFulfillmentStmt(
+        "UPDATE access_requests SET status = 'FULFILLED', fulfilled_at = NOW() WHERE id = $1::text AND status = 'FULFILLING'",
+        None,
+    )
+}
+impl CompleteAccessRequestFulfillmentStmt {
+    pub async fn prepare<'a, C: GenericClient>(
+        mut self,
+        client: &'a C,
+    ) -> Result<Self, tokio_postgres::Error> {
+        self.1 = Some(client.prepare(self.0).await?);
+        Ok(self)
+    }
+    pub async fn bind<'c, 'a, 's, C: GenericClient, T1: crate::StringSql>(
+        &'s self,
+        client: &'c C,
+        request_id: &'a T1,
+    ) -> Result<u64, tokio_postgres::Error> {
+        client.execute(self.0, &[request_id]).await
+    }
+}
+pub struct FailAccessRequestFulfillmentStmt(&'static str, Option<tokio_postgres::Statement>);
+pub fn fail_access_request_fulfillment() -> FailAccessRequestFulfillmentStmt {
+    FailAccessRequestFulfillmentStmt(
+        "UPDATE access_requests SET status = 'FAILED' WHERE id = $1::text AND status = 'FULFILLING'",
+        None,
+    )
+}
+impl FailAccessRequestFulfillmentStmt {
+    pub async fn prepare<'a, C: GenericClient>(
+        mut self,
+        client: &'a C,
+    ) -> Result<Self, tokio_postgres::Error> {
+        self.1 = Some(client.prepare(self.0).await?);
+        Ok(self)
+    }
+    pub async fn bind<'c, 'a, 's, C: GenericClient, T1: crate::StringSql>(
+        &'s self,
+        client: &'c C,
+        request_id: &'a T1,
+    ) -> Result<u64, tokio_postgres::Error> {
+        client.execute(self.0, &[request_id]).await
+    }
+}
+pub struct FailPendingAccessRequestGrantsStmt(&'static str, Option<tokio_postgres::Statement>);
+pub fn fail_pending_access_request_grants() -> FailPendingAccessRequestGrantsStmt {
+    FailPendingAccessRequestGrantsStmt(
+        "UPDATE access_request_grants SET fulfillment_status = 'FAILED', failure_message = $1::text WHERE request_id = $2::text AND fulfillment_status = 'PENDING'",
+        None,
+    )
+}
+impl FailPendingAccessRequestGrantsStmt {
+    pub async fn prepare<'a, C: GenericClient>(
+        mut self,
+        client: &'a C,
+    ) -> Result<Self, tokio_postgres::Error> {
+        self.1 = Some(client.prepare(self.0).await?);
+        Ok(self)
+    }
+    pub async fn bind<'c, 'a, 's, C: GenericClient, T1: crate::StringSql, T2: crate::StringSql>(
+        &'s self,
+        client: &'c C,
+        failure_message: &'a T1,
+        request_id: &'a T2,
+    ) -> Result<u64, tokio_postgres::Error> {
+        client.execute(self.0, &[failure_message, request_id]).await
+    }
+}
+impl<'a, C: GenericClient + Send + Sync, T1: crate::StringSql, T2: crate::StringSql>
+    crate::client::async_::Params<
+        'a,
+        'a,
+        'a,
+        FailPendingAccessRequestGrantsParams<T1, T2>,
+        std::pin::Pin<
+            Box<dyn futures::Future<Output = Result<u64, tokio_postgres::Error>> + Send + 'a>,
+        >,
+        C,
+    > for FailPendingAccessRequestGrantsStmt
+{
+    fn params(
+        &'a self,
+        client: &'a C,
+        params: &'a FailPendingAccessRequestGrantsParams<T1, T2>,
+    ) -> std::pin::Pin<
+        Box<dyn futures::Future<Output = Result<u64, tokio_postgres::Error>> + Send + 'a>,
+    > {
+        Box::pin(self.bind(client, &params.failure_message, &params.request_id))
+    }
+}
+pub struct ListExpiredFulfilledAccessRequestsStmt(&'static str, Option<tokio_postgres::Statement>);
+pub fn list_expired_fulfilled_access_requests() -> ListExpiredFulfilledAccessRequestsStmt {
+    ListExpiredFulfilledAccessRequestsStmt(
+        "SELECT id, requested_for FROM access_requests WHERE status = 'FULFILLED' AND access_expires_at <= NOW() ORDER BY access_expires_at, id",
+        None,
+    )
+}
+impl ListExpiredFulfilledAccessRequestsStmt {
+    pub async fn prepare<'a, C: GenericClient>(
+        mut self,
+        client: &'a C,
+    ) -> Result<Self, tokio_postgres::Error> {
+        self.1 = Some(client.prepare(self.0).await?);
+        Ok(self)
+    }
+    pub fn bind<'c, 'a, 's, C: GenericClient>(
+        &'s self,
+        client: &'c C,
+    ) -> ListExpiredFulfilledAccessRequestsQuery<'c, 'a, 's, C, ListExpiredFulfilledAccessRequests, 0>
+    {
+        ListExpiredFulfilledAccessRequestsQuery {
+            client,
+            params: [],
+            query: self.0,
+            cached: self.1.as_ref(),
+            extractor: |row: &tokio_postgres::Row| -> Result<
+                ListExpiredFulfilledAccessRequestsBorrowed,
+                tokio_postgres::Error,
+            > {
+                Ok(ListExpiredFulfilledAccessRequestsBorrowed {
+                    id: row.try_get(0)?,
+                    requested_for: row.try_get(1)?,
+                })
+            },
+            mapper: |it| ListExpiredFulfilledAccessRequests::from(it),
+        }
+    }
+}
+pub struct ListAccessRequestsPendingRevocationStmt(&'static str, Option<tokio_postgres::Statement>);
+pub fn list_access_requests_pending_revocation() -> ListAccessRequestsPendingRevocationStmt {
+    ListAccessRequestsPendingRevocationStmt(
+        "SELECT DISTINCT requests.id, requests.requested_for FROM access_requests requests JOIN access_request_grants grants ON grants.request_id = requests.id WHERE requests.status IN ('REJECTED', 'FAILED') AND grants.fulfillment_status IN ('GRANTING', 'GRANTED', 'UNCHANGED') ORDER BY requests.id",
+        None,
+    )
+}
+impl ListAccessRequestsPendingRevocationStmt {
+    pub async fn prepare<'a, C: GenericClient>(
+        mut self,
+        client: &'a C,
+    ) -> Result<Self, tokio_postgres::Error> {
+        self.1 = Some(client.prepare(self.0).await?);
+        Ok(self)
+    }
+    pub fn bind<'c, 'a, 's, C: GenericClient>(
+        &'s self,
+        client: &'c C,
+    ) -> ListAccessRequestsPendingRevocationQuery<
+        'c,
+        'a,
+        's,
+        C,
+        ListAccessRequestsPendingRevocation,
+        0,
+    > {
+        ListAccessRequestsPendingRevocationQuery {
+            client,
+            params: [],
+            query: self.0,
+            cached: self.1.as_ref(),
+            extractor: |row: &tokio_postgres::Row| -> Result<
+                ListAccessRequestsPendingRevocationBorrowed,
+                tokio_postgres::Error,
+            > {
+                Ok(ListAccessRequestsPendingRevocationBorrowed {
+                    id: row.try_get(0)?,
+                    requested_for: row.try_get(1)?,
+                })
+            },
+            mapper: |it| ListAccessRequestsPendingRevocation::from(it),
+        }
+    }
+}
+pub struct HasOtherActiveManagedGrantStmt(&'static str, Option<tokio_postgres::Statement>);
+pub fn has_other_active_managed_grant() -> HasOtherActiveManagedGrantStmt {
+    HasOtherActiveManagedGrantStmt(
+        "SELECT EXISTS ( SELECT 1 FROM access_request_grants grants JOIN access_requests requests ON requests.id = grants.request_id WHERE grants.request_id <> $1::text AND requests.requested_for = $2::text AND requests.status = 'FULFILLED' AND requests.access_expires_at > NOW() AND grants.securable_type = $3::text AND grants.full_name = $4::text AND grants.privilege = $5::text AND grants.fulfillment_status = 'GRANTED' ) AS active",
+        None,
+    )
+}
+impl HasOtherActiveManagedGrantStmt {
+    pub async fn prepare<'a, C: GenericClient>(
+        mut self,
+        client: &'a C,
+    ) -> Result<Self, tokio_postgres::Error> {
+        self.1 = Some(client.prepare(self.0).await?);
+        Ok(self)
+    }
+    pub fn bind<
+        'c,
+        'a,
+        's,
+        C: GenericClient,
+        T1: crate::StringSql,
+        T2: crate::StringSql,
+        T3: crate::StringSql,
+        T4: crate::StringSql,
+        T5: crate::StringSql,
+    >(
+        &'s self,
+        client: &'c C,
+        request_id: &'a T1,
+        requested_for: &'a T2,
+        securable_type: &'a T3,
+        full_name: &'a T4,
+        privilege: &'a T5,
+    ) -> BoolQuery<'c, 'a, 's, C, bool, 5> {
+        BoolQuery {
+            client,
+            params: [
+                request_id,
+                requested_for,
+                securable_type,
+                full_name,
+                privilege,
+            ],
+            query: self.0,
+            cached: self.1.as_ref(),
+            extractor: |row| Ok(row.try_get(0)?),
+            mapper: |it| it,
+        }
+    }
+}
+impl<
+    'c,
+    'a,
+    's,
+    C: GenericClient,
+    T1: crate::StringSql,
+    T2: crate::StringSql,
+    T3: crate::StringSql,
+    T4: crate::StringSql,
+    T5: crate::StringSql,
+>
+    crate::client::async_::Params<
+        'c,
+        'a,
+        's,
+        HasOtherActiveManagedGrantParams<T1, T2, T3, T4, T5>,
+        BoolQuery<'c, 'a, 's, C, bool, 5>,
+        C,
+    > for HasOtherActiveManagedGrantStmt
+{
+    fn params(
+        &'s self,
+        client: &'c C,
+        params: &'a HasOtherActiveManagedGrantParams<T1, T2, T3, T4, T5>,
+    ) -> BoolQuery<'c, 'a, 's, C, bool, 5> {
+        self.bind(
+            client,
+            &params.request_id,
+            &params.requested_for,
+            &params.securable_type,
+            &params.full_name,
+            &params.privilege,
+        )
+    }
+}
+pub struct ExpireAccessRequestStmt(&'static str, Option<tokio_postgres::Statement>);
+pub fn expire_access_request() -> ExpireAccessRequestStmt {
+    ExpireAccessRequestStmt(
+        "UPDATE access_requests SET status = 'EXPIRED' WHERE id = $1::text AND status = 'FULFILLED'",
+        None,
+    )
+}
+impl ExpireAccessRequestStmt {
+    pub async fn prepare<'a, C: GenericClient>(
+        mut self,
+        client: &'a C,
+    ) -> Result<Self, tokio_postgres::Error> {
+        self.1 = Some(client.prepare(self.0).await?);
+        Ok(self)
+    }
+    pub async fn bind<'c, 'a, 's, C: GenericClient, T1: crate::StringSql>(
+        &'s self,
+        client: &'c C,
+        request_id: &'a T1,
+    ) -> Result<u64, tokio_postgres::Error> {
+        client.execute(self.0, &[request_id]).await
+    }
+}
+pub struct ExpireUnfulfilledAccessRequestsStmt(&'static str, Option<tokio_postgres::Statement>);
+pub fn expire_unfulfilled_access_requests() -> ExpireUnfulfilledAccessRequestsStmt {
+    ExpireUnfulfilledAccessRequestsStmt(
+        "WITH expired AS ( UPDATE access_requests SET status = 'EXPIRED' WHERE status = 'APPROVED' AND access_expires_at <= NOW() RETURNING id ) INSERT INTO access_request_events (request_id, event_type, actor, comment) SELECT id, 'EXPIRED', 'system:expiry', 'Requested access duration elapsed before fulfillment' FROM expired",
+        None,
+    )
+}
+impl ExpireUnfulfilledAccessRequestsStmt {
     pub async fn prepare<'a, C: GenericClient>(
         mut self,
         client: &'a C,
@@ -2144,7 +2805,7 @@ impl GetAccessRequestStmt {
 pub struct LockAccessRequestStmt(&'static str, Option<tokio_postgres::Statement>);
 pub fn lock_access_request() -> LockAccessRequestStmt {
     LockAccessRequestStmt(
-        "SELECT requests.status, requests.approval_strategy, COALESCE(requests.routed_for_team, '') AS routed_for_team, COALESCE(requests.decided_by, '') AS decided_by FROM access_requests requests WHERE requests.id = $1::text FOR UPDATE OF requests",
+        "SELECT requests.status, requests.approval_strategy, requests.requested_for, COALESCE(requests.routed_for_team, '') AS routed_for_team, COALESCE(requests.decided_by, '') AS decided_by FROM access_requests requests WHERE requests.id = $1::text FOR UPDATE OF requests",
         None,
     )
 }
@@ -2172,8 +2833,9 @@ impl LockAccessRequestStmt {
                 Ok(LockAccessRequestBorrowed {
                     status: row.try_get(0)?,
                     approval_strategy: row.try_get(1)?,
-                    routed_for_team: row.try_get(2)?,
-                    decided_by: row.try_get(3)?,
+                    requested_for: row.try_get(2)?,
+                    routed_for_team: row.try_get(3)?,
+                    decided_by: row.try_get(4)?,
                 })
             },
             mapper: |it| LockAccessRequest::from(it),

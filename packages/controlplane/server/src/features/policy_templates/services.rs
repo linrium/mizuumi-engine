@@ -24,15 +24,16 @@ const SECURABLE_TYPES: &[&str] = &[
 fn privileges_for(securable_type: &str) -> &'static [&'static str] {
     match securable_type {
         "metastore" => &["CREATE CATALOG"],
-        "catalog" => &["USE CATALOG", "CREATE SCHEMA"],
+        "catalog" => &["BROWSE", "USE CATALOG", "CREATE SCHEMA"],
         "schema" => &[
+            "BROWSE",
             "USE SCHEMA",
             "CREATE TABLE",
             "CREATE FUNCTION",
             "CREATE VOLUME",
             "CREATE MODEL",
         ],
-        "table" => &["SELECT", "MODIFY"],
+        "table" => &["BROWSE", "SELECT", "MODIFY"],
         "function" | "registered_model" => &["EXECUTE"],
         "volume" => &["READ VOLUME"],
         "external_location" => &[
@@ -380,6 +381,19 @@ mod tests {
             error.to_string(),
             "invalid parameter: privilege USE CATALOG is not valid for securable_type table"
         );
+    }
+
+    #[test]
+    fn browse_policy_is_valid_for_catalog_schema_and_table() {
+        for securable_type in ["catalog", "schema", "table"] {
+            let mut request = valid_request(false);
+            request.grant.securable_type = securable_type.to_owned();
+            request.grant.privilege = "BROWSE".to_owned();
+
+            assert!(validate_create_request(&request).is_ok());
+        }
+
+        assert!(!privileges_for("metastore").contains(&"BROWSE"));
     }
 
     #[test]

@@ -137,6 +137,19 @@ spark_service_user_id="$(kc GET "/admin/realms/sovico/clients/$spark_uuid/servic
 writer_role="$(kc GET "/admin/realms/sovico/clients/$server_uuid/roles/unitycatalog-writer")"
 kc POST "/admin/realms/sovico/users/$spark_service_user_id/role-mappings/clients/$server_uuid" "[$writer_role]" >/dev/null
 
+controlplane_client_id="${CONTROLPLANE_KEYCLOAK_CLIENT_ID:-unitycatalog-controlplane}"
+controlplane_payload="$(jq -cn --arg id "$controlplane_client_id" \
+  '{clientId:$id,enabled:true,protocol:"openid-connect",publicClient:false,clientAuthenticatorType:"client-secret",standardFlowEnabled:false,directAccessGrantsEnabled:false,serviceAccountsEnabled:true}')"
+controlplane_uuid="$(upsert_client "$controlplane_client_id" "$controlplane_payload")"
+controlplane_client_secret="$(kc GET "/admin/realms/sovico/clients/$controlplane_uuid/client-secret" | jq -er '.value')"
+controlplane_mappers="$(kc GET "/admin/realms/sovico/clients/$controlplane_uuid/protocol-mappers/models")"
+if ! printf '%s' "$controlplane_mappers" | jq -e 'any(.[]; .name == "unitycatalog-audience")' >/dev/null; then
+  kc POST "/admin/realms/sovico/clients/$controlplane_uuid/protocol-mappers/models" "$audience_payload" >/dev/null
+fi
+controlplane_service_user_id="$(kc GET "/admin/realms/sovico/clients/$controlplane_uuid/service-account-user" | jq -er '.id')"
+admin_role="$(kc GET "/admin/realms/sovico/clients/$server_uuid/roles/unitycatalog-admin")"
+kc POST "/admin/realms/sovico/users/$controlplane_service_user_id/role-mappings/clients/$server_uuid" "[$admin_role]" >/dev/null
+
 # Remove the obsolete browser client from earlier UI-enabled installations.
 old_ui_clients="$(kc GET '/admin/realms/sovico/clients?clientId=unitycatalog-ui')"
 while IFS= read -r old_ui_uuid; do
@@ -211,11 +224,12 @@ sts_status="$(curl -sS --cacert "$rustfs_ca" -o "$response_dir/rustfs-sts" -w '%
 vault_payload="$(jq -cn \
   --arg client_id unitycatalog --arg client_secret "$oauth_client_secret" \
   --arg spark_client_id "$spark_client_id" --arg spark_client_secret "$spark_client_secret" \
+  --arg controlplane_client_id "$controlplane_client_id" --arg controlplane_client_secret "$controlplane_client_secret" \
   --arg access "$s3_access_key" --arg secret "$s3_secret_key" \
-  '{data:{OAUTH_CLIENT_ID:$client_id,OAUTH_CLIENT_SECRET:$client_secret,KEYCLOAK_CLIENT_ID:$spark_client_id,KEYCLOAK_CLIENT_SECRET:$spark_client_secret,S3_ACCESS_KEY:$access,S3_SECRET_KEY:$secret}}')"
+  '{data:{OAUTH_CLIENT_ID:$client_id,OAUTH_CLIENT_SECRET:$client_secret,KEYCLOAK_CLIENT_ID:$spark_client_id,KEYCLOAK_CLIENT_SECRET:$spark_client_secret,CONTROLPLANE_CLIENT_ID:$controlplane_client_id,CONTROLPLANE_CLIENT_SECRET:$controlplane_client_secret,S3_ACCESS_KEY:$access,S3_SECRET_KEY:$secret}}')"
 vault POST /v1/secret/data/unitycatalog "$vault_payload" >/dev/null
 
-unset admin_token vault_token oauth_client_secret spark_client_secret rustfs_root_access rustfs_root_secret s3_secret_key
+unset admin_token vault_token oauth_client_secret spark_client_secret controlplane_client_secret rustfs_root_access rustfs_root_secret s3_secret_key
 echo "Unity Catalog bootstrap complete: Keycloak API and Spark service clients, RustFS IAM/STS bucket, and Vault KV secret are ready."
 echo "Keycloak user khaopad will map to Unity Catalog user $uc_email."
 echo "Run ./scripts/unitycatalog/setup.sh."

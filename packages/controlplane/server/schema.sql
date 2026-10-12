@@ -61,6 +61,7 @@ CREATE TABLE IF NOT EXISTS policy_template_grants (
     privilege TEXT NOT NULL CHECK (
         privilege IN (
             'OWNER',
+            'BROWSE',
             'CREATE CATALOG',
             'USE CATALOG',
             'CREATE SCHEMA',
@@ -84,9 +85,9 @@ CREATE TABLE IF NOT EXISTS policy_template_grants (
     ),
     CHECK (
         (securable_type = 'metastore' AND privilege = 'CREATE CATALOG')
-        OR (securable_type = 'catalog' AND privilege IN ('USE CATALOG', 'CREATE SCHEMA'))
-        OR (securable_type = 'schema' AND privilege IN ('USE SCHEMA', 'CREATE TABLE', 'CREATE FUNCTION', 'CREATE VOLUME', 'CREATE MODEL'))
-        OR (securable_type = 'table' AND privilege IN ('SELECT', 'MODIFY'))
+        OR (securable_type = 'catalog' AND privilege IN ('BROWSE', 'USE CATALOG', 'CREATE SCHEMA'))
+        OR (securable_type = 'schema' AND privilege IN ('BROWSE', 'USE SCHEMA', 'CREATE TABLE', 'CREATE FUNCTION', 'CREATE VOLUME', 'CREATE MODEL'))
+        OR (securable_type = 'table' AND privilege IN ('BROWSE', 'SELECT', 'MODIFY'))
         OR (securable_type IN ('function', 'registered_model') AND privilege = 'EXECUTE')
         OR (securable_type = 'volume' AND privilege = 'READ VOLUME')
         OR (securable_type = 'external_location' AND privilege IN ('READ FILES', 'WRITE FILES', 'CREATE EXTERNAL TABLE', 'CREATE EXTERNAL VOLUME', 'CREATE MANAGED STORAGE'))
@@ -98,6 +99,47 @@ CREATE TABLE IF NOT EXISTS policy_template_grants (
         REFERENCES policy_template_versions(template_id, version)
         ON DELETE CASCADE
 );
+
+ALTER TABLE policy_template_grants
+    DROP CONSTRAINT IF EXISTS policy_template_grants_privilege_check,
+    DROP CONSTRAINT IF EXISTS policy_template_grants_check;
+
+ALTER TABLE policy_template_grants
+    ADD CONSTRAINT policy_template_grants_privilege_check CHECK (
+        privilege IN (
+            'OWNER',
+            'BROWSE',
+            'CREATE CATALOG',
+            'USE CATALOG',
+            'CREATE SCHEMA',
+            'USE SCHEMA',
+            'CREATE TABLE',
+            'SELECT',
+            'MODIFY',
+            'CREATE FUNCTION',
+            'EXECUTE',
+            'CREATE VOLUME',
+            'READ VOLUME',
+            'CREATE MODEL',
+            'CREATE EXTERNAL LOCATION',
+            'READ FILES',
+            'WRITE FILES',
+            'CREATE EXTERNAL TABLE',
+            'CREATE EXTERNAL VOLUME',
+            'CREATE MANAGED STORAGE',
+            'CREATE STORAGE CREDENTIAL'
+        )
+    ),
+    ADD CONSTRAINT policy_template_grants_check CHECK (
+        (securable_type = 'metastore' AND privilege = 'CREATE CATALOG')
+        OR (securable_type = 'catalog' AND privilege IN ('BROWSE', 'USE CATALOG', 'CREATE SCHEMA'))
+        OR (securable_type = 'schema' AND privilege IN ('BROWSE', 'USE SCHEMA', 'CREATE TABLE', 'CREATE FUNCTION', 'CREATE VOLUME', 'CREATE MODEL'))
+        OR (securable_type = 'table' AND privilege IN ('BROWSE', 'SELECT', 'MODIFY'))
+        OR (securable_type IN ('function', 'registered_model') AND privilege = 'EXECUTE')
+        OR (securable_type = 'volume' AND privilege = 'READ VOLUME')
+        OR (securable_type = 'external_location' AND privilege IN ('READ FILES', 'WRITE FILES', 'CREATE EXTERNAL TABLE', 'CREATE EXTERNAL VOLUME', 'CREATE MANAGED STORAGE'))
+        OR (securable_type = 'credential' AND privilege IN ('CREATE EXTERNAL LOCATION', 'CREATE STORAGE CREDENTIAL'))
+    );
 
 CREATE TABLE IF NOT EXISTS policy_template_affected_teams (
     template_id TEXT NOT NULL,
@@ -292,6 +334,7 @@ CREATE TABLE IF NOT EXISTS access_request_grants (
     privilege TEXT NOT NULL CHECK (
         privilege IN (
             'OWNER',
+            'BROWSE',
             'CREATE CATALOG',
             'USE CATALOG',
             'CREATE SCHEMA',
@@ -315,20 +358,65 @@ CREATE TABLE IF NOT EXISTS access_request_grants (
     ),
     CHECK (
         (securable_type = 'metastore' AND privilege = 'CREATE CATALOG')
-        OR (securable_type = 'catalog' AND privilege IN ('USE CATALOG', 'CREATE SCHEMA'))
-        OR (securable_type = 'schema' AND privilege IN ('USE SCHEMA', 'CREATE TABLE', 'CREATE FUNCTION', 'CREATE VOLUME', 'CREATE MODEL'))
-        OR (securable_type = 'table' AND privilege IN ('SELECT', 'MODIFY'))
+        OR (securable_type = 'catalog' AND privilege IN ('BROWSE', 'USE CATALOG', 'CREATE SCHEMA'))
+        OR (securable_type = 'schema' AND privilege IN ('BROWSE', 'USE SCHEMA', 'CREATE TABLE', 'CREATE FUNCTION', 'CREATE VOLUME', 'CREATE MODEL'))
+        OR (securable_type = 'table' AND privilege IN ('BROWSE', 'SELECT', 'MODIFY'))
         OR (securable_type IN ('function', 'registered_model') AND privilege = 'EXECUTE')
         OR (securable_type = 'volume' AND privilege = 'READ VOLUME')
         OR (securable_type = 'external_location' AND privilege IN ('READ FILES', 'WRITE FILES', 'CREATE EXTERNAL TABLE', 'CREATE EXTERNAL VOLUME', 'CREATE MANAGED STORAGE'))
         OR (securable_type = 'credential' AND privilege IN ('CREATE EXTERNAL LOCATION', 'CREATE STORAGE CREDENTIAL'))
     ),
     fulfillment_status TEXT NOT NULL DEFAULT 'PENDING'
-        CHECK (fulfillment_status IN ('PENDING', 'GRANTED', 'FAILED', 'REVOKED')),
+        CHECK (fulfillment_status IN ('PENDING', 'GRANTING', 'GRANTED', 'UNCHANGED', 'FAILED', 'REVOKED')),
     fulfilled_at TIMESTAMPTZ,
     failure_message TEXT,
     UNIQUE (request_id, securable_type, full_name, privilege)
 );
+
+ALTER TABLE access_request_grants
+    DROP CONSTRAINT IF EXISTS access_request_grants_privilege_check,
+    DROP CONSTRAINT IF EXISTS access_request_grants_check,
+    DROP CONSTRAINT IF EXISTS access_request_grants_fulfillment_status_check;
+
+ALTER TABLE access_request_grants
+    ADD CONSTRAINT access_request_grants_privilege_check CHECK (
+        privilege IN (
+            'OWNER',
+            'BROWSE',
+            'CREATE CATALOG',
+            'USE CATALOG',
+            'CREATE SCHEMA',
+            'USE SCHEMA',
+            'CREATE TABLE',
+            'SELECT',
+            'MODIFY',
+            'CREATE FUNCTION',
+            'EXECUTE',
+            'CREATE VOLUME',
+            'READ VOLUME',
+            'CREATE MODEL',
+            'CREATE EXTERNAL LOCATION',
+            'READ FILES',
+            'WRITE FILES',
+            'CREATE EXTERNAL TABLE',
+            'CREATE EXTERNAL VOLUME',
+            'CREATE MANAGED STORAGE',
+            'CREATE STORAGE CREDENTIAL'
+        )
+    ),
+    ADD CONSTRAINT access_request_grants_check CHECK (
+        (securable_type = 'metastore' AND privilege = 'CREATE CATALOG')
+        OR (securable_type = 'catalog' AND privilege IN ('BROWSE', 'USE CATALOG', 'CREATE SCHEMA'))
+        OR (securable_type = 'schema' AND privilege IN ('BROWSE', 'USE SCHEMA', 'CREATE TABLE', 'CREATE FUNCTION', 'CREATE VOLUME', 'CREATE MODEL'))
+        OR (securable_type = 'table' AND privilege IN ('BROWSE', 'SELECT', 'MODIFY'))
+        OR (securable_type IN ('function', 'registered_model') AND privilege = 'EXECUTE')
+        OR (securable_type = 'volume' AND privilege = 'READ VOLUME')
+        OR (securable_type = 'external_location' AND privilege IN ('READ FILES', 'WRITE FILES', 'CREATE EXTERNAL TABLE', 'CREATE EXTERNAL VOLUME', 'CREATE MANAGED STORAGE'))
+        OR (securable_type = 'credential' AND privilege IN ('CREATE EXTERNAL LOCATION', 'CREATE STORAGE CREDENTIAL'))
+    ),
+    ADD CONSTRAINT access_request_grants_fulfillment_status_check CHECK (
+        fulfillment_status IN ('PENDING', 'GRANTING', 'GRANTED', 'UNCHANGED', 'FAILED', 'REVOKED')
+    );
 
 CREATE INDEX IF NOT EXISTS idx_access_request_grants_status
     ON access_request_grants (request_id, fulfillment_status);

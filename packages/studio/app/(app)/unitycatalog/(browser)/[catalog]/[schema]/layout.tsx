@@ -3,9 +3,12 @@
 import { IconFolder } from "@tabler/icons-react"
 import { usePathname } from "next/navigation"
 import { use } from "react"
-import { useBrowser } from "@/app/(app)/unitycatalog/(browser)/browser-context"
-import { HeaderBlock, NotFound } from "@/app/(app)/unitycatalog/(browser)/detail"
 import { SchemaNav } from "@/app/(app)/unitycatalog/(browser)/[catalog]/[schema]/schema-nav"
+import { useBrowser } from "@/app/(app)/unitycatalog/(browser)/browser-context"
+import {
+  HeaderBlock,
+  NotFound,
+} from "@/app/(app)/unitycatalog/(browser)/detail"
 
 export default function SchemaLayout({
   params,
@@ -21,7 +24,9 @@ export default function SchemaLayout({
   const pathname = usePathname()
   const base = `/unitycatalog/${encodeURIComponent(catalogParam)}/${encodeURIComponent(schemaParam)}`
   const isSchemaLevel =
-    pathname === base || pathname === `${base}/permissions`
+    pathname === base ||
+    pathname === `${base}/permissions` ||
+    pathname === `${base}/requests`
 
   if (!catalog || !schema) {
     return (

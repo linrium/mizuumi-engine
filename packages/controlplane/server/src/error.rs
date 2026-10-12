@@ -18,6 +18,8 @@ pub enum AppError {
     Pool(#[from] deadpool_postgres::PoolError),
     #[error("kubernetes api failed: {0}")]
     Kube(#[from] kube::Error),
+    #[error("Unity Catalog synchronization failed: {0}")]
+    UnityCatalog(String),
 }
 
 #[derive(Serialize)]
@@ -34,7 +36,7 @@ impl IntoResponse for AppError {
             AppError::Forbidden(_) => StatusCode::FORBIDDEN,
             AppError::Postgres(_) | AppError::Pool(_) => StatusCode::SERVICE_UNAVAILABLE,
             AppError::Kube(kube::Error::Api(resp)) if resp.code == 404 => StatusCode::NOT_FOUND,
-            AppError::Kube(_) => StatusCode::BAD_GATEWAY,
+            AppError::Kube(_) | AppError::UnityCatalog(_) => StatusCode::BAD_GATEWAY,
         };
         if status.is_server_error() {
             tracing::error!(error = %self, "request failed");

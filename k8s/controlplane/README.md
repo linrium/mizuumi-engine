@@ -16,6 +16,9 @@ The default release is installed in the `tower` namespace and is available throu
 `https://api.controlplane.mizuumi.test`. The server exposes
 `/health/livez` for process liveness and `/health/readyz` for PostgreSQL-backed readiness.
 Use `CONTROLPLANE_SKIP_IMAGE_BUILD=1` when the configured image is already available to the cluster.
+The deployment consumes the `CONTROLPLANE_CLIENT_ID` and `CONTROLPLANE_CLIENT_SECRET` keys from the
+`unitycatalog-credentials` Secret created by `scripts/unitycatalog/bootstrap.sh` and
+`scripts/unitycatalog/setup.sh` so approved requests can update Unity Catalog permissions.
 
 Bootstrap idempotently seeds the `vietjet-grow-table-read` policy template. To seed or test an
 already-running deployment directly:

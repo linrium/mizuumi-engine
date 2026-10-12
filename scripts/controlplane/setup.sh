@@ -8,6 +8,7 @@ image_repository="${CONTROLPLANE_IMAGE_REPOSITORY:-mizuumi/controlplane-server}"
 default_image_tag="dev-$(date -u +%Y%m%d%H%M%S)"
 image_tag="${CONTROLPLANE_IMAGE_TAG:-$default_image_tag}"
 skip_image_build="${CONTROLPLANE_SKIP_IMAGE_BUILD:-0}"
+unitycatalog_credentials_secret="${UNITYCATALOG_CREDENTIALS_SECRET:-unitycatalog-credentials}"
 chart="$repo_root/k8s/controlplane"
 server_dir="$repo_root/packages/controlplane/server"
 
@@ -24,6 +25,8 @@ Environment overrides:
   CONTROLPLANE_IMAGE_REPOSITORY   Image repository (default: mizuumi/controlplane-server)
   CONTROLPLANE_IMAGE_TAG          Image tag (default: unique UTC dev timestamp)
   CONTROLPLANE_SKIP_IMAGE_BUILD   Set to 1 to skip docker build/load
+  UNITYCATALOG_CREDENTIALS_SECRET Secret containing CONTROLPLANE_CLIENT_ID and
+                                  CONTROLPLANE_CLIENT_SECRET (default: unitycatalog-credentials)
 EOF
 }
 
@@ -77,10 +80,19 @@ fi
 
 kubectl get namespace "$namespace" >/dev/null 2>&1 || kubectl create namespace "$namespace"
 
+for key in CONTROLPLANE_CLIENT_ID CONTROLPLANE_CLIENT_SECRET; do
+  if [[ -z "$(kubectl -n "$namespace" get secret "$unitycatalog_credentials_secret" \
+    -o "jsonpath={.data.$key}" 2>/dev/null)" ]]; then
+    echo "Missing $key in $namespace/$unitycatalog_credentials_secret. Rerun scripts/unitycatalog/bootstrap.sh and scripts/unitycatalog/setup.sh first." >&2
+    exit 1
+  fi
+done
+
 helm upgrade --install "$release" "$chart" \
   --namespace "$namespace" \
   --set-string "server.image.repository=$image_repository" \
   --set-string "server.image.tag=$image_tag" \
+  --set-string "unityCatalog.credentialsSecretName=$unitycatalog_credentials_secret" \
   --wait --timeout 10m "$@"
 
 server_deployment="$(kubectl -n "$namespace" get deployment \

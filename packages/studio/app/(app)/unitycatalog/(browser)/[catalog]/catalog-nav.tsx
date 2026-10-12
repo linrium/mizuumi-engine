@@ -10,6 +10,7 @@ export function CatalogNav({ catalog }: { catalog: string }) {
   const tabs = [
     { href: base, label: "Overview" },
     { href: `${base}/permissions`, label: "Permissions" },
+    { href: `${base}/requests`, label: "Requests" },
   ]
 
   return (

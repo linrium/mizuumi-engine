@@ -1,9 +1,12 @@
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use controlplane_queries::queries::access_requests as queries;
 use deadpool_postgres::{Object, Pool};
 use tokio_postgres::error::SqlState;
 
 use crate::error::AppError;
+use crate::infrastructure::unity_catalog::UnityCatalog;
 
 use super::dtos::{
     AccessRequest, AccessRequestSummary, CancelAccessRequest, CreateAccessRequest,
@@ -40,15 +43,16 @@ const DEFAULT_APPROVAL_TEAM: &str = "sovicoSecurity";
 fn privileges_for(securable_type: &str) -> &'static [&'static str] {
     match securable_type {
         "metastore" => &["CREATE CATALOG"],
-        "catalog" => &["USE CATALOG", "CREATE SCHEMA"],
+        "catalog" => &["BROWSE", "USE CATALOG", "CREATE SCHEMA"],
         "schema" => &[
+            "BROWSE",
             "USE SCHEMA",
             "CREATE TABLE",
             "CREATE FUNCTION",
             "CREATE VOLUME",
             "CREATE MODEL",
         ],
-        "table" => &["SELECT", "MODIFY"],
+        "table" => &["BROWSE", "SELECT", "MODIFY"],
         "function" | "registered_model" => &["EXECUTE"],
         "volume" => &["READ VOLUME"],
         "external_location" => &[
@@ -98,11 +102,305 @@ pub trait AccessRequestService: Send + Sync {
 
 pub struct DefaultAccessRequestService {
     pool: Pool,
+    unity_catalog: Arc<dyn UnityCatalog>,
 }
 
 impl DefaultAccessRequestService {
-    pub fn new(pool: Pool) -> Self {
-        Self { pool }
+    pub fn new(pool: Pool, unity_catalog: Arc<dyn UnityCatalog>) -> Self {
+        Self {
+            pool,
+            unity_catalog,
+        }
+    }
+
+    async fn fulfill_access_request(&self, request_id: &str) -> Result<(), AppError> {
+        let client = self.pool.get().await?;
+        let requested_for = match queries::start_access_request_fulfillment()
+            .bind(&client, &request_id)
+            .opt()
+            .await?
+        {
+            Some(principal) => principal,
+            None => return Ok(()),
+        };
+        queries::create_access_request_event()
+            .bind(
+                &client,
+                &request_id,
+                &"FULFILLMENT_STARTED",
+                &"system:unity-catalog",
+                &"Applying approved grants to Unity Catalog",
+            )
+            .await?;
+
+        let grants = queries::list_access_request_grants()
+            .bind(&client, &request_id)
+            .all()
+            .await?;
+        let mut has_managed_grants = false;
+        for grant in &grants {
+            let managed_by_another_request = queries::has_other_active_managed_grant()
+                .bind(
+                    &client,
+                    &request_id,
+                    &requested_for,
+                    &grant.securable_type,
+                    &grant.full_name,
+                    &grant.privilege,
+                )
+                .one()
+                .await?;
+            let result = if managed_by_another_request {
+                Ok("GRANTED")
+            } else {
+                match self
+                    .unity_catalog
+                    .has_privilege(
+                        &grant.securable_type,
+                        &grant.full_name,
+                        &requested_for,
+                        &grant.privilege,
+                    )
+                    .await
+                {
+                    Ok(true) => Ok("UNCHANGED"),
+                    Ok(false) => {
+                        queries::set_access_request_grant_status()
+                            .bind(
+                                &client,
+                                &"GRANTING",
+                                &"",
+                                &request_id,
+                                &grant.securable_type,
+                                &grant.full_name,
+                                &grant.privilege,
+                            )
+                            .await?;
+                        has_managed_grants = true;
+                        self.unity_catalog
+                            .grant(
+                                &grant.securable_type,
+                                &grant.full_name,
+                                &requested_for,
+                                &grant.privilege,
+                            )
+                            .await
+                            .map(|()| "GRANTED")
+                    }
+                    Err(error) => Err(error),
+                }
+            };
+
+            match result {
+                Ok(status) => {
+                    queries::set_access_request_grant_status()
+                        .bind(
+                            &client,
+                            &status,
+                            &"",
+                            &request_id,
+                            &grant.securable_type,
+                            &grant.full_name,
+                            &grant.privilege,
+                        )
+                        .await?;
+                    has_managed_grants |= status == "GRANTED";
+                }
+                Err(error) => {
+                    let failure_message = error.to_string();
+                    queries::fail_pending_access_request_grants()
+                        .bind(&client, &failure_message, &request_id)
+                        .await?;
+                    queries::fail_access_request_fulfillment()
+                        .bind(&client, &request_id)
+                        .await?;
+                    queries::create_access_request_event()
+                        .bind(
+                            &client,
+                            &request_id,
+                            &"FULFILLMENT_FAILED",
+                            &"system:unity-catalog",
+                            &failure_message,
+                        )
+                        .await?;
+                    tracing::error!(
+                        %request_id,
+                        error = %error,
+                        "failed to fulfill access request in Unity Catalog"
+                    );
+                    if has_managed_grants {
+                        drop(client);
+                        if let Err(rollback_error) = self
+                            .revoke_access_request_grants(request_id, &requested_for)
+                            .await
+                        {
+                            tracing::error!(
+                                %request_id,
+                                error = %rollback_error,
+                                "failed to roll back a partially fulfilled Unity Catalog request; reconciliation will retry"
+                            );
+                        }
+                    }
+                    return Ok(());
+                }
+            }
+        }
+
+        queries::complete_access_request_fulfillment()
+            .bind(&client, &request_id)
+            .await?;
+        queries::create_access_request_event()
+            .bind(
+                &client,
+                &request_id,
+                &"FULFILLMENT_SUCCEEDED",
+                &"system:unity-catalog",
+                &"Approved grants applied to Unity Catalog",
+            )
+            .await?;
+        Ok(())
+    }
+
+    async fn reconcile_access_requests(&self) -> Result<(), AppError> {
+        let client = self.pool.get().await?;
+        queries::expire_unfulfilled_access_requests()
+            .bind(&client)
+            .await?;
+        let approved_ids = queries::list_approved_access_request_ids()
+            .bind(&client)
+            .all()
+            .await?;
+        drop(client);
+
+        for request_id in approved_ids {
+            self.fulfill_access_request(&request_id).await?;
+        }
+
+        let client = self.pool.get().await?;
+        let expired = queries::list_expired_fulfilled_access_requests()
+            .bind(&client)
+            .all()
+            .await?;
+        drop(client);
+
+        for request in expired {
+            if let Err(error) = self
+                .expire_access_request(&request.id, &request.requested_for)
+                .await
+            {
+                tracing::error!(
+                    request_id = %request.id,
+                    %error,
+                    "failed to revoke an expired Unity Catalog access request"
+                );
+            }
+        }
+
+        let client = self.pool.get().await?;
+        let pending_revocations = queries::list_access_requests_pending_revocation()
+            .bind(&client)
+            .all()
+            .await?;
+        drop(client);
+        for request in pending_revocations {
+            if let Err(error) = self
+                .revoke_access_request_grants(&request.id, &request.requested_for)
+                .await
+            {
+                tracing::error!(
+                    request_id = %request.id,
+                    %error,
+                    "failed to retry Unity Catalog revocation for a rejected request"
+                );
+            }
+        }
+        Ok(())
+    }
+
+    async fn revoke_access_request_grants(
+        &self,
+        request_id: &str,
+        requested_for: &str,
+    ) -> Result<(), AppError> {
+        let client = self.pool.get().await?;
+        let grants = queries::list_access_request_grants()
+            .bind(&client, &request_id)
+            .all()
+            .await?;
+
+        for grant in &grants {
+            if matches!(grant.fulfillment_status.as_str(), "GRANTING" | "GRANTED") {
+                let still_required = queries::has_other_active_managed_grant()
+                    .bind(
+                        &client,
+                        &request_id,
+                        &requested_for,
+                        &grant.securable_type,
+                        &grant.full_name,
+                        &grant.privilege,
+                    )
+                    .one()
+                    .await?;
+                if !still_required {
+                    self.unity_catalog
+                        .revoke(
+                            &grant.securable_type,
+                            &grant.full_name,
+                            requested_for,
+                            &grant.privilege,
+                        )
+                        .await
+                        .map_err(|error| AppError::UnityCatalog(error.to_string()))?;
+                }
+            }
+        }
+
+        for grant in &grants {
+            queries::set_access_request_grant_status()
+                .bind(
+                    &client,
+                    &"REVOKED",
+                    &"",
+                    &request_id,
+                    &grant.securable_type,
+                    &grant.full_name,
+                    &grant.privilege,
+                )
+                .await?;
+        }
+        queries::create_access_request_event()
+            .bind(
+                &client,
+                &request_id,
+                &"ACCESS_REVOKED",
+                &"system:unity-catalog",
+                &"Control-plane-managed Unity Catalog grants revoked",
+            )
+            .await?;
+        Ok(())
+    }
+
+    async fn expire_access_request(
+        &self,
+        request_id: &str,
+        requested_for: &str,
+    ) -> Result<(), AppError> {
+        self.revoke_access_request_grants(request_id, requested_for)
+            .await?;
+        let client = self.pool.get().await?;
+        queries::expire_access_request()
+            .bind(&client, &request_id)
+            .await?;
+        queries::create_access_request_event()
+            .bind(
+                &client,
+                &request_id,
+                &"EXPIRED",
+                &"system:expiry",
+                &"Requested access duration elapsed; Unity Catalog grants revoked",
+            )
+            .await?;
+        Ok(())
     }
 
     async fn review_access_request(
@@ -141,6 +439,8 @@ impl DefaultAccessRequestService {
             &review.approval_team,
             decision,
         );
+        let revoke_fulfilled_grants = locked.status == "FULFILLED" && decision == "REJECTED";
+        let requested_for = locked.requested_for.clone();
         if !is_assigned_team && !is_auto_approved_rejection {
             return Err(AppError::Forbidden(format!(
                 "team {} is not assigned to this request",
@@ -193,12 +493,29 @@ impl DefaultAccessRequestService {
             )
             .await?;
         transaction.commit().await?;
+        drop(client);
+        if event_type == "APPROVED" {
+            self.fulfill_access_request(&request_id).await?;
+        } else if revoke_fulfilled_grants {
+            if let Err(error) = self
+                .revoke_access_request_grants(&request_id, &requested_for)
+                .await
+            {
+                tracing::error!(
+                    %request_id,
+                    %error,
+                    "failed to revoke Unity Catalog grants after rejection; reconciliation will retry"
+                );
+            }
+        }
+        let client = self.pool.get().await?;
         load_access_request(&client, &request_id).await
     }
 }
 
 fn can_record_review(status: &str, decision: &str) -> bool {
-    status == "AWAITING_APPROVAL" || (status == "APPROVED" && decision == "REJECTED")
+    status == "AWAITING_APPROVAL"
+        || (matches!(status, "APPROVED" | "FULFILLED") && decision == "REJECTED")
 }
 
 fn can_cancel_request(status: &str) -> bool {
@@ -212,7 +529,7 @@ fn can_reject_auto_approved_request(
     approval_team: &str,
     decision: &str,
 ) -> bool {
-    status == "APPROVED"
+    matches!(status, "APPROVED" | "FULFILLED")
         && decided_by == "system:auto-approve"
         && routed_for_team == approval_team
         && decision == "REJECTED"
@@ -370,6 +687,11 @@ impl AccessRequestService for DefaultAccessRequestService {
                 .await?;
         }
         transaction.commit().await?;
+        drop(client);
+        if auto_approve {
+            self.fulfill_access_request(&request_id).await?;
+        }
+        let client = self.pool.get().await?;
         load_access_request(&client, &request_id).await
     }
 
@@ -384,8 +706,8 @@ impl AccessRequestService for DefaultAccessRequestService {
                 "unsupported request status: {status}"
             )));
         }
+        self.reconcile_access_requests().await?;
         let client = self.pool.get().await?;
-        queries::expire_access_requests().bind(&client).await?;
         let rows = queries::list_access_requests()
             .bind(
                 &client,
@@ -403,8 +725,8 @@ impl AccessRequestService for DefaultAccessRequestService {
     }
 
     async fn get_access_request(&self, request_id: String) -> Result<AccessRequest, AppError> {
+        self.reconcile_access_requests().await?;
         let client = self.pool.get().await?;
-        queries::expire_access_requests().bind(&client).await?;
         load_access_request(&client, &request_id).await
     }
 
@@ -703,6 +1025,8 @@ mod tests {
     fn approved_request_can_be_rejected_but_not_approved_again() {
         assert!(can_record_review("APPROVED", "REJECTED"));
         assert!(!can_record_review("APPROVED", "APPROVED"));
+        assert!(can_record_review("FULFILLED", "REJECTED"));
+        assert!(!can_record_review("FULFILLED", "APPROVED"));
     }
 
     #[test]
@@ -733,6 +1057,13 @@ mod tests {
             "system:auto-approve",
             "analytics",
             "security",
+            "REJECTED",
+        ));
+        assert!(can_reject_auto_approved_request(
+            "FULFILLED",
+            "system:auto-approve",
+            "analytics",
+            "analytics",
             "REJECTED",
         ));
     }
@@ -787,5 +1118,18 @@ mod tests {
             error.to_string(),
             "invalid parameter: privilege USE CATALOG is not valid for target_securable_type table"
         );
+    }
+
+    #[test]
+    fn browse_is_requestable_for_catalog_schema_and_table() {
+        for securable_type in ["catalog", "schema", "table"] {
+            let mut request = valid_request();
+            request.target_securable_type = securable_type.to_owned();
+            request.requested_privilege = "BROWSE".to_owned();
+
+            assert!(validate_create_request(&request).is_ok());
+        }
+
+        assert!(!privileges_for("metastore").contains(&"BROWSE"));
     }
 }

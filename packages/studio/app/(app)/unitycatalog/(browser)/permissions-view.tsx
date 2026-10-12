@@ -32,6 +32,7 @@ import { authClient } from "@/lib/auth-client"
 
 const PRIVILEGES_BY_TYPE: Record<SecurableType, string[]> = {
   catalog: [
+    "BROWSE",
     "USE CATALOG",
     "CREATE SCHEMA",
     "USE SCHEMA",
@@ -39,8 +40,8 @@ const PRIVILEGES_BY_TYPE: Record<SecurableType, string[]> = {
     "SELECT",
     "MODIFY",
   ],
-  schema: ["USE SCHEMA", "CREATE TABLE", "SELECT", "MODIFY"],
-  table: ["SELECT", "MODIFY"],
+  schema: ["BROWSE", "USE SCHEMA", "CREATE TABLE", "SELECT", "MODIFY"],
+  table: ["BROWSE", "SELECT", "MODIFY"],
 }
 
 export function PermissionsView({
@@ -161,8 +162,7 @@ export function PermissionsView({
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
-        <div>
-        </div>
+        <div></div>
         <div className="flex gap-2">
           <Button
             size="sm"

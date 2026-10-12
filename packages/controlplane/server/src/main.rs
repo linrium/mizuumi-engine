@@ -22,7 +22,10 @@ use crate::{
         pipelines::{DefaultPipelineService, pipeline_router},
         policy_templates::{DefaultPolicyTemplateService, policy_template_router},
     },
-    infrastructure::postgres::{create_pool, run_migrations},
+    infrastructure::{
+        postgres::{create_pool, run_migrations},
+        unity_catalog::HttpUnityCatalog,
+    },
 };
 
 #[tokio::main]
@@ -47,9 +50,16 @@ async fn main() -> anyhow::Result<()> {
     let kube_client = kube::Client::try_default()
         .await
         .context("failed to initialize kubernetes client")?;
+    let unity_catalog = Arc::new(
+        HttpUnityCatalog::new(&settings.unity_catalog)
+            .context("failed to configure Unity Catalog client")?,
+    );
 
     let state = AppState {
-        access_requests: Arc::new(DefaultAccessRequestService::new(pool.clone())),
+        access_requests: Arc::new(DefaultAccessRequestService::new(
+            pool.clone(),
+            unity_catalog,
+        )),
         health: Arc::new(DefaultHealthService::new(pool.clone())),
         pipelines: Arc::new(DefaultPipelineService::new(kube_client)),
         policy_templates: Arc::new(DefaultPolicyTemplateService::new(pool)),

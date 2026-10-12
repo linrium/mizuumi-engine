@@ -69,6 +69,10 @@ Unity Catalog evaluates that timestamp on every permission and resource authoriz
 expired assignment stops granting access immediately without waiting for a cleanup process. Omit
 `expires_at` for a permanent administrative grant.
 
+`BROWSE` may be granted on a catalog, schema, or table. Catalog and schema grants expose metadata
+below that scope, while a table grant exposes only that table. `BROWSE` never authorizes temporary
+credential vending or data reads; those continue to require `SELECT` and the parent usage grants.
+
 Roles may be present as realm roles or as client roles under `resource_access.unitycatalog`. Human principals use their verified token email (then username, then subject) as their ID. Keycloak service-account tokens use the service client ID. Inspect the current mapping with `GET /api/auth/me`.
 
 At first startup the server generates a 256-bit bootstrap token in `/var/run/unitycatalog/bootstrap-token` with mode `0600`. It has admin access and is intended only for initial provisioning. Retrieve it locally when needed:

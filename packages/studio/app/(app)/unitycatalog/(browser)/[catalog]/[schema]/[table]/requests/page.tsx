@@ -2,7 +2,7 @@ import {
   listMyAccessRequests,
   listRequestTeams,
 } from "@/app/(app)/review/actions"
-import { TableRequestsView } from "./table-requests-view"
+import { RequestsView } from "@/app/(app)/unitycatalog/(browser)/requests-view"
 
 export default async function TableRequestsPage({
   params,
@@ -13,11 +13,12 @@ export default async function TableRequestsPage({
   const fullName = `${catalog}.${schema}.${table}`
   const [teamsResult, requestsResult] = await Promise.all([
     listRequestTeams(),
-    listMyAccessRequests(fullName),
+    listMyAccessRequests("table", fullName),
   ])
 
   return (
-    <TableRequestsView
+    <RequestsView
+      securableType="table"
       fullName={fullName}
       teams={teamsResult.ok ? teamsResult.data : []}
       initialRequests={requestsResult.ok ? requestsResult.data : []}

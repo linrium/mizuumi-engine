@@ -232,6 +232,7 @@ export async function createAccessRequest(
 }
 
 export async function listMyAccessRequests(
+  securableType: string,
   fullName: string,
 ): Promise<ActionResult<AccessRequest[]>> {
   const { user } = await currentUser()
@@ -249,7 +250,11 @@ export async function listMyAccessRequests(
     return {
       ok: true,
       data: requests.filter((request) =>
-        request.grants.some((grant) => grant.full_name === fullName),
+        request.grants.some(
+          (grant) =>
+            grant.securable_type === securableType &&
+            grant.full_name === fullName,
+        ),
       ),
     }
   } catch (error) {

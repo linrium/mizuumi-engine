@@ -10,3 +10,9 @@ password = "controlplane"
 database = "controlplane"
 pool_size = 16
 
+[unity_catalog]
+url = "http://127.0.0.1:8081"
+token_url = "http://127.0.0.1:8080/realms/sovico/protocol/openid-connect/token"
+client_id = ""
+client_secret = ""
+

@@ -42,6 +42,16 @@ spec:
                 secretKeyRef:
                   name: {{ include "controlplane.postgresqlSecretName" . }}
                   key: {{ include "controlplane.postgresqlPasswordKey" . | quote }}
+            - name: CONTROLPLANE__UNITY_CATALOG__CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.unityCatalog.credentialsSecretName | quote }}
+                  key: {{ .Values.unityCatalog.clientIdKey | quote }}
+            - name: CONTROLPLANE__UNITY_CATALOG__CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.unityCatalog.credentialsSecretName | quote }}
+                  key: {{ .Values.unityCatalog.clientSecretKey | quote }}
           volumeMounts:
             - name: config
               mountPath: {{ dir .Values.server.configPath }}

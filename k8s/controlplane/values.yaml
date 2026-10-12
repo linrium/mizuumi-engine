@@ -17,6 +17,13 @@ service:
   type: ClusterIP
   port: 8080
 
+unityCatalog:
+  url: http://unitycatalog-server.tower.svc.cluster.local:8080
+  tokenUrl: http://keycloak.auth.svc.cluster.local:8080/realms/sovico/protocol/openid-connect/token
+  credentialsSecretName: unitycatalog-credentials
+  clientIdKey: CONTROLPLANE_CLIENT_ID
+  clientSecretKey: CONTROLPLANE_CLIENT_SECRET
+
 postgresql:
   enabled: true
   image:

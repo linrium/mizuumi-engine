@@ -32,7 +32,7 @@ pub async fn can_read_catalog(
         principal,
         SecurableType::Catalog,
         catalog,
-        &[Privilege::Owner, Privilege::UseCatalog],
+        &[Privilege::Owner, Privilege::UseCatalog, Privilege::Browse],
     )
     .await
 }
@@ -62,7 +62,7 @@ pub async fn can_read_schema(
             principal,
             SecurableType::Catalog,
             catalog,
-            &[Privilege::Owner],
+            &[Privilege::Owner, Privilege::Browse],
         )
         .await?
     {
@@ -84,7 +84,7 @@ pub async fn can_read_schema(
         principal,
         SecurableType::Schema,
         &format!("{catalog}.{schema}"),
-        &[Privilege::Owner, Privilege::UseSchema],
+        &[Privilege::Owner, Privilege::UseSchema, Privilege::Browse],
     )
     .await
 }
@@ -115,7 +115,7 @@ pub async fn can_read_table(
             principal,
             SecurableType::Catalog,
             catalog,
-            &[Privilege::Owner],
+            &[Privilege::Owner, Privilege::Browse],
         )
         .await?
     {
@@ -124,6 +124,25 @@ pub async fn can_read_table(
     let catalog_name = catalog;
     let schema_name = format!("{catalog}.{schema}");
     let table_name = format!("{catalog}.{schema}.{table}");
+    if has(
+        state,
+        principal,
+        SecurableType::Schema,
+        &schema_name,
+        &[Privilege::Browse],
+    )
+    .await?
+        || has(
+            state,
+            principal,
+            SecurableType::Table,
+            &table_name,
+            &[Privilege::Browse],
+        )
+        .await?
+    {
+        return Ok(true);
+    }
     if !has(
         state,
         principal,

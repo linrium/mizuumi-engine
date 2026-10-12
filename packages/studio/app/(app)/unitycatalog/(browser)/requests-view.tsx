@@ -60,19 +60,35 @@ function canCancel(status: string) {
   return status === "AWAITING_APPROVAL"
 }
 
-const TABLE_PRIVILEGES = ["SELECT", "MODIFY"]
+const PRIVILEGES_BY_TYPE = {
+  catalog: ["BROWSE", "USE CATALOG", "CREATE SCHEMA"],
+  schema: [
+    "BROWSE",
+    "USE SCHEMA",
+    "CREATE TABLE",
+    "CREATE FUNCTION",
+    "CREATE VOLUME",
+    "CREATE MODEL",
+  ],
+  table: ["BROWSE", "SELECT", "MODIFY"],
+} as const
 
-export function TableRequestsView({
+type RequestSecurableType = keyof typeof PRIVILEGES_BY_TYPE
+
+export function RequestsView({
+  securableType,
   fullName,
   teams,
   initialRequests,
   initialError,
 }: {
+  securableType: RequestSecurableType
   fullName: string
   teams: string[]
   initialRequests: AccessRequest[]
   initialError?: string
 }) {
+  const privileges = PRIVILEGES_BY_TYPE[securableType]
   const router = useRouter()
   const [requests, setRequests] = useState(initialRequests)
   const [message, setMessage] = useState<{
@@ -82,7 +98,7 @@ export function TableRequestsView({
   const [createOpen, setCreateOpen] = useState(false)
   const [selected, setSelected] = useState<AccessRequest | null>(null)
   const [team, setTeam] = useState(teams[0] ?? "")
-  const [privilege, setPrivilege] = useState(TABLE_PRIVILEGES[0])
+  const [privilege, setPrivilege] = useState<string>(privileges[0])
   const [durationHours, setDurationHours] = useState("8")
   const [reason, setReason] = useState("")
   const [isPending, startTransition] = useTransition()
@@ -91,7 +107,7 @@ export function TableRequestsView({
 
   function resetForm() {
     setTeam(teams[0] ?? "")
-    setPrivilege(TABLE_PRIVILEGES[0])
+    setPrivilege(privileges[0])
     setDurationHours("8")
     setReason("")
   }
@@ -108,7 +124,7 @@ export function TableRequestsView({
     startTransition(async () => {
       const result = await createAccessRequest({
         routed_for_team: team,
-        target_securable_type: "table",
+        target_securable_type: securableType,
         target_full_name: fullName,
         requested_privilege: privilege,
         reason: reason.trim(),
@@ -177,8 +193,7 @@ export function TableRequestsView({
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
-        <div>
-        </div>
+        <div></div>
         <div className="flex gap-2">
           <Button
             size="sm"
@@ -237,7 +252,7 @@ export function TableRequestsView({
                   colSpan={6}
                   className="px-3 py-6 text-center text-muted-foreground"
                 >
-                  No requests for this table.
+                  No requests for this {securableType}.
                 </TableCell>
               </TableRow>
             ) : (
@@ -306,7 +321,7 @@ export function TableRequestsView({
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Request table access</DialogTitle>
+            <DialogTitle>Request {securableType} access</DialogTitle>
             <DialogDescription>
               Request temporary access to{" "}
               <span className="font-mono">{fullName}</span>.
@@ -318,6 +333,7 @@ export function TableRequestsView({
             setTeam={setTeam}
             privilege={privilege}
             setPrivilege={setPrivilege}
+            privileges={privileges}
             durationHours={durationHours}
             setDurationHours={setDurationHours}
             reason={reason}
@@ -407,6 +423,7 @@ function RequestFields({
   setTeam,
   privilege,
   setPrivilege,
+  privileges,
   durationHours,
   setDurationHours,
   reason,
@@ -417,6 +434,7 @@ function RequestFields({
   setTeam: (value: string) => void
   privilege: string
   setPrivilege: (value: string) => void
+  privileges: readonly string[]
   durationHours: string
   setDurationHours: (value: string) => void
   reason: string
@@ -452,7 +470,7 @@ function RequestFields({
           Privilege
         </label>
         <Select
-          items={TABLE_PRIVILEGES.map((item) => ({ value: item, label: item }))}
+          items={privileges.map((item) => ({ value: item, label: item }))}
           value={privilege}
           onValueChange={(value) => value && setPrivilege(value)}
         >
@@ -461,7 +479,7 @@ function RequestFields({
           </SelectTrigger>
           <SelectContent>
             <SelectGroup>
-              {TABLE_PRIVILEGES.map((item) => (
+              {privileges.map((item) => (
                 <SelectItem key={item} value={item}>
                   {item}
                 </SelectItem>

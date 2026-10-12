@@ -167,16 +167,96 @@ WHERE (:status::text = '' OR requests.status = :status::text)
   )
 ORDER BY requests.submitted_at DESC, requests.id;
 
---! expire_access_requests
+--! list_approved_access_request_ids
+SELECT id
+FROM access_requests
+WHERE status = 'APPROVED'
+  AND access_expires_at > NOW()
+ORDER BY decided_at, id;
+
+--! start_access_request_fulfillment
+UPDATE access_requests
+SET status = 'FULFILLING'
+WHERE id = :request_id::text
+  AND status = 'APPROVED'
+  AND access_expires_at > NOW()
+RETURNING requested_for;
+
+--! set_access_request_grant_status
+UPDATE access_request_grants
+SET fulfillment_status = :status::text,
+    fulfilled_at = CASE WHEN :status::text = 'GRANTED' THEN NOW() ELSE fulfilled_at END,
+    failure_message = NULLIF(:failure_message::text, '')
+WHERE request_id = :request_id::text
+  AND securable_type = :securable_type::text
+  AND full_name = :full_name::text
+  AND privilege = :privilege::text;
+
+--! complete_access_request_fulfillment
+UPDATE access_requests
+SET status = 'FULFILLED', fulfilled_at = NOW()
+WHERE id = :request_id::text
+  AND status = 'FULFILLING';
+
+--! fail_access_request_fulfillment
+UPDATE access_requests
+SET status = 'FAILED'
+WHERE id = :request_id::text
+  AND status = 'FULFILLING';
+
+--! fail_pending_access_request_grants
+UPDATE access_request_grants
+SET fulfillment_status = 'FAILED',
+    failure_message = :failure_message::text
+WHERE request_id = :request_id::text
+  AND fulfillment_status = 'PENDING';
+
+--! list_expired_fulfilled_access_requests
+SELECT id, requested_for
+FROM access_requests
+WHERE status = 'FULFILLED'
+  AND access_expires_at <= NOW()
+ORDER BY access_expires_at, id;
+
+--! list_access_requests_pending_revocation
+SELECT DISTINCT requests.id, requests.requested_for
+FROM access_requests requests
+JOIN access_request_grants grants ON grants.request_id = requests.id
+WHERE requests.status IN ('REJECTED', 'FAILED')
+  AND grants.fulfillment_status IN ('GRANTING', 'GRANTED', 'UNCHANGED')
+ORDER BY requests.id;
+
+--! has_other_active_managed_grant
+SELECT EXISTS (
+    SELECT 1
+    FROM access_request_grants grants
+    JOIN access_requests requests ON requests.id = grants.request_id
+    WHERE grants.request_id <> :request_id::text
+      AND requests.requested_for = :requested_for::text
+      AND requests.status = 'FULFILLED'
+      AND requests.access_expires_at > NOW()
+      AND grants.securable_type = :securable_type::text
+      AND grants.full_name = :full_name::text
+      AND grants.privilege = :privilege::text
+      AND grants.fulfillment_status = 'GRANTED'
+) AS active;
+
+--! expire_access_request
+UPDATE access_requests
+SET status = 'EXPIRED'
+WHERE id = :request_id::text
+  AND status = 'FULFILLED';
+
+--! expire_unfulfilled_access_requests
 WITH expired AS (
     UPDATE access_requests
     SET status = 'EXPIRED'
-    WHERE status IN ('APPROVED', 'FULFILLED')
+    WHERE status = 'APPROVED'
       AND access_expires_at <= NOW()
     RETURNING id
 )
 INSERT INTO access_request_events (request_id, event_type, actor, comment)
-SELECT id, 'EXPIRED', 'system:expiry', 'Requested access duration elapsed'
+SELECT id, 'EXPIRED', 'system:expiry', 'Requested access duration elapsed before fulfillment'
 FROM expired;
 
 --! get_access_request
@@ -207,6 +287,7 @@ WHERE requests.id = :request_id::text;
 SELECT
     requests.status,
     requests.approval_strategy,
+    requests.requested_for,
     COALESCE(requests.routed_for_team, '') AS routed_for_team,
     COALESCE(requests.decided_by, '') AS decided_by
 FROM access_requests requests

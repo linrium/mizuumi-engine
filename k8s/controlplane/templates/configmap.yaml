@@ -19,3 +19,9 @@ data:
     database = {{ include "controlplane.postgresqlDatabase" . | quote }}
     pool_size = 16
 
+    [unity_catalog]
+    url = {{ .Values.unityCatalog.url | quote }}
+    token_url = {{ .Values.unityCatalog.tokenUrl | quote }}
+    client_id = ""
+    client_secret = ""
+

@@ -3,9 +3,12 @@
 import { IconDatabase } from "@tabler/icons-react"
 import { usePathname } from "next/navigation"
 import { use } from "react"
-import { useBrowser } from "@/app/(app)/unitycatalog/(browser)/browser-context"
-import { HeaderBlock, NotFound } from "@/app/(app)/unitycatalog/(browser)/detail"
 import { CatalogNav } from "@/app/(app)/unitycatalog/(browser)/[catalog]/catalog-nav"
+import { useBrowser } from "@/app/(app)/unitycatalog/(browser)/browser-context"
+import {
+  HeaderBlock,
+  NotFound,
+} from "@/app/(app)/unitycatalog/(browser)/detail"
 
 export default function CatalogLayout({
   params,
@@ -20,7 +23,9 @@ export default function CatalogLayout({
   const pathname = usePathname()
   const base = `/unitycatalog/${encodeURIComponent(catalogParam)}`
   const isCatalogLevel =
-    pathname === base || pathname === `${base}/permissions`
+    pathname === base ||
+    pathname === `${base}/permissions` ||
+    pathname === `${base}/requests`
 
   if (!catalog) {
     return (

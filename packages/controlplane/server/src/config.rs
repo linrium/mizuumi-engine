@@ -9,6 +9,20 @@ pub struct Settings {
     pub server: ServerSettings,
     #[serde(default)]
     pub postgres: PostgresSettings,
+    #[serde(default)]
+    pub unity_catalog: UnityCatalogSettings,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct UnityCatalogSettings {
+    #[serde(default = "default_unity_catalog_url")]
+    pub url: String,
+    #[serde(default = "default_unity_catalog_token_url")]
+    pub token_url: String,
+    #[serde(default)]
+    pub client_id: String,
+    #[serde(default)]
+    pub client_secret: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -71,6 +85,17 @@ impl Default for PostgresSettings {
     }
 }
 
+impl Default for UnityCatalogSettings {
+    fn default() -> Self {
+        Self {
+            url: default_unity_catalog_url(),
+            token_url: default_unity_catalog_token_url(),
+            client_id: String::new(),
+            client_secret: String::new(),
+        }
+    }
+}
+
 fn default_host() -> IpAddr {
     [0, 0, 0, 0].into()
 }
@@ -101,4 +126,12 @@ fn default_postgres_database() -> String {
 
 fn default_pool_size() -> usize {
     16
+}
+
+fn default_unity_catalog_url() -> String {
+    "http://127.0.0.1:8081".to_owned()
+}
+
+fn default_unity_catalog_token_url() -> String {
+    "http://127.0.0.1:8080/realms/sovico/protocol/openid-connect/token".to_owned()
 }

@@ -24,15 +24,28 @@ approval teams. The database prevents duplicate templates for the same securable
 and privilege.
 
 Every access request must include a nonblank `reason` and a positive `requested_duration_seconds`
-value in whole-hour increments. The duration starts when the request is approved; the resulting
-`access_expires_at` timestamp is returned with request details and must be propagated to the target
-system during fulfillment. Request reads reconcile elapsed approved or fulfilled requests to the
-`EXPIRED` status and append an expiry event.
+value in whole-hour increments. The duration starts when the request is approved. Approval and
+auto-approval synchronously apply the snapshotted grants to Unity Catalog for `requested_for`, then
+move the request through `FULFILLING` to `FULFILLED`. Failed API calls set the request and grants to
+`FAILED`. A durable `GRANTING` marker lets reconciliation revoke a permission even when the remote
+mutation succeeds but its response is lost. Request reads reconcile elapsed grants, revoke
+control-plane-managed Unity Catalog permissions, and move the request to `EXPIRED`. Permissions
+that existed before the request are recorded as `UNCHANGED` and are never revoked; overlapping
+active requests also retain access until the last managed grant expires.
+
+Unity Catalog synchronization uses a Keycloak client-credentials service account with the
+`unitycatalog-admin` role. Configure `[unity_catalog]` (`url`, `token_url`, `client_id`, and
+`client_secret`) or the equivalent `CONTROLPLANE__UNITY_CATALOG__*` environment variables. The
+local bootstrap stores the generated client credentials in the `unitycatalog-credentials` secret.
 
 The request API resolves the published policy from `routed_for_team`, `target_securable_type`,
 `target_full_name`, and `requested_privilege`; callers do not supply a template ID. When no policy
 matches, the request remains manual and is routed to the `sovicoSecurity` team with one required
 approval.
+
+`BROWSE` is a valid requested or policy-template privilege for catalogs, schemas, and tables. It
+only exposes metadata in Unity Catalog; data access still requires `SELECT` and the normal catalog
+and schema usage privileges.
 
 The initial API contract accepts `created_by`, `requested_by`, and `reviewer` explicitly. These
 fields must be replaced by authenticated principal and team claims when Keycloak middleware is
