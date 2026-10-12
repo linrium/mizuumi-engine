@@ -1,0 +1,13 @@
+apiVersion: v2
+name: dagster
+description: Mizuumi Dagster orchestrator (umbrella wrapping the upstream Dagster chart)
+type: application
+version: 0.1.0
+appVersion: "1.9.5"
+home: https://dagster.io/
+sources:
+  - https://github.com/dagster-io/dagster
+dependencies:
+  - name: dagster
+    version: 1.9.5
+    repository: https://dagster-io.github.io/helm

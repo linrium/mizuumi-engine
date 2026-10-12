@@ -1,0 +1,23 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "dagster-umbrella.sparkAccessRoleName" . }}
+  namespace: {{ .Values.sparkJobNamespace | quote }}
+rules:
+  - apiGroups: ["sparkoperator.k8s.io"]
+    resources: ["sparkapplications"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "dagster-umbrella.sparkAccessRoleName" . }}
+  namespace: {{ .Values.sparkJobNamespace | quote }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "dagster-umbrella.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "dagster-umbrella.sparkAccessRoleName" . }}

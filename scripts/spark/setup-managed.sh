@@ -21,7 +21,11 @@ esac
 export SPARK_UNITY_SCHEMAS=demo
 export SPARK_RELEASE="${SPARK_RELEASE:-spark-managed}"
 export SPARK_APPLICATION_SCRIPT="$repo_root/packages/spark/examples/managed/main.py"
-export SPARK_APPLICATION_SOURCE="${SPARK_APPLICATION_SOURCE:-rustfs}"
+# Default to `configmap`: the script is baked into a ConfigMap at install
+# time and mounted into the driver pod. The rustfs source relies on a
+# presigned URL that expires (max 7 days), which breaks any scheduler that
+# re-triggers this SparkApplication after the URL lifetime.
+export SPARK_APPLICATION_SOURCE="${SPARK_APPLICATION_SOURCE:-configmap}"
 export SPARK_APPLICATION_URL_SECRET="${SPARK_APPLICATION_URL_SECRET:-unity-catalog-managed-artifact}"
 export SPARK_APPLICATION_SCRIPT_CONFIGMAP=unity-catalog-managed-script
 export SPARK_APPLICATION_SCRIPT_MOUNT_PATH=/opt/spark/work-dir/examples/managed
