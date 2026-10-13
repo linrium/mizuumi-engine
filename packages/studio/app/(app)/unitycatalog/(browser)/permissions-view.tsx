@@ -3,6 +3,7 @@
 import { IconPlus } from "@tabler/icons-react"
 import { cn } from "cn"
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react"
+import { useForm } from "react-hook-form"
 import {
   getUnityCatalogPermissions,
   type PrivilegeAssignment,
@@ -43,6 +44,11 @@ const PRIVILEGES_BY_TYPE: Record<SecurableType, string[]> = {
   table: ["SELECT", "MODIFY"],
 }
 
+type GrantPermissionsForm = {
+  principal: string
+  privileges: string[]
+}
+
 export function PermissionsView({
   securableType,
   fullName,
@@ -62,9 +68,19 @@ export function PermissionsView({
     { kind: "error"; text: string } | { kind: "success"; text: string } | null
   >(null)
   const [grantOpen, setGrantOpen] = useState(false)
-  const [principal, setPrincipal] = useState<string>("")
-  const [checked, setChecked] = useState<Record<string, boolean>>({})
   const [isPending, startTransition] = useTransition()
+  const {
+    register,
+    handleSubmit,
+    reset,
+    setError,
+    formState: { errors },
+  } = useForm<GrantPermissionsForm>({
+    defaultValues: {
+      principal: "",
+      privileges: [],
+    },
+  })
 
   const permissionRows = useMemo(
     () =>
@@ -76,11 +92,6 @@ export function PermissionsView({
       ),
     [assignments],
   )
-
-  const togglePrivilege = (p: string) =>
-    setChecked((prev) => ({ ...prev, [p]: !prev[p] }))
-
-  const selectedPrivileges = privileges.filter((p) => checked[p])
 
   const reconnect = useCallback(async () => {
     await authClient.signIn.social({
@@ -110,36 +121,30 @@ export function PermissionsView({
     loadAssignments()
   }, [loadAssignments])
 
-  const grant = () => {
-    if (!principal || selectedPrivileges.length === 0) {
-      setMessage({
-        kind: "error",
-        text: "Enter a principal and select at least one privilege.",
-      })
-      return
-    }
+  const grant = (values: GrantPermissionsForm) => {
+    const principal = values.principal.trim()
+
     startTransition(async () => {
       const res = await updateUnityCatalogPermissions({
         securableType,
         fullName,
         principal,
-        add: selectedPrivileges,
+        add: values.privileges,
       })
       if (res.needsReconnect) {
         await reconnect()
         return
       }
       if (res.error) {
-        setMessage({ kind: "error", text: res.error })
+        setError("root.server", { message: res.error })
         return
       }
       setAssignments(res.data?.privilege_assignments ?? [])
       setMessage({
         kind: "success",
-        text: `Granted ${selectedPrivileges.join(", ")} to ${principal}.`,
+        text: `Granted ${values.privileges.join(", ")} to ${principal}.`,
       })
-      setChecked({})
-      setPrincipal("")
+      reset()
       setGrantOpen(false)
     })
   }
@@ -308,8 +313,7 @@ export function PermissionsView({
         onOpenChange={(open) => {
           setGrantOpen(open)
           if (!open) {
-            setPrincipal("")
-            setChecked({})
+            reset()
           }
         }}
       >
@@ -322,53 +326,97 @@ export function PermissionsView({
             </DialogDescription>
           </DialogHeader>
 
-          <div className="mt-4 space-y-4">
-            <div className="space-y-1">
-              <label className="text-xs font-medium" htmlFor="principal">
-                Principal (user, service principal, or group)
-              </label>
-              <Input
-                id="principal"
-                placeholder="user@example.com"
-                value={principal}
-                onChange={(e) => setPrincipal(e.target.value)}
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <div className="text-xs font-medium">Privileges</div>
-              <div className="grid grid-cols-2 gap-1.5">
-                {privileges.map((p) => (
-                  <label
-                    key={p}
-                    className="flex items-center gap-2 rounded border px-2 py-1.5 text-xs hover:bg-muted"
+          <form onSubmit={handleSubmit(grant)}>
+            <div className="mt-4 space-y-4">
+              <div className="space-y-1">
+                <label className="text-xs font-medium" htmlFor="principal">
+                  Principal (user, service principal, or group)
+                </label>
+                <Input
+                  id="principal"
+                  placeholder="user@example.com"
+                  aria-invalid={!!errors.principal}
+                  aria-describedby={
+                    errors.principal ? "principal-error" : undefined
+                  }
+                  {...register("principal", {
+                    validate: (value) =>
+                      value.trim().length > 0 || "Principal is required.",
+                  })}
+                />
+                {errors.principal ? (
+                  <p
+                    id="principal-error"
+                    className="text-xs text-destructive"
+                    role="alert"
                   >
-                    <input
-                      type="checkbox"
-                      className="size-3.5"
-                      checked={!!checked[p]}
-                      onChange={() => togglePrivilege(p)}
-                    />
-                    <span className="font-mono">{p}</span>
-                  </label>
-                ))}
+                    {errors.principal.message}
+                  </p>
+                ) : null}
               </div>
-            </div>
-          </div>
 
-          <DialogFooter>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={isPending}
-              onClick={() => setGrantOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button size="sm" disabled={isPending} onClick={grant}>
-              Grant
-            </Button>
-          </DialogFooter>
+              <fieldset className="space-y-1.5">
+                <legend className="text-xs font-medium">Privileges</legend>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {privileges.map((p) => (
+                    <label
+                      key={p}
+                      className="flex items-center gap-2 rounded border px-2 py-1.5 text-xs hover:bg-muted"
+                    >
+                      <input
+                        type="checkbox"
+                        value={p}
+                        className="size-3.5"
+                        aria-invalid={!!errors.privileges}
+                        aria-describedby={
+                          errors.privileges ? "privileges-error" : undefined
+                        }
+                        {...register("privileges", {
+                          validate: (value) =>
+                            value.length > 0 ||
+                            "Select at least one privilege.",
+                        })}
+                      />
+                      <span className="font-mono">{p}</span>
+                    </label>
+                  ))}
+                </div>
+                {errors.privileges ? (
+                  <p
+                    id="privileges-error"
+                    className="text-xs text-destructive"
+                    role="alert"
+                  >
+                    {errors.privileges.message}
+                  </p>
+                ) : null}
+              </fieldset>
+
+              {errors.root?.server ? (
+                <div
+                  className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive"
+                  role="alert"
+                >
+                  {errors.root.server.message}
+                </div>
+              ) : null}
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={isPending}
+                onClick={() => setGrantOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" size="sm" disabled={isPending}>
+                Grant
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

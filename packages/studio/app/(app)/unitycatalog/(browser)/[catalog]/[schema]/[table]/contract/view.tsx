@@ -313,8 +313,8 @@ export function DataContractView({
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
+      <div className="grid gap-4 lg:grid-cols-1">
+        {/*<Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <IconUsers className="size-4" />
@@ -348,7 +348,7 @@ export function DataContractView({
               <p className="text-muted-foreground">No team members declared.</p>
             ) : null}
           </CardContent>
-        </Card>
+        </Card>*/}
 
         <Card>
           <CardHeader>

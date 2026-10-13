@@ -4,6 +4,13 @@ import { IconPlus } from "@tabler/icons-react"
 import { cn } from "cn"
 import { useEffect, useState, useTransition } from "react"
 import {
+  type Control,
+  Controller,
+  type FieldErrors,
+  type UseFormRegister,
+  useForm,
+} from "react-hook-form"
+import {
   cancelAccessRequest,
   createAccessRequest,
   updateAccessRequest,
@@ -74,6 +81,13 @@ const PRIVILEGES_BY_TYPE = {
 
 type RequestSecurableType = keyof typeof PRIVILEGES_BY_TYPE
 
+type CreateAccessRequestForm = {
+  team: string
+  privilege: string
+  durationHours: number
+  reason: string
+}
+
 export function RequestsView({
   securableType,
   fullName,
@@ -95,47 +109,45 @@ export function RequestsView({
   } | null>(initialError ? { kind: "error", text: initialError } : null)
   const [createOpen, setCreateOpen] = useState(false)
   const [selected, setSelected] = useState<AccessRequest | null>(null)
-  const [team, setTeam] = useState(teams[0] ?? "")
-  const [privilege, setPrivilege] = useState<string>(privileges[0])
   const [durationHours, setDurationHours] = useState("8")
   const [reason, setReason] = useState("")
   const [isPending, startTransition] = useTransition()
+  const {
+    control: createControl,
+    register: registerCreate,
+    handleSubmit: handleCreateSubmit,
+    reset: resetCreateForm,
+    setError: setCreateError,
+    formState: { errors: createErrors },
+  } = useForm<CreateAccessRequestForm>({
+    defaultValues: {
+      team: teams[0] ?? "",
+      privilege: privileges[0],
+      durationHours: 8,
+      reason: "",
+    },
+  })
 
   useEffect(() => setRequests(initialRequests), [initialRequests])
 
-  function resetForm() {
-    setTeam(teams[0] ?? "")
-    setPrivilege(privileges[0])
-    setDurationHours("8")
-    setReason("")
-  }
-
-  function submitCreate() {
-    const hours = Number(durationHours)
-    if (!team || !Number.isInteger(hours) || hours <= 0 || !reason.trim()) {
-      setMessage({
-        kind: "error",
-        text: "Team, reason, and a positive whole-hour duration are required.",
-      })
-      return
-    }
+  function submitCreate(values: CreateAccessRequestForm) {
     startTransition(async () => {
       const result = await createAccessRequest({
-        routed_for_team: team,
+        routed_for_team: values.team,
         target_securable_type: securableType,
         target_full_name: fullName,
-        requested_privilege: privilege,
-        reason: reason.trim(),
-        duration_hours: hours,
+        requested_privilege: values.privilege,
+        reason: values.reason.trim(),
+        duration_hours: values.durationHours,
       })
       if (!result.ok) {
-        setMessage({ kind: "error", text: result.error })
+        setCreateError("root.server", { message: result.error })
         return
       }
       setRequests((items) => [result.data, ...items])
       setMessage({ kind: "success", text: "Access request submitted." })
       setCreateOpen(false)
-      resetForm()
+      resetCreateForm()
     })
   }
 
@@ -302,7 +314,7 @@ export function RequestsView({
         open={createOpen}
         onOpenChange={(open) => {
           setCreateOpen(open)
-          if (!open) resetForm()
+          if (!open) resetCreateForm()
         }}
       >
         <DialogContent>
@@ -313,26 +325,36 @@ export function RequestsView({
               <span className="font-mono">{fullName}</span>.
             </DialogDescription>
           </DialogHeader>
-          <RequestFields
-            teams={teams}
-            team={team}
-            setTeam={setTeam}
-            privilege={privilege}
-            setPrivilege={setPrivilege}
-            privileges={privileges}
-            durationHours={durationHours}
-            setDurationHours={setDurationHours}
-            reason={reason}
-            setReason={setReason}
-          />
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateOpen(false)}>
-              Cancel
-            </Button>
-            <Button disabled={isPending || !team} onClick={submitCreate}>
-              Request
-            </Button>
-          </DialogFooter>
+          <form onSubmit={handleCreateSubmit(submitCreate)}>
+            <RequestFields
+              teams={teams}
+              privileges={privileges}
+              control={createControl}
+              register={registerCreate}
+              errors={createErrors}
+            />
+            {createErrors.root?.server ? (
+              <div
+                className="mt-4 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive"
+                role="alert"
+              >
+                {createErrors.root.server.message}
+              </div>
+            ) : null}
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={isPending}
+                onClick={() => setCreateOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isPending}>
+                Request
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 
@@ -405,26 +427,16 @@ export function RequestsView({
 
 function RequestFields({
   teams,
-  team,
-  setTeam,
-  privilege,
-  setPrivilege,
   privileges,
-  durationHours,
-  setDurationHours,
-  reason,
-  setReason,
+  control,
+  register,
+  errors,
 }: {
   teams: string[]
-  team: string
-  setTeam: (value: string) => void
-  privilege: string
-  setPrivilege: (value: string) => void
   privileges: readonly string[]
-  durationHours: string
-  setDurationHours: (value: string) => void
-  reason: string
-  setReason: (value: string) => void
+  control: Control<CreateAccessRequestForm>
+  register: UseFormRegister<CreateAccessRequestForm>
+  errors: FieldErrors<CreateAccessRequestForm>
 }) {
   return (
     <div className="space-y-4">
@@ -432,47 +444,93 @@ function RequestFields({
         <label className="text-xs font-medium" htmlFor="request-team">
           Team
         </label>
-        <Select
-          items={teams.map((item) => ({ value: item, label: item }))}
-          value={team}
-          onValueChange={(value) => value && setTeam(value)}
-        >
-          <SelectTrigger id="request-team" className="w-full">
-            <SelectValue placeholder="Select team" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectGroup>
-              {teams.map((item) => (
-                <SelectItem key={item} value={item}>
-                  {item}
-                </SelectItem>
-              ))}
-            </SelectGroup>
-          </SelectContent>
-        </Select>
+        <Controller
+          name="team"
+          control={control}
+          rules={{ required: "Team is required." }}
+          render={({ field }) => (
+            <Select
+              items={teams.map((item) => ({ value: item, label: item }))}
+              value={field.value}
+              onValueChange={(value) => value && field.onChange(value)}
+            >
+              <SelectTrigger
+                id="request-team"
+                className="w-full"
+                aria-invalid={!!errors.team}
+                aria-describedby={
+                  errors.team ? "request-team-error" : undefined
+                }
+              >
+                <SelectValue placeholder="Select team" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  {teams.map((item) => (
+                    <SelectItem key={item} value={item}>
+                      {item}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          )}
+        />
+        {errors.team ? (
+          <p
+            id="request-team-error"
+            className="text-xs text-destructive"
+            role="alert"
+          >
+            {errors.team.message}
+          </p>
+        ) : null}
       </div>
       <div className="grid gap-2">
         <label className="text-xs font-medium" htmlFor="request-privilege">
           Privilege
         </label>
-        <Select
-          items={privileges.map((item) => ({ value: item, label: item }))}
-          value={privilege}
-          onValueChange={(value) => value && setPrivilege(value)}
-        >
-          <SelectTrigger id="request-privilege" className="w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectGroup>
-              {privileges.map((item) => (
-                <SelectItem key={item} value={item}>
-                  {item}
-                </SelectItem>
-              ))}
-            </SelectGroup>
-          </SelectContent>
-        </Select>
+        <Controller
+          name="privilege"
+          control={control}
+          rules={{ required: "Privilege is required." }}
+          render={({ field }) => (
+            <Select
+              items={privileges.map((item) => ({ value: item, label: item }))}
+              value={field.value}
+              onValueChange={(value) => value && field.onChange(value)}
+            >
+              <SelectTrigger
+                id="request-privilege"
+                className="w-full"
+                aria-invalid={!!errors.privilege}
+                aria-describedby={
+                  errors.privilege ? "request-privilege-error" : undefined
+                }
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  {privileges.map((item) => (
+                    <SelectItem key={item} value={item}>
+                      {item}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          )}
+        />
+        {errors.privilege ? (
+          <p
+            id="request-privilege-error"
+            className="text-xs text-destructive"
+            role="alert"
+          >
+            {errors.privilege.message}
+          </p>
+        ) : null}
       </div>
       <div className="grid gap-2">
         <label className="text-xs font-medium" htmlFor="request-duration">
@@ -483,9 +541,26 @@ function RequestFields({
           type="number"
           min="1"
           step="1"
-          value={durationHours}
-          onChange={(event) => setDurationHours(event.target.value)}
+          aria-invalid={!!errors.durationHours}
+          aria-describedby={
+            errors.durationHours ? "request-duration-error" : undefined
+          }
+          {...register("durationHours", {
+            valueAsNumber: true,
+            validate: (value) =>
+              (Number.isInteger(value) && value > 0) ||
+              "Enter a positive whole-hour duration.",
+          })}
         />
+        {errors.durationHours ? (
+          <p
+            id="request-duration-error"
+            className="text-xs text-destructive"
+            role="alert"
+          >
+            {errors.durationHours.message}
+          </p>
+        ) : null}
       </div>
       <div className="grid gap-2">
         <label className="text-xs font-medium" htmlFor="request-reason">
@@ -494,9 +569,22 @@ function RequestFields({
         <Textarea
           id="request-reason"
           rows={3}
-          value={reason}
-          onChange={(event) => setReason(event.target.value)}
+          aria-invalid={!!errors.reason}
+          aria-describedby={errors.reason ? "request-reason-error" : undefined}
+          {...register("reason", {
+            validate: (value) =>
+              value.trim().length > 0 || "Reason is required.",
+          })}
         />
+        {errors.reason ? (
+          <p
+            id="request-reason-error"
+            className="text-xs text-destructive"
+            role="alert"
+          >
+            {errors.reason.message}
+          </p>
+        ) : null}
       </div>
     </div>
   )
