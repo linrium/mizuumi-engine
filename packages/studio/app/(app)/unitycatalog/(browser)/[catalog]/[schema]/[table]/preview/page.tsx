@@ -2,31 +2,51 @@
 
 import { IconAlertCircle, IconRefresh } from "@tabler/icons-react"
 import {
-  columnVisibilityFeature,
-  createColumnHelper,
-  tableFeatures,
-  useTable,
-} from "@tanstack/react-table"
+  AllCommunityModule,
+  type ColDef,
+  themeQuartz,
+  type ValueFormatterParams,
+} from "ag-grid-community"
+import { AgGridProvider, AgGridReact } from "ag-grid-react"
 import { cn } from "cn"
-import { use, useCallback, useEffect, useMemo, useState, useTransition } from "react"
-import { Button } from "@/components/ui/button"
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
+  use,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useTransition,
+} from "react"
 import { executeSql, type SqlQueryResult } from "@/app/(app)/sql/actions"
+import { Button } from "@/components/ui/button"
 
 const PREVIEW_LIMIT = 100
+const modules = [AllCommunityModule]
 
-const features = tableFeatures({ columnVisibilityFeature })
+type Row = unknown[]
 
-type Row = Record<string, unknown>
+const previewTheme = themeQuartz.withParams({
+  accentColor: "var(--primary)",
+  backgroundColor: "var(--background)",
+  borderColor: "var(--border)",
+  fontFamily: "var(--font-sans)",
+  fontSize: 12,
+  foregroundColor: "var(--foreground)",
+  headerBackgroundColor: "var(--muted)",
+  headerFontSize: 12,
+  headerFontWeight: 500,
+  headerHeight: 36,
+  rowHeight: 32,
+  wrapperBorder: false,
+})
 
-const columnHelper = createColumnHelper<typeof features, Row>()
+const defaultColDef: ColDef<Row> = {
+  filter: true,
+  maxWidth: 360,
+  minWidth: 120,
+  resizable: true,
+  sortable: true,
+}
 
 export default function TablePreviewPage({
   params,
@@ -46,36 +66,22 @@ export default function TablePreviewPage({
     load()
   }, [load])
 
-  const columns = useMemo(() => {
-    const names: string[] = result?.columns ?? []
-    const types: string[] = result?.columnTypes ?? []
-    return names.map((name, i) =>
-      columnHelper.accessor((row: Row) => row[name], {
-        id: `${name}:${i}`,
-        header: () => (
-          <div className="flex items-baseline gap-2">
-            <span>{name}</span>
-            <span className="text-[10px] font-normal text-muted-foreground">
-              {types[i]}
-            </span>
-          </div>
-        ),
-        cell: ({ getValue }) => (
-          <span className="truncate font-mono">{formatValue(getValue())}</span>
-        ),
-      }),
-    )
+  const columnDefs = useMemo<ColDef<Row>[]>(() => {
+    const names = result?.columns ?? []
+    const types = result?.columnTypes ?? []
+
+    return names.map((name, index) => ({
+      colId: `${name}:${index}`,
+      headerName: name,
+      headerTooltip: types[index] ? `${name} · ${types[index]}` : name,
+      tooltipValueGetter: ({ value }) => formatValue(value),
+      valueFormatter: (params: ValueFormatterParams<Row>) =>
+        formatValue(params.value),
+      valueGetter: ({ data }) => data?.[index],
+    }))
   }, [result?.columns, result?.columnTypes])
 
-  const data = useMemo<Row[]>(() => {
-    const names: string[] = result?.columns ?? []
-    const rows: unknown[][] = result?.rows ?? []
-    return rows.map((cells: unknown[]) =>
-      Object.fromEntries(names.map((n: string, i: number) => [n, cells[i]])),
-    )
-  }, [result?.columns, result?.rows])
-
-  const tableInstance = useTable({ features, data, columns })
+  const rowData = useMemo<Row[]>(() => result?.rows ?? [], [result?.rows])
 
   return (
     <div className="space-y-3">
@@ -83,8 +89,9 @@ export default function TablePreviewPage({
         <div className="text-xs text-muted-foreground">
           {result && !result.error ? (
             <>
-              {data.length.toLocaleString()} row{data.length === 1 ? "" : "s"}{" "}
-              · {result.elapsedMs ?? 0} ms · limit {PREVIEW_LIMIT}
+              {rowData.length.toLocaleString()} row
+              {rowData.length === 1 ? "" : "s"} · {result.elapsedMs ?? 0} ms ·
+              limit {PREVIEW_LIMIT}
             </>
           ) : null}
         </div>
@@ -102,51 +109,18 @@ export default function TablePreviewPage({
           </div>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-md ring-1 ring-foreground/10">
-          <Table>
-            <TableHeader className="bg-muted/50">
-              {tableInstance.getHeaderGroups().map((group) => (
-                <TableRow key={group.id}>
-                  {group.headers.map((header) => (
-                    <TableHead key={header.id}>
-                      <tableInstance.FlexRender header={header} />
-                    </TableHead>
-                  ))}
-                </TableRow>
-              ))}
-            </TableHeader>
-            <TableBody>
-              {tableInstance.getRowModel().rows.map((row) => (
-                <TableRow key={row.id}>
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id} className="max-w-96">
-                      <tableInstance.FlexRender cell={cell} />
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))}
-              {!isPending && data.length === 0 ? (
-                <TableRow>
-                  <TableCell
-                    colSpan={columns.length || 1}
-                    className="h-20 text-center text-muted-foreground"
-                  >
-                    No rows.
-                  </TableCell>
-                </TableRow>
-              ) : null}
-              {isPending && data.length === 0 ? (
-                <TableRow>
-                  <TableCell
-                    colSpan={columns.length || 1}
-                    className="h-20 text-center text-muted-foreground"
-                  >
-                    Loading preview…
-                  </TableCell>
-                </TableRow>
-              ) : null}
-            </TableBody>
-          </Table>
+        <div className="h-[min(60vh,32rem)] min-h-72 overflow-hidden rounded-md ring-1 ring-foreground/10">
+          <AgGridProvider modules={modules}>
+            <AgGridReact<Row>
+              autoSizeStrategy={{ type: "fitCellContents" }}
+              columnDefs={columnDefs}
+              defaultColDef={defaultColDef}
+              loading={isPending || result === null}
+              rowData={rowData}
+              theme={previewTheme}
+              tooltipShowDelay={150}
+            />
+          </AgGridProvider>
         </div>
       )}
     </div>
