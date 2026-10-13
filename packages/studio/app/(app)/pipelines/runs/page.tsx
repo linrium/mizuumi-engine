@@ -1,7 +1,13 @@
-export default function PipelinesRunsPage() {
-  return (
-    <div className="rounded-md border p-6 text-sm text-muted-foreground">
-      Runs coming soon.
-    </div>
-  )
+import { RunsView } from "@/app/(app)/pipelines/runs/runs-view"
+import { getRuns } from "@/lib/dagster"
+
+export const dynamic = "force-dynamic"
+
+export default async function PipelinesRunsPage() {
+  try {
+    return <RunsView initialRuns={await getRuns()} />
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error"
+    return <RunsView initialRuns={[]} initialError={message} />
+  }
 }
