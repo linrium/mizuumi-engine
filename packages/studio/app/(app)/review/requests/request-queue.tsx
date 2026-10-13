@@ -344,6 +344,72 @@ export function RequestQueue({
                   </p>
                 </div>
 
+                {selected.contract ? (
+                  <div>
+                    <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Data contract decision
+                    </h3>
+                    <div className="space-y-3 rounded-md border bg-card p-3 text-sm">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="outline">
+                          Version {selected.contract.version}
+                        </Badge>
+                        <Badge
+                          variant={
+                            selected.contract.evaluation_status === "PASSED"
+                              ? "outline"
+                              : "secondary"
+                          }
+                        >
+                          {selected.contract.evaluation_status}
+                        </Badge>
+                        <span className="text-muted-foreground">
+                          {selected.purpose_code?.replaceAll("_", " ")} ·{" "}
+                          {selected.consumer_context.consumer_domain}
+                        </span>
+                      </div>
+                      <div className="grid gap-2">
+                        {selected.contract.evaluations.map((evaluation) => (
+                          <div
+                            key={evaluation.rule_key}
+                            className="flex items-start justify-between gap-3 rounded bg-muted/40 px-2 py-1.5"
+                          >
+                            <div>
+                              <div className="font-medium">
+                                {evaluation.name}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                {evaluation.message}
+                              </div>
+                            </div>
+                            <Badge
+                              variant={
+                                evaluation.status === "PASS"
+                                  ? "outline"
+                                  : "secondary"
+                              }
+                            >
+                              {evaluation.status}
+                            </Badge>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        Processing:{" "}
+                        {selected.consumer_context.processing_countries?.join(
+                          ", ",
+                        ) ?? "—"}
+                        {selected.consumer_context.cross_border_transfer
+                          ? " · cross-border"
+                          : ""}
+                        {selected.consumer_context.ai_use
+                          ? " · AI/model use"
+                          : ""}
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+
                 <div>
                   <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Privileges

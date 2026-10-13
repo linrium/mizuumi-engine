@@ -72,6 +72,23 @@ export type AccessRequest = {
   routed_for_team: string
   target_securable_type: string
   target_full_name: string
+  contract?: {
+    id: string
+    version: string
+    document_hash: string
+    evaluation_status: "PASSED" | "WARNING"
+    evaluated_at: string
+    snapshot: Record<string, unknown>
+    evaluations: ContractEvaluation[]
+  } | null
+  purpose_code?: string | null
+  consumer_context: {
+    consumer_domain?: string
+    processing_countries?: string[]
+    cross_border_transfer?: boolean
+    ai_use?: boolean
+    intended_output?: string | null
+  }
   reason: string
   status: string
   requested_duration_seconds: number
@@ -100,6 +117,15 @@ export type AccessRequest = {
   }>
 }
 
+export type ContractEvaluation = {
+  rule_key: string
+  name: string
+  enforcement: "BLOCK" | "ADVISORY"
+  status: "PASS" | "WARN"
+  message: string
+  evidence: Record<string, unknown>
+}
+
 export type CreatePolicyTemplateInput = {
   key: string
   name: string
@@ -116,6 +142,15 @@ export type CreateAccessRequestInput = {
   target_securable_type: string
   target_full_name: string
   requested_privilege: string
+  purpose_code?: string
+  consumer_context?: {
+    consumer_domain: string
+    processing_countries: string[]
+    cross_border_transfer: boolean
+    ai_use: boolean
+    intended_output?: string
+  }
+  acknowledged_contract_terms?: boolean
   reason: string
   duration_hours: number
 }

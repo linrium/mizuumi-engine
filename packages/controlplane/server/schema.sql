@@ -302,6 +302,19 @@ CREATE TABLE IF NOT EXISTS access_requests (
         )
     ),
     target_full_name TEXT NOT NULL CHECK (BTRIM(target_full_name) <> ''),
+    contract_id TEXT,
+    contract_version TEXT,
+    contract_document_hash TEXT,
+    purpose_code TEXT,
+    consumer_context JSONB NOT NULL DEFAULT '{}'::jsonb
+        CHECK (jsonb_typeof(consumer_context) = 'object'),
+    contract_snapshot JSONB NOT NULL DEFAULT '{}'::jsonb
+        CHECK (jsonb_typeof(contract_snapshot) = 'object'),
+    contract_evaluations JSONB NOT NULL DEFAULT '[]'::jsonb
+        CHECK (jsonb_typeof(contract_evaluations) = 'array'),
+    contract_evaluation_status TEXT NOT NULL DEFAULT 'NOT_APPLICABLE'
+        CHECK (contract_evaluation_status IN ('NOT_APPLICABLE', 'PASSED', 'WARNING')),
+    contract_evaluated_at TIMESTAMPTZ,
     reason TEXT NOT NULL CONSTRAINT access_requests_reason_required
         CHECK (BTRIM(reason) <> ''),
     status TEXT NOT NULL DEFAULT 'PENDING' CHECK (
@@ -334,12 +347,40 @@ CREATE TABLE IF NOT EXISTS access_requests (
     access_expires_at TIMESTAMPTZ,
     FOREIGN KEY (template_id, template_version)
         REFERENCES policy_template_versions(template_id, version),
+    CONSTRAINT access_requests_contract_version_fkey
+        FOREIGN KEY (contract_id, contract_version)
+        REFERENCES data_contract_versions(contract_id, version),
     CHECK (
         (template_id IS NULL AND template_version IS NULL)
         OR (template_id IS NOT NULL AND template_version IS NOT NULL)
     ),
     CHECK (idempotency_key IS NULL OR BTRIM(idempotency_key) <> '')
 );
+
+ALTER TABLE access_requests
+    ADD COLUMN IF NOT EXISTS contract_id TEXT,
+    ADD COLUMN IF NOT EXISTS contract_version TEXT,
+    ADD COLUMN IF NOT EXISTS contract_document_hash TEXT,
+    ADD COLUMN IF NOT EXISTS purpose_code TEXT,
+    ADD COLUMN IF NOT EXISTS consumer_context JSONB NOT NULL DEFAULT '{}'::jsonb,
+    ADD COLUMN IF NOT EXISTS contract_snapshot JSONB NOT NULL DEFAULT '{}'::jsonb,
+    ADD COLUMN IF NOT EXISTS contract_evaluations JSONB NOT NULL DEFAULT '[]'::jsonb,
+    ADD COLUMN IF NOT EXISTS contract_evaluation_status TEXT NOT NULL DEFAULT 'NOT_APPLICABLE',
+    ADD COLUMN IF NOT EXISTS contract_evaluated_at TIMESTAMPTZ;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'access_requests_contract_version_fkey'
+    ) THEN
+        ALTER TABLE access_requests
+            ADD CONSTRAINT access_requests_contract_version_fkey
+            FOREIGN KEY (contract_id, contract_version)
+            REFERENCES data_contract_versions(contract_id, version);
+    END IF;
+END
+$$;
 
 DO $$
 BEGIN

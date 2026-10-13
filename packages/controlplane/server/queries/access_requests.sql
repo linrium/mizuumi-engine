@@ -29,6 +29,15 @@ INSERT INTO access_requests (
     routed_for_team,
     target_securable_type,
     target_full_name,
+    contract_id,
+    contract_version,
+    contract_document_hash,
+    purpose_code,
+    consumer_context,
+    contract_snapshot,
+    contract_evaluations,
+    contract_evaluation_status,
+    contract_evaluated_at,
     reason,
     status,
     requested_duration_seconds,
@@ -48,6 +57,15 @@ VALUES (
     :routed_for_team::text,
     :target_securable_type::text,
     :target_full_name::text,
+    NULLIF(:contract_id::text, ''),
+    NULLIF(:contract_version::text, ''),
+    NULLIF(:contract_document_hash::text, ''),
+    NULLIF(:purpose_code::text, ''),
+    :consumer_context,
+    :contract_snapshot,
+    :contract_evaluations,
+    :contract_evaluation_status::text,
+    CASE WHEN :contract_id::text = '' THEN NULL ELSE NOW() END,
     :reason::text,
     CASE WHEN :auto_approve::boolean THEN 'APPROVED' ELSE 'AWAITING_APPROVAL' END,
     :requested_duration_seconds::bigint,
@@ -61,6 +79,60 @@ VALUES (
     END
 )
 RETURNING id;
+
+--! get_active_contract_for_access_request
+SELECT
+    contracts.id,
+    versions.version,
+    versions.document,
+    versions.document_hash,
+    COALESCE(observations.state, 'PENDING_DEPLOYMENT') AS sync_state,
+    COALESCE((
+        SELECT runs.status
+        FROM data_quality_runs runs
+        WHERE runs.contract_id = contracts.id
+          AND runs.contract_version = versions.version
+        ORDER BY runs.started_at DESC
+        LIMIT 1
+    ), '') AS latest_quality_status
+FROM data_contracts contracts
+JOIN data_contract_versions versions
+  ON versions.contract_id = contracts.id
+ AND versions.version = contracts.active_version
+LEFT JOIN data_contract_observations observations
+  ON observations.contract_id = contracts.id
+ AND observations.contract_version = versions.version
+WHERE contracts.catalog_name = :catalog_name::text
+  AND contracts.schema_name = :schema_name::text
+  AND contracts.table_name = :table_name::text;
+
+--! get_access_request_contract_state
+SELECT
+    COALESCE(contracts.active_version, '') AS active_version,
+    COALESCE(active_version.document_hash, '') AS active_document_hash,
+    COALESCE(observations.state, 'PENDING_DEPLOYMENT') AS sync_state,
+    COALESCE(requests.contract_version, '') AS bound_version,
+    COALESCE(requests.contract_document_hash, '') AS bound_document_hash
+FROM access_requests requests
+JOIN data_contracts contracts ON contracts.id = requests.contract_id
+LEFT JOIN data_contract_versions active_version
+  ON active_version.contract_id = contracts.id
+ AND active_version.version = contracts.active_version
+LEFT JOIN data_contract_observations observations
+  ON observations.contract_id = contracts.id
+ AND observations.contract_version = contracts.active_version
+WHERE requests.id = :request_id::text
+  AND requests.contract_id IS NOT NULL;
+
+--! fail_access_request_contract_validation
+UPDATE access_requests
+SET status = 'FAILED',
+    decided_by = 'system:contract-evaluation',
+    decided_at = NOW(),
+    decision_comment = :message::text,
+    access_expires_at = NOW()
+WHERE id = :request_id::text
+  AND status IN ('APPROVED', 'FULFILLING');
 
 --! copy_access_request_approval_teams
 INSERT INTO access_request_approval_teams (request_id, team, required_approvals)
@@ -271,6 +343,15 @@ SELECT
     COALESCE(requests.routed_for_team, '') AS routed_for_team,
     requests.target_securable_type,
     requests.target_full_name,
+    COALESCE(requests.contract_id, '') AS contract_id,
+    COALESCE(requests.contract_version, '') AS contract_version,
+    COALESCE(requests.contract_document_hash, '') AS contract_document_hash,
+    COALESCE(requests.purpose_code, '') AS purpose_code,
+    requests.consumer_context,
+    requests.contract_snapshot,
+    requests.contract_evaluations,
+    requests.contract_evaluation_status,
+    COALESCE(requests.contract_evaluated_at::text, '') AS contract_evaluated_at,
     requests.reason,
     requests.status,
     requests.requested_duration_seconds,
@@ -295,11 +376,16 @@ WHERE requests.id = :request_id::text
 FOR UPDATE OF requests;
 
 --! lock_owned_access_request
-SELECT status
-FROM access_requests
-WHERE id = :request_id::text
-  AND requested_by = :requested_by::text
-FOR UPDATE;
+SELECT
+    requests.status,
+    COALESCE(versions.document, '{}'::jsonb) AS contract_document
+FROM access_requests requests
+LEFT JOIN data_contract_versions versions
+  ON versions.contract_id = requests.contract_id
+ AND versions.version = requests.contract_version
+WHERE requests.id = :request_id::text
+  AND requests.requested_by = :requested_by::text
+FOR UPDATE OF requests;
 
 --! clear_access_request_reviews
 DELETE FROM access_request_reviews

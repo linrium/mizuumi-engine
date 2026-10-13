@@ -43,6 +43,15 @@ control-plane-managed Unity Catalog permissions, and move the request to `EXPIRE
 that existed before the request are recorded as `UNCHANGED` and are never revoked; overlapping
 active requests also retain access until the last managed grant expires.
 
+Table requests additionally require `purpose_code`, `consumer_context` (consumer domain,
+processing countries, cross-border-transfer and AI-use declarations), and
+`acknowledged_contract_terms: true`. Submission resolves the active contract on the server and
+freezes its ID, version, document hash, applicable terms, and evaluation evidence. Missing or
+inactive contracts, schema drift, prohibited processing locations, and contract duration limits
+block submission. Quality state and declared AI use are advisory warnings that disable policy
+auto-approval. Approval and fulfillment recheck that the bound version is still active and in
+sync so a changed contract cannot silently authorize a Unity Catalog grant.
+
 Unity Catalog synchronization uses a Keycloak client-credentials service account with the
 `unitycatalog-admin` role. Configure `[unity_catalog]` (`url`, `token_url`, `client_id`, and
 `client_secret`) or the equivalent `CONTROLPLANE__UNITY_CATALOG__*` environment variables. The

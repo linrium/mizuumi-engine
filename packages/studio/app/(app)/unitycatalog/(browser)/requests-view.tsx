@@ -16,8 +16,25 @@ import {
   updateAccessRequest,
 } from "@/app/(app)/review/actions"
 import type { AccessRequest } from "@/app/(app)/review/types"
+import type {
+  DataContract,
+  DataQualityRun,
+} from "@/app/(app)/unitycatalog/(browser)/[catalog]/[schema]/[table]/contract/types"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
+import {
+  Combobox,
+  ComboboxChip,
+  ComboboxChips,
+  ComboboxChipsInput,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxItem,
+  ComboboxList,
+  ComboboxValue,
+  useComboboxAnchor,
+} from "@/components/ui/combobox"
 import {
   Dialog,
   DialogContent,
@@ -85,6 +102,13 @@ type CreateAccessRequestForm = {
   team: string
   privilege: string
   durationHours: number
+  purposeCode: string
+  consumerDomain: string
+  processingCountries: string[]
+  crossBorderTransfer: boolean
+  aiUse: boolean
+  intendedOutput: string
+  acknowledgedTerms: boolean
   reason: string
 }
 
@@ -93,15 +117,21 @@ export function RequestsView({
   fullName,
   teams,
   initialRequests,
+  dataContract,
+  latestQualityRun,
   initialError,
 }: {
   securableType: RequestSecurableType
   fullName: string
   teams: string[]
   initialRequests: AccessRequest[]
+  dataContract?: DataContract | null
+  latestQualityRun?: DataQualityRun
   initialError?: string
 }) {
   const privileges = PRIVILEGES_BY_TYPE[securableType]
+  const contractReady =
+    securableType !== "table" || dataContract?.sync_state === "IN_SYNC"
   const [requests, setRequests] = useState(initialRequests)
   const [message, setMessage] = useState<{
     kind: "error" | "success"
@@ -124,6 +154,13 @@ export function RequestsView({
       team: teams[0] ?? "",
       privilege: privileges[0],
       durationHours: 8,
+      purposeCode: "ANALYTICS",
+      consumerDomain: "",
+      processingCountries: ["VN"],
+      crossBorderTransfer: false,
+      aiUse: false,
+      intendedOutput: "",
+      acknowledgedTerms: false,
       reason: "",
     },
   })
@@ -137,6 +174,20 @@ export function RequestsView({
         target_securable_type: securableType,
         target_full_name: fullName,
         requested_privilege: values.privilege,
+        purpose_code:
+          securableType === "table" ? values.purposeCode : undefined,
+        consumer_context:
+          securableType === "table"
+            ? {
+                consumer_domain: values.consumerDomain.trim(),
+                processing_countries: values.processingCountries,
+                cross_border_transfer: values.crossBorderTransfer,
+                ai_use: values.aiUse,
+                intended_output: values.intendedOutput.trim() || undefined,
+              }
+            : undefined,
+        acknowledged_contract_terms:
+          securableType === "table" ? values.acknowledgedTerms : undefined,
         reason: values.reason.trim(),
         duration_hours: values.durationHours,
       })
@@ -203,10 +254,26 @@ export function RequestsView({
   return (
     <div className="space-y-3">
       <div className="flex justify-end">
-        <Button size="sm" onClick={() => setCreateOpen(true)}>
+        <Button
+          size="sm"
+          disabled={!contractReady}
+          onClick={() => setCreateOpen(true)}
+        >
           <IconPlus /> Request
         </Button>
       </div>
+
+      {securableType === "table" && !dataContract ? (
+        <div className="rounded border border-amber-500/40 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+          This table needs an active data contract before access can be
+          requested.
+        </div>
+      ) : securableType === "table" && !contractReady ? (
+        <div className="rounded border border-amber-500/40 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+          The data contract is {dataContract?.sync_state}. Reconcile it with
+          Unity Catalog before requesting access.
+        </div>
+      ) : null}
 
       {message ? (
         <div
@@ -317,7 +384,7 @@ export function RequestsView({
           if (!open) resetCreateForm()
         }}
       >
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Request {securableType} access</DialogTitle>
             <DialogDescription>
@@ -332,6 +399,8 @@ export function RequestsView({
               control={createControl}
               register={registerCreate}
               errors={createErrors}
+              dataContract={dataContract}
+              latestQualityRun={latestQualityRun}
             />
             {createErrors.root?.server ? (
               <div
@@ -370,6 +439,9 @@ export function RequestsView({
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            {selected?.contract ? (
+              <ContractBindingSummary request={selected} />
+            ) : null}
             <div className="grid gap-2">
               <label className="text-xs font-medium" htmlFor="edit-duration">
                 Duration (hours)
@@ -431,12 +503,16 @@ function RequestFields({
   control,
   register,
   errors,
+  dataContract,
+  latestQualityRun,
 }: {
   teams: string[]
   privileges: readonly string[]
   control: Control<CreateAccessRequestForm>
   register: UseFormRegister<CreateAccessRequestForm>
   errors: FieldErrors<CreateAccessRequestForm>
+  dataContract?: DataContract | null
+  latestQualityRun?: DataQualityRun
 }) {
   return (
     <div className="space-y-4">
@@ -486,6 +562,15 @@ function RequestFields({
           </p>
         ) : null}
       </div>
+      {dataContract ? (
+        <ContractRequestFields
+          contract={dataContract}
+          latestQualityRun={latestQualityRun}
+          control={control}
+          register={register}
+          errors={errors}
+        />
+      ) : null}
       <div className="grid gap-2">
         <label className="text-xs font-medium" htmlFor="request-privilege">
           Privilege
@@ -588,4 +673,325 @@ function RequestFields({
       </div>
     </div>
   )
+}
+
+function ContractRequestFields({
+  contract,
+  latestQualityRun,
+  control,
+  register,
+  errors,
+}: {
+  contract: DataContract
+  latestQualityRun?: DataQualityRun
+  control: Control<CreateAccessRequestForm>
+  register: UseFormRegister<CreateAccessRequestForm>
+  errors: FieldErrors<CreateAccessRequestForm>
+}) {
+  const description = contract.document.description
+  const limitations =
+    description &&
+    typeof description === "object" &&
+    typeof description.limitations === "string"
+      ? description.limitations
+      : undefined
+  const residency = (contract.document.customProperties ?? []).find(
+    (property) => property.property === "residencyCountries",
+  )?.value
+  const countryCodes = ["VN", "TH"]
+  const processingCountriesAnchor = useComboboxAnchor()
+
+  return (
+    <div className="space-y-5 rounded-lg border bg-card p-4 shadow-xs">
+      <div className="space-y-2 border-b pb-4">
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="text-sm font-semibold">
+            Contract {contract.version}
+          </span>
+          <Badge
+            variant={
+              contract.sync_state === "IN_SYNC" ? "outline" : "destructive"
+            }
+          >
+            {contract.sync_state}
+          </Badge>
+          <Badge
+            variant={
+              latestQualityRun?.status === "PASSED" ? "outline" : "secondary"
+            }
+          >
+            Quality {latestQualityRun?.status ?? "NOT RUN"}
+          </Badge>
+          <span className="text-muted-foreground">
+            {contract.document.team?.name ?? contract.document.domain ?? "—"}
+          </span>
+        </div>
+        {limitations ? (
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            {limitations}
+          </p>
+        ) : null}
+      </div>
+      <div className="grid items-start gap-x-5 gap-y-5 sm:grid-cols-2">
+        <div className="grid content-start gap-1.5">
+          <label className="text-xs font-medium" htmlFor="request-purpose">
+            Purpose
+          </label>
+          <Controller
+            name="purposeCode"
+            control={control}
+            rules={{ required: "Purpose is required." }}
+            render={({ field }) => (
+              <Select
+                items={[
+                  "ANALYTICS",
+                  "DATA_PRODUCT",
+                  "OPERATIONS",
+                  "COMPLIANCE",
+                  "AI_MODEL",
+                ].map((value) => ({
+                  value,
+                  label: value.replaceAll("_", " "),
+                }))}
+                value={field.value}
+                onValueChange={(value) => value && field.onChange(value)}
+              >
+                <SelectTrigger id="request-purpose" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    {[
+                      "ANALYTICS",
+                      "DATA_PRODUCT",
+                      "OPERATIONS",
+                      "COMPLIANCE",
+                      "AI_MODEL",
+                    ].map((value) => (
+                      <SelectItem key={value} value={value}>
+                        {value.replaceAll("_", " ")}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            )}
+          />
+          <p className="text-[11px] leading-relaxed text-muted-foreground">
+            Select why access is needed. This becomes part of the approval and
+            audit record.
+          </p>
+        </div>
+        <div className="grid content-start gap-1.5">
+          <label className="text-xs font-medium" htmlFor="consumer-domain">
+            Consumer domain
+          </label>
+          <Input
+            id="consumer-domain"
+            aria-invalid={!!errors.consumerDomain}
+            {...register("consumerDomain", {
+              validate: (value) =>
+                value.trim().length > 0 || "Consumer domain is required.",
+            })}
+          />
+          <p className="text-[11px] leading-relaxed text-muted-foreground">
+            The business or data domain that will use the table and own the
+            resulting output.
+          </p>
+        </div>
+        <div className="grid content-start gap-1.5">
+          <label className="text-xs font-medium" htmlFor="processing-countries">
+            Processing countries
+          </label>
+          <Controller
+            name="processingCountries"
+            control={control}
+            rules={{
+              validate: (value) =>
+                value.length > 0 || "Select at least one processing country.",
+            }}
+            render={({ field }) => (
+              <Combobox
+                items={countryCodes}
+                multiple
+                value={field.value}
+                onValueChange={field.onChange}
+              >
+                <ComboboxChips
+                  ref={processingCountriesAnchor}
+                  aria-invalid={!!errors.processingCountries}
+                >
+                  <ComboboxValue>
+                    {field.value.map((country) => (
+                      <ComboboxChip key={country}>{country}</ComboboxChip>
+                    ))}
+                  </ComboboxValue>
+                  <ComboboxChipsInput
+                    id="processing-countries"
+                    placeholder={field.value.length ? "" : "Select countries"}
+                  />
+                </ComboboxChips>
+                <ComboboxContent anchor={processingCountriesAnchor}>
+                  <ComboboxEmpty>No countries found.</ComboboxEmpty>
+                  <ComboboxList>
+                    {(country) => (
+                      <ComboboxItem key={country} value={country}>
+                        {country === "VN" ? "VN — Vietnam" : "TH — Thailand"}
+                      </ComboboxItem>
+                    )}
+                  </ComboboxList>
+                </ComboboxContent>
+              </Combobox>
+            )}
+          />
+          <p className="text-[11px] leading-relaxed text-muted-foreground">
+            Select every country where the data will be stored or processed.
+            Contract residency: {formatValue(residency)}.
+          </p>
+          {errors.processingCountries ? (
+            <p className="text-xs text-destructive">
+              {errors.processingCountries.message}
+            </p>
+          ) : null}
+        </div>
+        <div className="grid content-start gap-1.5">
+          <label className="text-xs font-medium" htmlFor="intended-output">
+            Intended output
+          </label>
+          <Input
+            id="intended-output"
+            placeholder="Dashboard, governed data product…"
+            {...register("intendedOutput")}
+          />
+          <p className="text-[11px] leading-relaxed text-muted-foreground">
+            Describe the dashboard, governed data product, analysis, or model
+            that this access will produce.
+          </p>
+        </div>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Controller
+          name="crossBorderTransfer"
+          control={control}
+          render={({ field }) => (
+            <label
+              className="flex cursor-pointer items-start gap-3 rounded-md border p-3"
+              htmlFor="cross-border-transfer"
+            >
+              <Checkbox
+                id="cross-border-transfer"
+                className="mt-0.5"
+                checked={field.value}
+                onCheckedChange={field.onChange}
+              />
+              <span>
+                <span className="block text-xs font-medium">
+                  Cross-border transfer
+                </span>
+                <span className="mt-0.5 block text-[11px] leading-relaxed text-muted-foreground">
+                  Data will move outside its contracted residency boundary.
+                </span>
+              </span>
+            </label>
+          )}
+        />
+        <Controller
+          name="aiUse"
+          control={control}
+          render={({ field }) => (
+            <label
+              className="flex cursor-pointer items-start gap-3 rounded-md border p-3"
+              htmlFor="ai-model-use"
+            >
+              <Checkbox
+                id="ai-model-use"
+                className="mt-0.5"
+                checked={field.value}
+                onCheckedChange={field.onChange}
+              />
+              <span>
+                <span className="block text-xs font-medium">
+                  AI or model use
+                </span>
+                <span className="mt-0.5 block text-[11px] leading-relaxed text-muted-foreground">
+                  Data will be used for model training, inference, or
+                  evaluation.
+                </span>
+              </span>
+            </label>
+          )}
+        />
+      </div>
+      <Controller
+        name="acknowledgedTerms"
+        control={control}
+        rules={{ required: "You must acknowledge the contract terms." }}
+        render={({ field }) => (
+          <label
+            className="flex cursor-pointer items-start gap-3 rounded-md bg-muted/40 p-3 text-xs"
+            htmlFor="acknowledged-contract-terms"
+          >
+            <Checkbox
+              id="acknowledged-contract-terms"
+              className="mt-0.5"
+              aria-invalid={!!errors.acknowledgedTerms}
+              checked={field.value}
+              onCheckedChange={field.onChange}
+            />
+            <span className="leading-relaxed">
+              I acknowledge contract version {contract.version}, including its
+              usage, residency, quality, and SLA terms.
+            </span>
+          </label>
+        )}
+      />
+      {errors.acknowledgedTerms ? (
+        <p className="text-xs text-destructive">
+          {errors.acknowledgedTerms.message}
+        </p>
+      ) : null}
+    </div>
+  )
+}
+
+function ContractBindingSummary({ request }: { request: AccessRequest }) {
+  const contract = request.contract
+  if (!contract) return null
+  return (
+    <div className="space-y-2 rounded-md border p-3 text-xs">
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-medium">Contract {contract.version}</span>
+        <Badge
+          variant={
+            contract.evaluation_status === "PASSED" ? "outline" : "secondary"
+          }
+        >
+          {contract.evaluation_status}
+        </Badge>
+      </div>
+      <div className="text-muted-foreground">
+        {request.purpose_code?.replaceAll("_", " ")} ·{" "}
+        {request.consumer_context.consumer_domain}
+      </div>
+      {contract.evaluations.map((evaluation) => (
+        <div
+          key={evaluation.rule_key}
+          className="flex items-start justify-between gap-3"
+        >
+          <span>{evaluation.message}</span>
+          <Badge
+            variant={evaluation.status === "PASS" ? "outline" : "secondary"}
+          >
+            {evaluation.status}
+          </Badge>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function formatValue(value: unknown) {
+  if (Array.isArray(value)) return value.join(", ")
+  if (value === undefined || value === null) return "not declared"
+  return String(value)
 }

@@ -24,6 +24,14 @@ pub struct CreateAccessRequestParams<
     T8: crate::StringSql,
     T9: crate::StringSql,
     T10: crate::StringSql,
+    T11: crate::StringSql,
+    T12: crate::StringSql,
+    T13: crate::JsonSql,
+    T14: crate::JsonSql,
+    T15: crate::JsonSql,
+    T16: crate::StringSql,
+    T17: crate::StringSql,
+    T18: crate::StringSql,
 > {
     pub template_id: T1,
     pub template_version: i32,
@@ -34,10 +42,33 @@ pub struct CreateAccessRequestParams<
     pub routed_for_team: T6,
     pub target_securable_type: T7,
     pub target_full_name: T8,
-    pub reason: T9,
+    pub contract_id: T9,
+    pub contract_version: T10,
+    pub contract_document_hash: T11,
+    pub purpose_code: T12,
+    pub consumer_context: T13,
+    pub contract_snapshot: T14,
+    pub contract_evaluations: T15,
+    pub contract_evaluation_status: T16,
+    pub reason: T17,
     pub auto_approve: bool,
     pub requested_duration_seconds: i64,
-    pub idempotency_key: T10,
+    pub idempotency_key: T18,
+}
+#[derive(Debug)]
+pub struct GetActiveContractForAccessRequestParams<
+    T1: crate::StringSql,
+    T2: crate::StringSql,
+    T3: crate::StringSql,
+> {
+    pub catalog_name: T1,
+    pub schema_name: T2,
+    pub table_name: T3,
+}
+#[derive(Debug)]
+pub struct FailAccessRequestContractValidationParams<T1: crate::StringSql, T2: crate::StringSql> {
+    pub message: T1,
+    pub request_id: T2,
 }
 #[derive(Debug)]
 pub struct CopyAccessRequestApprovalTeamsParams<T1: crate::StringSql, T2: crate::StringSql> {
@@ -223,6 +254,78 @@ impl<'a> From<ResolveRequestPolicyBorrowed<'a>> for ResolveRequestPolicy {
     }
 }
 #[derive(Debug, Clone, PartialEq)]
+pub struct GetActiveContractForAccessRequest {
+    pub id: String,
+    pub version: String,
+    pub document: serde_json::Value,
+    pub document_hash: String,
+    pub sync_state: String,
+    pub latest_quality_status: String,
+}
+pub struct GetActiveContractForAccessRequestBorrowed<'a> {
+    pub id: &'a str,
+    pub version: &'a str,
+    pub document: postgres_types::Json<&'a serde_json::value::RawValue>,
+    pub document_hash: &'a str,
+    pub sync_state: &'a str,
+    pub latest_quality_status: &'a str,
+}
+impl<'a> From<GetActiveContractForAccessRequestBorrowed<'a>> for GetActiveContractForAccessRequest {
+    fn from(
+        GetActiveContractForAccessRequestBorrowed {
+            id,
+            version,
+            document,
+            document_hash,
+            sync_state,
+            latest_quality_status,
+        }: GetActiveContractForAccessRequestBorrowed<'a>,
+    ) -> Self {
+        Self {
+            id: id.into(),
+            version: version.into(),
+            document: serde_json::from_str(document.0.get()).unwrap(),
+            document_hash: document_hash.into(),
+            sync_state: sync_state.into(),
+            latest_quality_status: latest_quality_status.into(),
+        }
+    }
+}
+#[derive(Debug, Clone, PartialEq)]
+pub struct GetAccessRequestContractState {
+    pub active_version: String,
+    pub active_document_hash: String,
+    pub sync_state: String,
+    pub bound_version: String,
+    pub bound_document_hash: String,
+}
+pub struct GetAccessRequestContractStateBorrowed<'a> {
+    pub active_version: &'a str,
+    pub active_document_hash: &'a str,
+    pub sync_state: &'a str,
+    pub bound_version: &'a str,
+    pub bound_document_hash: &'a str,
+}
+impl<'a> From<GetAccessRequestContractStateBorrowed<'a>> for GetAccessRequestContractState {
+    fn from(
+        GetAccessRequestContractStateBorrowed {
+            active_version,
+            active_document_hash,
+            sync_state,
+            bound_version,
+            bound_document_hash,
+        }: GetAccessRequestContractStateBorrowed<'a>,
+    ) -> Self {
+        Self {
+            active_version: active_version.into(),
+            active_document_hash: active_document_hash.into(),
+            sync_state: sync_state.into(),
+            bound_version: bound_version.into(),
+            bound_document_hash: bound_document_hash.into(),
+        }
+    }
+}
+#[derive(Debug, Clone, PartialEq)]
 pub struct ListAccessRequests {
     pub id: String,
     pub template_id: String,
@@ -360,6 +463,15 @@ pub struct GetAccessRequest {
     pub routed_for_team: String,
     pub target_securable_type: String,
     pub target_full_name: String,
+    pub contract_id: String,
+    pub contract_version: String,
+    pub contract_document_hash: String,
+    pub purpose_code: String,
+    pub consumer_context: serde_json::Value,
+    pub contract_snapshot: serde_json::Value,
+    pub contract_evaluations: serde_json::Value,
+    pub contract_evaluation_status: String,
+    pub contract_evaluated_at: String,
     pub reason: String,
     pub status: String,
     pub requested_duration_seconds: i64,
@@ -381,6 +493,15 @@ pub struct GetAccessRequestBorrowed<'a> {
     pub routed_for_team: &'a str,
     pub target_securable_type: &'a str,
     pub target_full_name: &'a str,
+    pub contract_id: &'a str,
+    pub contract_version: &'a str,
+    pub contract_document_hash: &'a str,
+    pub purpose_code: &'a str,
+    pub consumer_context: postgres_types::Json<&'a serde_json::value::RawValue>,
+    pub contract_snapshot: postgres_types::Json<&'a serde_json::value::RawValue>,
+    pub contract_evaluations: postgres_types::Json<&'a serde_json::value::RawValue>,
+    pub contract_evaluation_status: &'a str,
+    pub contract_evaluated_at: &'a str,
     pub reason: &'a str,
     pub status: &'a str,
     pub requested_duration_seconds: i64,
@@ -404,6 +525,15 @@ impl<'a> From<GetAccessRequestBorrowed<'a>> for GetAccessRequest {
             routed_for_team,
             target_securable_type,
             target_full_name,
+            contract_id,
+            contract_version,
+            contract_document_hash,
+            purpose_code,
+            consumer_context,
+            contract_snapshot,
+            contract_evaluations,
+            contract_evaluation_status,
+            contract_evaluated_at,
             reason,
             status,
             requested_duration_seconds,
@@ -426,6 +556,15 @@ impl<'a> From<GetAccessRequestBorrowed<'a>> for GetAccessRequest {
             routed_for_team: routed_for_team.into(),
             target_securable_type: target_securable_type.into(),
             target_full_name: target_full_name.into(),
+            contract_id: contract_id.into(),
+            contract_version: contract_version.into(),
+            contract_document_hash: contract_document_hash.into(),
+            purpose_code: purpose_code.into(),
+            consumer_context: serde_json::from_str(consumer_context.0.get()).unwrap(),
+            contract_snapshot: serde_json::from_str(contract_snapshot.0.get()).unwrap(),
+            contract_evaluations: serde_json::from_str(contract_evaluations.0.get()).unwrap(),
+            contract_evaluation_status: contract_evaluation_status.into(),
+            contract_evaluated_at: contract_evaluated_at.into(),
             reason: reason.into(),
             status: status.into(),
             requested_duration_seconds,
@@ -469,6 +608,28 @@ impl<'a> From<LockAccessRequestBorrowed<'a>> for LockAccessRequest {
             requested_for: requested_for.into(),
             routed_for_team: routed_for_team.into(),
             decided_by: decided_by.into(),
+        }
+    }
+}
+#[derive(Debug, Clone, PartialEq)]
+pub struct LockOwnedAccessRequest {
+    pub status: String,
+    pub contract_document: serde_json::Value,
+}
+pub struct LockOwnedAccessRequestBorrowed<'a> {
+    pub status: &'a str,
+    pub contract_document: postgres_types::Json<&'a serde_json::value::RawValue>,
+}
+impl<'a> From<LockOwnedAccessRequestBorrowed<'a>> for LockOwnedAccessRequest {
+    fn from(
+        LockOwnedAccessRequestBorrowed {
+            status,
+            contract_document,
+        }: LockOwnedAccessRequestBorrowed<'a>,
+    ) -> Self {
+        Self {
+            status: status.into(),
+            contract_document: serde_json::from_str(contract_document.0.get()).unwrap(),
         }
     }
 }
@@ -718,6 +879,145 @@ where
 {
     pub fn map<R>(self, mapper: fn(&str) -> R) -> StringQuery<'c, 'a, 's, C, R, N> {
         StringQuery {
+            client: self.client,
+            params: self.params,
+            query: self.query,
+            cached: self.cached,
+            extractor: self.extractor,
+            mapper,
+        }
+    }
+    pub async fn one(self) -> Result<T, tokio_postgres::Error> {
+        let row =
+            crate::client::async_::one(self.client, self.query, &self.params, self.cached).await?;
+        Ok((self.mapper)((self.extractor)(&row)?))
+    }
+    pub async fn all(self) -> Result<Vec<T>, tokio_postgres::Error> {
+        self.iter().await?.try_collect().await
+    }
+    pub async fn opt(self) -> Result<Option<T>, tokio_postgres::Error> {
+        let opt_row =
+            crate::client::async_::opt(self.client, self.query, &self.params, self.cached).await?;
+        Ok(opt_row
+            .map(|row| {
+                let extracted = (self.extractor)(&row)?;
+                Ok((self.mapper)(extracted))
+            })
+            .transpose()?)
+    }
+    pub async fn iter(
+        self,
+    ) -> Result<
+        impl futures::Stream<Item = Result<T, tokio_postgres::Error>> + 'c,
+        tokio_postgres::Error,
+    > {
+        let stream = crate::client::async_::raw(
+            self.client,
+            self.query,
+            crate::slice_iter(&self.params),
+            self.cached,
+        )
+        .await?;
+        let mapped = stream
+            .map(move |res| {
+                res.and_then(|row| {
+                    let extracted = (self.extractor)(&row)?;
+                    Ok((self.mapper)(extracted))
+                })
+            })
+            .into_stream();
+        Ok(mapped)
+    }
+}
+pub struct GetActiveContractForAccessRequestQuery<'c, 'a, 's, C: GenericClient, T, const N: usize> {
+    client: &'c C,
+    params: [&'a (dyn postgres_types::ToSql + Sync); N],
+    query: &'static str,
+    cached: Option<&'s tokio_postgres::Statement>,
+    extractor: fn(
+        &tokio_postgres::Row,
+    ) -> Result<GetActiveContractForAccessRequestBorrowed, tokio_postgres::Error>,
+    mapper: fn(GetActiveContractForAccessRequestBorrowed) -> T,
+}
+impl<'c, 'a, 's, C, T: 'c, const N: usize>
+    GetActiveContractForAccessRequestQuery<'c, 'a, 's, C, T, N>
+where
+    C: GenericClient,
+{
+    pub fn map<R>(
+        self,
+        mapper: fn(GetActiveContractForAccessRequestBorrowed) -> R,
+    ) -> GetActiveContractForAccessRequestQuery<'c, 'a, 's, C, R, N> {
+        GetActiveContractForAccessRequestQuery {
+            client: self.client,
+            params: self.params,
+            query: self.query,
+            cached: self.cached,
+            extractor: self.extractor,
+            mapper,
+        }
+    }
+    pub async fn one(self) -> Result<T, tokio_postgres::Error> {
+        let row =
+            crate::client::async_::one(self.client, self.query, &self.params, self.cached).await?;
+        Ok((self.mapper)((self.extractor)(&row)?))
+    }
+    pub async fn all(self) -> Result<Vec<T>, tokio_postgres::Error> {
+        self.iter().await?.try_collect().await
+    }
+    pub async fn opt(self) -> Result<Option<T>, tokio_postgres::Error> {
+        let opt_row =
+            crate::client::async_::opt(self.client, self.query, &self.params, self.cached).await?;
+        Ok(opt_row
+            .map(|row| {
+                let extracted = (self.extractor)(&row)?;
+                Ok((self.mapper)(extracted))
+            })
+            .transpose()?)
+    }
+    pub async fn iter(
+        self,
+    ) -> Result<
+        impl futures::Stream<Item = Result<T, tokio_postgres::Error>> + 'c,
+        tokio_postgres::Error,
+    > {
+        let stream = crate::client::async_::raw(
+            self.client,
+            self.query,
+            crate::slice_iter(&self.params),
+            self.cached,
+        )
+        .await?;
+        let mapped = stream
+            .map(move |res| {
+                res.and_then(|row| {
+                    let extracted = (self.extractor)(&row)?;
+                    Ok((self.mapper)(extracted))
+                })
+            })
+            .into_stream();
+        Ok(mapped)
+    }
+}
+pub struct GetAccessRequestContractStateQuery<'c, 'a, 's, C: GenericClient, T, const N: usize> {
+    client: &'c C,
+    params: [&'a (dyn postgres_types::ToSql + Sync); N],
+    query: &'static str,
+    cached: Option<&'s tokio_postgres::Statement>,
+    extractor: fn(
+        &tokio_postgres::Row,
+    ) -> Result<GetAccessRequestContractStateBorrowed, tokio_postgres::Error>,
+    mapper: fn(GetAccessRequestContractStateBorrowed) -> T,
+}
+impl<'c, 'a, 's, C, T: 'c, const N: usize> GetAccessRequestContractStateQuery<'c, 'a, 's, C, T, N>
+where
+    C: GenericClient,
+{
+    pub fn map<R>(
+        self,
+        mapper: fn(GetAccessRequestContractStateBorrowed) -> R,
+    ) -> GetAccessRequestContractStateQuery<'c, 'a, 's, C, R, N> {
+        GetAccessRequestContractStateQuery {
             client: self.client,
             params: self.params,
             query: self.query,
@@ -1241,6 +1541,74 @@ where
         Ok(mapped)
     }
 }
+pub struct LockOwnedAccessRequestQuery<'c, 'a, 's, C: GenericClient, T, const N: usize> {
+    client: &'c C,
+    params: [&'a (dyn postgres_types::ToSql + Sync); N],
+    query: &'static str,
+    cached: Option<&'s tokio_postgres::Statement>,
+    extractor:
+        fn(&tokio_postgres::Row) -> Result<LockOwnedAccessRequestBorrowed, tokio_postgres::Error>,
+    mapper: fn(LockOwnedAccessRequestBorrowed) -> T,
+}
+impl<'c, 'a, 's, C, T: 'c, const N: usize> LockOwnedAccessRequestQuery<'c, 'a, 's, C, T, N>
+where
+    C: GenericClient,
+{
+    pub fn map<R>(
+        self,
+        mapper: fn(LockOwnedAccessRequestBorrowed) -> R,
+    ) -> LockOwnedAccessRequestQuery<'c, 'a, 's, C, R, N> {
+        LockOwnedAccessRequestQuery {
+            client: self.client,
+            params: self.params,
+            query: self.query,
+            cached: self.cached,
+            extractor: self.extractor,
+            mapper,
+        }
+    }
+    pub async fn one(self) -> Result<T, tokio_postgres::Error> {
+        let row =
+            crate::client::async_::one(self.client, self.query, &self.params, self.cached).await?;
+        Ok((self.mapper)((self.extractor)(&row)?))
+    }
+    pub async fn all(self) -> Result<Vec<T>, tokio_postgres::Error> {
+        self.iter().await?.try_collect().await
+    }
+    pub async fn opt(self) -> Result<Option<T>, tokio_postgres::Error> {
+        let opt_row =
+            crate::client::async_::opt(self.client, self.query, &self.params, self.cached).await?;
+        Ok(opt_row
+            .map(|row| {
+                let extracted = (self.extractor)(&row)?;
+                Ok((self.mapper)(extracted))
+            })
+            .transpose()?)
+    }
+    pub async fn iter(
+        self,
+    ) -> Result<
+        impl futures::Stream<Item = Result<T, tokio_postgres::Error>> + 'c,
+        tokio_postgres::Error,
+    > {
+        let stream = crate::client::async_::raw(
+            self.client,
+            self.query,
+            crate::slice_iter(&self.params),
+            self.cached,
+        )
+        .await?;
+        let mapped = stream
+            .map(move |res| {
+                res.and_then(|row| {
+                    let extracted = (self.extractor)(&row)?;
+                    Ok((self.mapper)(extracted))
+                })
+            })
+            .into_stream();
+        Ok(mapped)
+    }
+}
 pub struct ListAccessRequestApprovalTeamsQuery<'c, 'a, 's, C: GenericClient, T, const N: usize> {
     client: &'c C,
     params: [&'a (dyn postgres_types::ToSql + Sync); N],
@@ -1671,7 +2039,7 @@ impl<
 pub struct CreateAccessRequestStmt(&'static str, Option<tokio_postgres::Statement>);
 pub fn create_access_request() -> CreateAccessRequestStmt {
     CreateAccessRequestStmt(
-        "INSERT INTO access_requests ( template_id, template_version, template_name, approval_strategy, requested_by, requested_for, routed_for_team, target_securable_type, target_full_name, reason, status, requested_duration_seconds, idempotency_key, decided_by, decided_at, decision_comment, access_expires_at ) VALUES ( NULLIF($1::text, ''), CASE WHEN $1::text = '' THEN NULL ELSE $2::integer END, $3::text, $4::text, $5::text, $6::text, $7::text, $8::text, $9::text, $10::text, CASE WHEN $11::boolean THEN 'APPROVED' ELSE 'AWAITING_APPROVAL' END, $12::bigint, NULLIF($13::text, ''), CASE WHEN $11::boolean THEN 'system:auto-approve' END, CASE WHEN $11::boolean THEN NOW() END, CASE WHEN $11::boolean THEN 'Automatically approved by policy template' END, CASE WHEN $11::boolean THEN NOW() + ($12::bigint * INTERVAL '1 second') END ) RETURNING id",
+        "INSERT INTO access_requests ( template_id, template_version, template_name, approval_strategy, requested_by, requested_for, routed_for_team, target_securable_type, target_full_name, contract_id, contract_version, contract_document_hash, purpose_code, consumer_context, contract_snapshot, contract_evaluations, contract_evaluation_status, contract_evaluated_at, reason, status, requested_duration_seconds, idempotency_key, decided_by, decided_at, decision_comment, access_expires_at ) VALUES ( NULLIF($1::text, ''), CASE WHEN $1::text = '' THEN NULL ELSE $2::integer END, $3::text, $4::text, $5::text, $6::text, $7::text, $8::text, $9::text, NULLIF($10::text, ''), NULLIF($11::text, ''), NULLIF($12::text, ''), NULLIF($13::text, ''), $14, $15, $16, $17::text, CASE WHEN $10::text = '' THEN NULL ELSE NOW() END, $18::text, CASE WHEN $19::boolean THEN 'APPROVED' ELSE 'AWAITING_APPROVAL' END, $20::bigint, NULLIF($21::text, ''), CASE WHEN $19::boolean THEN 'system:auto-approve' END, CASE WHEN $19::boolean THEN NOW() END, CASE WHEN $19::boolean THEN 'Automatically approved by policy template' END, CASE WHEN $19::boolean THEN NOW() + ($20::bigint * INTERVAL '1 second') END ) RETURNING id",
         None,
     )
 }
@@ -1698,6 +2066,14 @@ impl CreateAccessRequestStmt {
         T8: crate::StringSql,
         T9: crate::StringSql,
         T10: crate::StringSql,
+        T11: crate::StringSql,
+        T12: crate::StringSql,
+        T13: crate::JsonSql,
+        T14: crate::JsonSql,
+        T15: crate::JsonSql,
+        T16: crate::StringSql,
+        T17: crate::StringSql,
+        T18: crate::StringSql,
     >(
         &'s self,
         client: &'c C,
@@ -1710,11 +2086,19 @@ impl CreateAccessRequestStmt {
         routed_for_team: &'a T6,
         target_securable_type: &'a T7,
         target_full_name: &'a T8,
-        reason: &'a T9,
+        contract_id: &'a T9,
+        contract_version: &'a T10,
+        contract_document_hash: &'a T11,
+        purpose_code: &'a T12,
+        consumer_context: &'a T13,
+        contract_snapshot: &'a T14,
+        contract_evaluations: &'a T15,
+        contract_evaluation_status: &'a T16,
+        reason: &'a T17,
         auto_approve: &'a bool,
         requested_duration_seconds: &'a i64,
-        idempotency_key: &'a T10,
-    ) -> StringQuery<'c, 'a, 's, C, String, 13> {
+        idempotency_key: &'a T18,
+    ) -> StringQuery<'c, 'a, 's, C, String, 21> {
         StringQuery {
             client,
             params: [
@@ -1727,6 +2111,14 @@ impl CreateAccessRequestStmt {
                 routed_for_team,
                 target_securable_type,
                 target_full_name,
+                contract_id,
+                contract_version,
+                contract_document_hash,
+                purpose_code,
+                consumer_context,
+                contract_snapshot,
+                contract_evaluations,
+                contract_evaluation_status,
                 reason,
                 auto_approve,
                 requested_duration_seconds,
@@ -1754,21 +2146,67 @@ impl<
     T8: crate::StringSql,
     T9: crate::StringSql,
     T10: crate::StringSql,
+    T11: crate::StringSql,
+    T12: crate::StringSql,
+    T13: crate::JsonSql,
+    T14: crate::JsonSql,
+    T15: crate::JsonSql,
+    T16: crate::StringSql,
+    T17: crate::StringSql,
+    T18: crate::StringSql,
 >
     crate::client::async_::Params<
         'c,
         'a,
         's,
-        CreateAccessRequestParams<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>,
-        StringQuery<'c, 'a, 's, C, String, 13>,
+        CreateAccessRequestParams<
+            T1,
+            T2,
+            T3,
+            T4,
+            T5,
+            T6,
+            T7,
+            T8,
+            T9,
+            T10,
+            T11,
+            T12,
+            T13,
+            T14,
+            T15,
+            T16,
+            T17,
+            T18,
+        >,
+        StringQuery<'c, 'a, 's, C, String, 21>,
         C,
     > for CreateAccessRequestStmt
 {
     fn params(
         &'s self,
         client: &'c C,
-        params: &'a CreateAccessRequestParams<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>,
-    ) -> StringQuery<'c, 'a, 's, C, String, 13> {
+        params: &'a CreateAccessRequestParams<
+            T1,
+            T2,
+            T3,
+            T4,
+            T5,
+            T6,
+            T7,
+            T8,
+            T9,
+            T10,
+            T11,
+            T12,
+            T13,
+            T14,
+            T15,
+            T16,
+            T17,
+            T18,
+        >,
+    ) -> StringQuery<'c, 'a, 's, C, String, 21> {
         self.bind(
             client,
             &params.template_id,
@@ -1780,11 +2218,182 @@ impl<
             &params.routed_for_team,
             &params.target_securable_type,
             &params.target_full_name,
+            &params.contract_id,
+            &params.contract_version,
+            &params.contract_document_hash,
+            &params.purpose_code,
+            &params.consumer_context,
+            &params.contract_snapshot,
+            &params.contract_evaluations,
+            &params.contract_evaluation_status,
             &params.reason,
             &params.auto_approve,
             &params.requested_duration_seconds,
             &params.idempotency_key,
         )
+    }
+}
+pub struct GetActiveContractForAccessRequestStmt(&'static str, Option<tokio_postgres::Statement>);
+pub fn get_active_contract_for_access_request() -> GetActiveContractForAccessRequestStmt {
+    GetActiveContractForAccessRequestStmt(
+        "SELECT contracts.id, versions.version, versions.document, versions.document_hash, COALESCE(observations.state, 'PENDING_DEPLOYMENT') AS sync_state, COALESCE(( SELECT runs.status FROM data_quality_runs runs WHERE runs.contract_id = contracts.id AND runs.contract_version = versions.version ORDER BY runs.started_at DESC LIMIT 1 ), '') AS latest_quality_status FROM data_contracts contracts JOIN data_contract_versions versions ON versions.contract_id = contracts.id AND versions.version = contracts.active_version LEFT JOIN data_contract_observations observations ON observations.contract_id = contracts.id AND observations.contract_version = versions.version WHERE contracts.catalog_name = $1::text AND contracts.schema_name = $2::text AND contracts.table_name = $3::text",
+        None,
+    )
+}
+impl GetActiveContractForAccessRequestStmt {
+    pub async fn prepare<'a, C: GenericClient>(
+        mut self,
+        client: &'a C,
+    ) -> Result<Self, tokio_postgres::Error> {
+        self.1 = Some(client.prepare(self.0).await?);
+        Ok(self)
+    }
+    pub fn bind<
+        'c,
+        'a,
+        's,
+        C: GenericClient,
+        T1: crate::StringSql,
+        T2: crate::StringSql,
+        T3: crate::StringSql,
+    >(
+        &'s self,
+        client: &'c C,
+        catalog_name: &'a T1,
+        schema_name: &'a T2,
+        table_name: &'a T3,
+    ) -> GetActiveContractForAccessRequestQuery<'c, 'a, 's, C, GetActiveContractForAccessRequest, 3>
+    {
+        GetActiveContractForAccessRequestQuery {
+            client,
+            params: [catalog_name, schema_name, table_name],
+            query: self.0,
+            cached: self.1.as_ref(),
+            extractor: |row: &tokio_postgres::Row| -> Result<
+                GetActiveContractForAccessRequestBorrowed,
+                tokio_postgres::Error,
+            > {
+                Ok(GetActiveContractForAccessRequestBorrowed {
+                    id: row.try_get(0)?,
+                    version: row.try_get(1)?,
+                    document: row.try_get(2)?,
+                    document_hash: row.try_get(3)?,
+                    sync_state: row.try_get(4)?,
+                    latest_quality_status: row.try_get(5)?,
+                })
+            },
+            mapper: |it| GetActiveContractForAccessRequest::from(it),
+        }
+    }
+}
+impl<'c, 'a, 's, C: GenericClient, T1: crate::StringSql, T2: crate::StringSql, T3: crate::StringSql>
+    crate::client::async_::Params<
+        'c,
+        'a,
+        's,
+        GetActiveContractForAccessRequestParams<T1, T2, T3>,
+        GetActiveContractForAccessRequestQuery<'c, 'a, 's, C, GetActiveContractForAccessRequest, 3>,
+        C,
+    > for GetActiveContractForAccessRequestStmt
+{
+    fn params(
+        &'s self,
+        client: &'c C,
+        params: &'a GetActiveContractForAccessRequestParams<T1, T2, T3>,
+    ) -> GetActiveContractForAccessRequestQuery<'c, 'a, 's, C, GetActiveContractForAccessRequest, 3>
+    {
+        self.bind(
+            client,
+            &params.catalog_name,
+            &params.schema_name,
+            &params.table_name,
+        )
+    }
+}
+pub struct GetAccessRequestContractStateStmt(&'static str, Option<tokio_postgres::Statement>);
+pub fn get_access_request_contract_state() -> GetAccessRequestContractStateStmt {
+    GetAccessRequestContractStateStmt(
+        "SELECT COALESCE(contracts.active_version, '') AS active_version, COALESCE(active_version.document_hash, '') AS active_document_hash, COALESCE(observations.state, 'PENDING_DEPLOYMENT') AS sync_state, COALESCE(requests.contract_version, '') AS bound_version, COALESCE(requests.contract_document_hash, '') AS bound_document_hash FROM access_requests requests JOIN data_contracts contracts ON contracts.id = requests.contract_id LEFT JOIN data_contract_versions active_version ON active_version.contract_id = contracts.id AND active_version.version = contracts.active_version LEFT JOIN data_contract_observations observations ON observations.contract_id = contracts.id AND observations.contract_version = contracts.active_version WHERE requests.id = $1::text AND requests.contract_id IS NOT NULL",
+        None,
+    )
+}
+impl GetAccessRequestContractStateStmt {
+    pub async fn prepare<'a, C: GenericClient>(
+        mut self,
+        client: &'a C,
+    ) -> Result<Self, tokio_postgres::Error> {
+        self.1 = Some(client.prepare(self.0).await?);
+        Ok(self)
+    }
+    pub fn bind<'c, 'a, 's, C: GenericClient, T1: crate::StringSql>(
+        &'s self,
+        client: &'c C,
+        request_id: &'a T1,
+    ) -> GetAccessRequestContractStateQuery<'c, 'a, 's, C, GetAccessRequestContractState, 1> {
+        GetAccessRequestContractStateQuery {
+            client,
+            params: [request_id],
+            query: self.0,
+            cached: self.1.as_ref(),
+            extractor: |
+                row: &tokio_postgres::Row,
+            | -> Result<GetAccessRequestContractStateBorrowed, tokio_postgres::Error> {
+                Ok(GetAccessRequestContractStateBorrowed {
+                    active_version: row.try_get(0)?,
+                    active_document_hash: row.try_get(1)?,
+                    sync_state: row.try_get(2)?,
+                    bound_version: row.try_get(3)?,
+                    bound_document_hash: row.try_get(4)?,
+                })
+            },
+            mapper: |it| GetAccessRequestContractState::from(it),
+        }
+    }
+}
+pub struct FailAccessRequestContractValidationStmt(&'static str, Option<tokio_postgres::Statement>);
+pub fn fail_access_request_contract_validation() -> FailAccessRequestContractValidationStmt {
+    FailAccessRequestContractValidationStmt(
+        "UPDATE access_requests SET status = 'FAILED', decided_by = 'system:contract-evaluation', decided_at = NOW(), decision_comment = $1::text, access_expires_at = NOW() WHERE id = $2::text AND status IN ('APPROVED', 'FULFILLING')",
+        None,
+    )
+}
+impl FailAccessRequestContractValidationStmt {
+    pub async fn prepare<'a, C: GenericClient>(
+        mut self,
+        client: &'a C,
+    ) -> Result<Self, tokio_postgres::Error> {
+        self.1 = Some(client.prepare(self.0).await?);
+        Ok(self)
+    }
+    pub async fn bind<'c, 'a, 's, C: GenericClient, T1: crate::StringSql, T2: crate::StringSql>(
+        &'s self,
+        client: &'c C,
+        message: &'a T1,
+        request_id: &'a T2,
+    ) -> Result<u64, tokio_postgres::Error> {
+        client.execute(self.0, &[message, request_id]).await
+    }
+}
+impl<'a, C: GenericClient + Send + Sync, T1: crate::StringSql, T2: crate::StringSql>
+    crate::client::async_::Params<
+        'a,
+        'a,
+        'a,
+        FailAccessRequestContractValidationParams<T1, T2>,
+        std::pin::Pin<
+            Box<dyn futures::Future<Output = Result<u64, tokio_postgres::Error>> + Send + 'a>,
+        >,
+        C,
+    > for FailAccessRequestContractValidationStmt
+{
+    fn params(
+        &'a self,
+        client: &'a C,
+        params: &'a FailAccessRequestContractValidationParams<T1, T2>,
+    ) -> std::pin::Pin<
+        Box<dyn futures::Future<Output = Result<u64, tokio_postgres::Error>> + Send + 'a>,
+    > {
+        Box::pin(self.bind(client, &params.message, &params.request_id))
     }
 }
 pub struct CopyAccessRequestApprovalTeamsStmt(&'static str, Option<tokio_postgres::Statement>);
@@ -2751,7 +3360,7 @@ impl ExpireUnfulfilledAccessRequestsStmt {
 pub struct GetAccessRequestStmt(&'static str, Option<tokio_postgres::Statement>);
 pub fn get_access_request() -> GetAccessRequestStmt {
     GetAccessRequestStmt(
-        "SELECT requests.id, COALESCE(requests.template_id, '') AS template_id, COALESCE(requests.template_version, 0) AS template_version, requests.template_name, requests.approval_strategy, requests.requested_by, requests.requested_for, COALESCE(requests.routed_for_team, '') AS routed_for_team, requests.target_securable_type, requests.target_full_name, requests.reason, requests.status, requests.requested_duration_seconds, requests.submitted_at::text AS submitted_at, COALESCE(requests.decided_by, '') AS decided_by, COALESCE(requests.decided_at::text, '') AS decided_at, COALESCE(requests.decision_comment, '') AS decision_comment, COALESCE(requests.fulfilled_at::text, '') AS fulfilled_at, COALESCE(requests.access_expires_at::text, '') AS access_expires_at FROM access_requests requests WHERE requests.id = $1::text",
+        "SELECT requests.id, COALESCE(requests.template_id, '') AS template_id, COALESCE(requests.template_version, 0) AS template_version, requests.template_name, requests.approval_strategy, requests.requested_by, requests.requested_for, COALESCE(requests.routed_for_team, '') AS routed_for_team, requests.target_securable_type, requests.target_full_name, COALESCE(requests.contract_id, '') AS contract_id, COALESCE(requests.contract_version, '') AS contract_version, COALESCE(requests.contract_document_hash, '') AS contract_document_hash, COALESCE(requests.purpose_code, '') AS purpose_code, requests.consumer_context, requests.contract_snapshot, requests.contract_evaluations, requests.contract_evaluation_status, COALESCE(requests.contract_evaluated_at::text, '') AS contract_evaluated_at, requests.reason, requests.status, requests.requested_duration_seconds, requests.submitted_at::text AS submitted_at, COALESCE(requests.decided_by, '') AS decided_by, COALESCE(requests.decided_at::text, '') AS decided_at, COALESCE(requests.decision_comment, '') AS decision_comment, COALESCE(requests.fulfilled_at::text, '') AS fulfilled_at, COALESCE(requests.access_expires_at::text, '') AS access_expires_at FROM access_requests requests WHERE requests.id = $1::text",
         None,
     )
 }
@@ -2787,15 +3396,24 @@ impl GetAccessRequestStmt {
                     routed_for_team: row.try_get(7)?,
                     target_securable_type: row.try_get(8)?,
                     target_full_name: row.try_get(9)?,
-                    reason: row.try_get(10)?,
-                    status: row.try_get(11)?,
-                    requested_duration_seconds: row.try_get(12)?,
-                    submitted_at: row.try_get(13)?,
-                    decided_by: row.try_get(14)?,
-                    decided_at: row.try_get(15)?,
-                    decision_comment: row.try_get(16)?,
-                    fulfilled_at: row.try_get(17)?,
-                    access_expires_at: row.try_get(18)?,
+                    contract_id: row.try_get(10)?,
+                    contract_version: row.try_get(11)?,
+                    contract_document_hash: row.try_get(12)?,
+                    purpose_code: row.try_get(13)?,
+                    consumer_context: row.try_get(14)?,
+                    contract_snapshot: row.try_get(15)?,
+                    contract_evaluations: row.try_get(16)?,
+                    contract_evaluation_status: row.try_get(17)?,
+                    contract_evaluated_at: row.try_get(18)?,
+                    reason: row.try_get(19)?,
+                    status: row.try_get(20)?,
+                    requested_duration_seconds: row.try_get(21)?,
+                    submitted_at: row.try_get(22)?,
+                    decided_by: row.try_get(23)?,
+                    decided_at: row.try_get(24)?,
+                    decision_comment: row.try_get(25)?,
+                    fulfilled_at: row.try_get(26)?,
+                    access_expires_at: row.try_get(27)?,
                 })
             },
             mapper: |it| GetAccessRequest::from(it),
@@ -2845,7 +3463,7 @@ impl LockAccessRequestStmt {
 pub struct LockOwnedAccessRequestStmt(&'static str, Option<tokio_postgres::Statement>);
 pub fn lock_owned_access_request() -> LockOwnedAccessRequestStmt {
     LockOwnedAccessRequestStmt(
-        "SELECT status FROM access_requests WHERE id = $1::text AND requested_by = $2::text FOR UPDATE",
+        "SELECT requests.status, COALESCE(versions.document, '{}'::jsonb) AS contract_document FROM access_requests requests LEFT JOIN data_contract_versions versions ON versions.contract_id = requests.contract_id AND versions.version = requests.contract_version WHERE requests.id = $1::text AND requests.requested_by = $2::text FOR UPDATE OF requests",
         None,
     )
 }
@@ -2862,14 +3480,21 @@ impl LockOwnedAccessRequestStmt {
         client: &'c C,
         request_id: &'a T1,
         requested_by: &'a T2,
-    ) -> StringQuery<'c, 'a, 's, C, String, 2> {
-        StringQuery {
+    ) -> LockOwnedAccessRequestQuery<'c, 'a, 's, C, LockOwnedAccessRequest, 2> {
+        LockOwnedAccessRequestQuery {
             client,
             params: [request_id, requested_by],
             query: self.0,
             cached: self.1.as_ref(),
-            extractor: |row| Ok(row.try_get(0)?),
-            mapper: |it| it.into(),
+            extractor: |
+                row: &tokio_postgres::Row,
+            | -> Result<LockOwnedAccessRequestBorrowed, tokio_postgres::Error> {
+                Ok(LockOwnedAccessRequestBorrowed {
+                    status: row.try_get(0)?,
+                    contract_document: row.try_get(1)?,
+                })
+            },
+            mapper: |it| LockOwnedAccessRequest::from(it),
         }
     }
 }
@@ -2879,7 +3504,7 @@ impl<'c, 'a, 's, C: GenericClient, T1: crate::StringSql, T2: crate::StringSql>
         'a,
         's,
         LockOwnedAccessRequestParams<T1, T2>,
-        StringQuery<'c, 'a, 's, C, String, 2>,
+        LockOwnedAccessRequestQuery<'c, 'a, 's, C, LockOwnedAccessRequest, 2>,
         C,
     > for LockOwnedAccessRequestStmt
 {
@@ -2887,7 +3512,7 @@ impl<'c, 'a, 's, C: GenericClient, T1: crate::StringSql, T2: crate::StringSql>
         &'s self,
         client: &'c C,
         params: &'a LockOwnedAccessRequestParams<T1, T2>,
-    ) -> StringQuery<'c, 'a, 's, C, String, 2> {
+    ) -> LockOwnedAccessRequestQuery<'c, 'a, 's, C, LockOwnedAccessRequest, 2> {
         self.bind(client, &params.request_id, &params.requested_by)
     }
 }

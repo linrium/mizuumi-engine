@@ -3,15 +3,18 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use controlplane_queries::queries::access_requests as queries;
 use deadpool_postgres::{Object, Pool};
+use serde::Serialize;
+use serde_json::{Value, json};
 use tokio_postgres::error::SqlState;
 
 use crate::error::AppError;
 use crate::infrastructure::unity_catalog::UnityCatalog;
 
 use super::dtos::{
-    AccessRequest, AccessRequestSummary, CancelAccessRequest, CreateAccessRequest,
-    ListAccessRequestsRequest, ListAccessRequestsResponse, RequestApprovalTeam, RequestEvent,
-    RequestGrant, RequestGuardrail, RequestReview, ReviewAccessRequest, UpdateAccessRequest,
+    AccessRequest, AccessRequestSummary, CancelAccessRequest, ConsumerContext, CreateAccessRequest,
+    ListAccessRequestsRequest, ListAccessRequestsResponse, RequestApprovalTeam,
+    RequestContractBinding, RequestEvent, RequestGrant, RequestGuardrail, RequestReview,
+    ReviewAccessRequest, UpdateAccessRequest,
 };
 
 const REQUEST_STATUSES: &[&str] = &[
@@ -39,6 +42,32 @@ const SECURABLE_TYPES: &[&str] = &[
     "credential",
 ];
 const DEFAULT_APPROVAL_TEAM: &str = "sovicoSecurity";
+const PURPOSE_CODES: &[&str] = &[
+    "ANALYTICS",
+    "DATA_PRODUCT",
+    "OPERATIONS",
+    "COMPLIANCE",
+    "AI_MODEL",
+];
+
+#[derive(Debug, Serialize)]
+struct ContractEvaluation {
+    rule_key: &'static str,
+    name: &'static str,
+    enforcement: &'static str,
+    status: &'static str,
+    message: String,
+    evidence: Value,
+}
+
+struct EvaluatedContract {
+    id: String,
+    version: String,
+    document_hash: String,
+    snapshot: Value,
+    evaluations: Value,
+    status: &'static str,
+}
 
 fn privileges_for(securable_type: &str) -> &'static [&'static str] {
     match securable_type {
@@ -115,6 +144,34 @@ impl DefaultAccessRequestService {
 
     async fn fulfill_access_request(&self, request_id: &str) -> Result<(), AppError> {
         let client = self.pool.get().await?;
+        if let Some(state) = queries::get_access_request_contract_state()
+            .bind(&client, &request_id)
+            .opt()
+            .await?
+        {
+            let validation_error = contract_binding_error(
+                &state.active_version,
+                &state.active_document_hash,
+                &state.sync_state,
+                &state.bound_version,
+                &state.bound_document_hash,
+            );
+            if let Some(message) = validation_error {
+                queries::fail_access_request_contract_validation()
+                    .bind(&client, &message, &request_id)
+                    .await?;
+                queries::create_access_request_event()
+                    .bind(
+                        &client,
+                        &request_id,
+                        &"CONTRACT_VALIDATION_FAILED",
+                        &"system:contract-evaluation",
+                        &message,
+                    )
+                    .await?;
+                return Ok(());
+            }
+        }
         let requested_for = match queries::start_access_request_fulfillment()
             .bind(&client, &request_id)
             .opt()
@@ -447,6 +504,21 @@ impl DefaultAccessRequestService {
                 review.approval_team
             )));
         }
+        if decision == "APPROVED"
+            && let Some(state) = queries::get_access_request_contract_state()
+                .bind(&transaction, &request_id)
+                .opt()
+                .await?
+            && let Some(message) = contract_binding_error(
+                &state.active_version,
+                &state.active_document_hash,
+                &state.sync_state,
+                &state.bound_version,
+                &state.bound_document_hash,
+            )
+        {
+            return Err(AppError::Conflict(message));
+        }
         if is_auto_approved_rejection {
             queries::create_access_request_approval_team()
                 .bind(&transaction, &request_id, &review.approval_team)
@@ -555,6 +627,35 @@ impl AccessRequestService for DefaultAccessRequestService {
             )
             .opt()
             .await?;
+        let evaluated_contract = if request.target_securable_type == "table" {
+            let (catalog_name, schema_name, table_name) =
+                split_table_name(&request.target_full_name)?;
+            let contract = queries::get_active_contract_for_access_request()
+                .bind(&transaction, &catalog_name, &schema_name, &table_name)
+                .opt()
+                .await?
+                .ok_or_else(|| {
+                    AppError::Conflict(format!(
+                        "table {} has no active data contract",
+                        request.target_full_name
+                    ))
+                })?;
+            Some(evaluate_contract(
+                contract.id,
+                contract.version,
+                contract.document,
+                contract.document_hash,
+                contract.sync_state,
+                contract.latest_quality_status,
+                request
+                    .consumer_context
+                    .as_ref()
+                    .expect("validated context"),
+                request.requested_duration_seconds,
+            )?)
+        } else {
+            None
+        };
         let template_id = template
             .as_ref()
             .map(|item| item.template_id.as_str())
@@ -571,7 +672,10 @@ impl AccessRequestService for DefaultAccessRequestService {
             .as_ref()
             .map(|item| item.approval_strategy.as_str())
             .unwrap_or("ANY");
-        let auto_approve = template.as_ref().is_some_and(|item| item.auto_approve);
+        let auto_approve = template.as_ref().is_some_and(|item| item.auto_approve)
+            && evaluated_contract
+                .as_ref()
+                .is_none_or(|contract| contract.status == "PASSED");
 
         let requested_duration = request.requested_duration_seconds;
 
@@ -581,6 +685,37 @@ impl AccessRequestService for DefaultAccessRequestService {
             .unwrap_or_else(|| request.requested_by.clone());
         let reason = request.reason.clone();
         let idempotency_key = request.idempotency_key.clone().unwrap_or_default();
+        let consumer_context = request
+            .consumer_context
+            .as_ref()
+            .map(serde_json::to_value)
+            .transpose()?
+            .unwrap_or_else(|| json!({}));
+        let contract_id = evaluated_contract
+            .as_ref()
+            .map(|contract| contract.id.as_str())
+            .unwrap_or_default();
+        let contract_version = evaluated_contract
+            .as_ref()
+            .map(|contract| contract.version.as_str())
+            .unwrap_or_default();
+        let contract_document_hash = evaluated_contract
+            .as_ref()
+            .map(|contract| contract.document_hash.as_str())
+            .unwrap_or_default();
+        let contract_snapshot = evaluated_contract
+            .as_ref()
+            .map(|contract| contract.snapshot.clone())
+            .unwrap_or_else(|| json!({}));
+        let contract_evaluations = evaluated_contract
+            .as_ref()
+            .map(|contract| contract.evaluations.clone())
+            .unwrap_or_else(|| json!([]));
+        let contract_evaluation_status = evaluated_contract
+            .as_ref()
+            .map(|contract| contract.status)
+            .unwrap_or("NOT_APPLICABLE");
+        let purpose_code = request.purpose_code.as_deref().unwrap_or_default();
         let request_id = queries::create_access_request()
             .bind(
                 &transaction,
@@ -593,6 +728,14 @@ impl AccessRequestService for DefaultAccessRequestService {
                 &request.routed_for_team,
                 &request.target_securable_type,
                 &request.target_full_name,
+                &contract_id,
+                &contract_version,
+                &contract_document_hash,
+                &purpose_code,
+                &consumer_context,
+                &contract_snapshot,
+                &contract_evaluations,
+                &contract_evaluation_status,
                 &reason,
                 &auto_approve,
                 &requested_duration,
@@ -603,7 +746,7 @@ impl AccessRequestService for DefaultAccessRequestService {
             .map_err(map_request_write_error)?;
 
         if let Some(template) = &template {
-            if !template.auto_approve {
+            if !auto_approve {
                 queries::copy_access_request_approval_teams()
                     .bind(
                         &transaction,
@@ -651,9 +794,9 @@ impl AccessRequestService for DefaultAccessRequestService {
                 .await?
                 == 0
         {
-            return Err(AppError::InvalidParameter(
-                "policy template has no approval teams".to_owned(),
-            ));
+            queries::create_access_request_approval_team()
+                .bind(&transaction, &request_id, &DEFAULT_APPROVAL_TEAM)
+                .await?;
         }
         if queries::count_access_request_grants()
             .bind(&transaction, &request_id)
@@ -675,6 +818,29 @@ impl AccessRequestService for DefaultAccessRequestService {
                 &reason,
             )
             .await?;
+        if let Some(contract) = &evaluated_contract {
+            queries::create_access_request_event()
+                .bind(
+                    &transaction,
+                    &request_id,
+                    &"CONTRACT_BOUND",
+                    &request.requested_by,
+                    &format!(
+                        "Bound data contract {} version {} ({})",
+                        contract.id, contract.version, contract.status
+                    ),
+                )
+                .await?;
+            queries::create_access_request_event()
+                .bind(
+                    &transaction,
+                    &request_id,
+                    &"CONTRACT_TERMS_ACKNOWLEDGED",
+                    &request.requested_by,
+                    &"Requester acknowledged the frozen data contract terms",
+                )
+                .await?;
+        }
         if auto_approve {
             queries::create_access_request_event()
                 .bind(
@@ -760,15 +926,39 @@ impl AccessRequestService for DefaultAccessRequestService {
 
         let mut client = self.pool.get().await?;
         let transaction = client.transaction().await?;
-        let status = queries::lock_owned_access_request()
+        let locked = queries::lock_owned_access_request()
             .bind(&transaction, &request_id, &request.requested_by)
             .opt()
             .await?
             .ok_or_else(|| AppError::NotFound(format!("access request {request_id}")))?;
-        if status != "AWAITING_APPROVAL" {
+        if locked.status != "AWAITING_APPROVAL" {
             return Err(AppError::Conflict(format!(
-                "access request is {status}, not editable"
+                "access request is {}, not editable",
+                locked.status
             )));
+        }
+        if let Some(max_hours) =
+            custom_property(&locked.contract_document, "maxAccessDurationHours")
+                .and_then(Value::as_i64)
+            && request.requested_duration_seconds > max_hours * 3600
+        {
+            return Err(AppError::Conflict(format!(
+                "requested duration exceeds the contract maximum of {max_hours} hours"
+            )));
+        }
+        if let Some(state) = queries::get_access_request_contract_state()
+            .bind(&transaction, &request_id)
+            .opt()
+            .await?
+            && let Some(message) = contract_binding_error(
+                &state.active_version,
+                &state.active_document_hash,
+                &state.sync_state,
+                &state.bound_version,
+                &state.bound_document_hash,
+            )
+        {
+            return Err(AppError::Conflict(message));
         }
 
         queries::clear_access_request_reviews()
@@ -805,14 +995,15 @@ impl AccessRequestService for DefaultAccessRequestService {
 
         let mut client = self.pool.get().await?;
         let transaction = client.transaction().await?;
-        let status = queries::lock_owned_access_request()
+        let locked = queries::lock_owned_access_request()
             .bind(&transaction, &request_id, &request.requested_by)
             .opt()
             .await?
             .ok_or_else(|| AppError::NotFound(format!("access request {request_id}")))?;
-        if !can_cancel_request(&status) {
+        if !can_cancel_request(&locked.status) {
             return Err(AppError::Conflict(format!(
-                "access request is {status}, not cancellable"
+                "access request is {}, not cancellable",
+                locked.status
             )));
         }
 
@@ -914,6 +1105,17 @@ async fn load_access_request(client: &Object, request_id: &str) -> Result<Access
         routed_for_team: row.routed_for_team,
         target_securable_type: row.target_securable_type,
         target_full_name: row.target_full_name,
+        contract: (!row.contract_id.is_empty()).then(|| RequestContractBinding {
+            id: row.contract_id,
+            version: row.contract_version,
+            document_hash: row.contract_document_hash,
+            evaluation_status: row.contract_evaluation_status,
+            evaluated_at: row.contract_evaluated_at,
+            snapshot: row.contract_snapshot,
+            evaluations: row.contract_evaluations,
+        }),
+        purpose_code: non_empty(row.purpose_code),
+        consumer_context: row.consumer_context,
         reason: row.reason,
         status: row.status,
         requested_duration_seconds: row.requested_duration_seconds,
@@ -961,6 +1163,37 @@ fn validate_create_request(request: &CreateAccessRequest) -> Result<(), AppError
     require_text("target_full_name", &request.target_full_name)?;
     require_text("requested_privilege", &request.requested_privilege)?;
     require_text("reason", &request.reason)?;
+    if request.target_securable_type == "table" {
+        let purpose_code = request.purpose_code.as_deref().ok_or_else(|| {
+            AppError::InvalidParameter("purpose_code is required for table access".to_owned())
+        })?;
+        if !PURPOSE_CODES.contains(&purpose_code) {
+            return Err(AppError::InvalidParameter(format!(
+                "unsupported purpose_code: {purpose_code}"
+            )));
+        }
+        let context = request.consumer_context.as_ref().ok_or_else(|| {
+            AppError::InvalidParameter("consumer_context is required for table access".to_owned())
+        })?;
+        require_text("consumer_context.consumer_domain", &context.consumer_domain)?;
+        if context.processing_countries.is_empty()
+            || context
+                .processing_countries
+                .iter()
+                .any(|country| country.trim().is_empty())
+        {
+            return Err(AppError::InvalidParameter(
+                "consumer_context.processing_countries must contain at least one country"
+                    .to_owned(),
+            ));
+        }
+        if !request.acknowledged_contract_terms {
+            return Err(AppError::InvalidParameter(
+                "acknowledged_contract_terms must be true for table access".to_owned(),
+            ));
+        }
+        split_table_name(&request.target_full_name)?;
+    }
     if !SECURABLE_TYPES.contains(&request.target_securable_type.as_str()) {
         return Err(AppError::InvalidParameter(format!(
             "unsupported target_securable_type: {}",
@@ -980,6 +1213,212 @@ fn validate_create_request(request: &CreateAccessRequest) -> Result<(), AppError
         require_text("idempotency_key", key)?;
     }
     Ok(())
+}
+
+fn split_table_name(full_name: &str) -> Result<(String, String, String), AppError> {
+    let parts = full_name.split('.').collect::<Vec<_>>();
+    if parts.len() != 3 || parts.iter().any(|part| part.trim().is_empty()) {
+        return Err(AppError::InvalidParameter(
+            "table target_full_name must be catalog.schema.table".to_owned(),
+        ));
+    }
+    Ok((
+        parts[0].to_owned(),
+        parts[1].to_owned(),
+        parts[2].to_owned(),
+    ))
+}
+
+fn custom_property<'a>(document: &'a Value, name: &str) -> Option<&'a Value> {
+    document
+        .get("customProperties")?
+        .as_array()?
+        .iter()
+        .find(|property| property.get("property").and_then(Value::as_str) == Some(name))?
+        .get("value")
+}
+
+fn has_quality_rules(document: &Value) -> bool {
+    document
+        .get("schema")
+        .and_then(Value::as_array)
+        .is_some_and(|schemas| {
+            schemas.iter().any(|schema| {
+                schema
+                    .get("quality")
+                    .and_then(Value::as_array)
+                    .is_some_and(|rules| !rules.is_empty())
+                    || schema
+                        .get("properties")
+                        .and_then(Value::as_array)
+                        .is_some_and(|properties| {
+                            properties.iter().any(|property| {
+                                property
+                                    .get("quality")
+                                    .and_then(Value::as_array)
+                                    .is_some_and(|rules| !rules.is_empty())
+                            })
+                        })
+            })
+        })
+}
+
+fn evaluate_contract(
+    id: String,
+    version: String,
+    document: Value,
+    document_hash: String,
+    sync_state: String,
+    latest_quality_status: String,
+    context: &ConsumerContext,
+    requested_duration_seconds: i64,
+) -> Result<EvaluatedContract, AppError> {
+    if document.get("status").and_then(Value::as_str) != Some("active") {
+        return Err(AppError::Conflict(format!(
+            "data contract {id} version {version} is not active"
+        )));
+    }
+    if sync_state != "IN_SYNC" {
+        return Err(AppError::Conflict(format!(
+            "data contract {id} is {sync_state}; reconcile it before requesting access"
+        )));
+    }
+
+    let residency_countries = custom_property(&document, "residencyCountries")
+        .and_then(Value::as_array)
+        .map(|countries| {
+            countries
+                .iter()
+                .filter_map(Value::as_str)
+                .map(|country| country.to_ascii_uppercase())
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    let outside_residency = context.processing_countries.iter().any(|country| {
+        !residency_countries.is_empty()
+            && !residency_countries.contains(&country.trim().to_ascii_uppercase())
+    });
+    let cross_border_allowed = custom_property(&document, "crossBorderTransferAllowed")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    if (context.cross_border_transfer || outside_residency) && !cross_border_allowed {
+        return Err(AppError::Conflict(format!(
+            "data contract {id} prohibits the requested cross-border processing"
+        )));
+    }
+    if let Some(max_hours) =
+        custom_property(&document, "maxAccessDurationHours").and_then(Value::as_i64)
+        && requested_duration_seconds > max_hours * 3600
+    {
+        return Err(AppError::Conflict(format!(
+            "requested duration exceeds the contract maximum of {max_hours} hours"
+        )));
+    }
+
+    let mut evaluations = vec![
+        ContractEvaluation {
+            rule_key: "contract.active",
+            name: "Active contract",
+            enforcement: "BLOCK",
+            status: "PASS",
+            message: format!("Contract version {version} is active"),
+            evidence: json!({ "version": &version, "documentHash": &document_hash }),
+        },
+        ContractEvaluation {
+            rule_key: "schema.in_sync",
+            name: "Unity Catalog schema",
+            enforcement: "BLOCK",
+            status: "PASS",
+            message: "Contract and Unity Catalog schemas are in sync".to_owned(),
+            evidence: json!({ "syncState": &sync_state }),
+        },
+        ContractEvaluation {
+            rule_key: "residency.allowed",
+            name: "Processing residency",
+            enforcement: "BLOCK",
+            status: "PASS",
+            message: "Requested processing locations satisfy the contract".to_owned(),
+            evidence: json!({
+                "allowedCountries": residency_countries,
+                "requestedCountries": &context.processing_countries,
+                "crossBorderTransfer": context.cross_border_transfer,
+            }),
+        },
+    ];
+
+    if has_quality_rules(&document) {
+        let (status, message) = match latest_quality_status.as_str() {
+            "PASSED" => ("PASS", "Latest contract quality run passed"),
+            "FAILED" | "ERROR" => ("WARN", "Latest contract quality run did not pass"),
+            "RUNNING" => ("WARN", "Contract quality checks are still running"),
+            _ => ("WARN", "Contract quality rules have not been run"),
+        };
+        evaluations.push(ContractEvaluation {
+            rule_key: "quality.latest_run",
+            name: "Latest data quality run",
+            enforcement: "ADVISORY",
+            status,
+            message: message.to_owned(),
+            evidence: json!({ "latestStatus": &latest_quality_status }),
+        });
+    }
+    if context.ai_use {
+        evaluations.push(ContractEvaluation {
+            rule_key: "usage.ai",
+            name: "AI or model use",
+            enforcement: "ADVISORY",
+            status: "WARN",
+            message: "AI use was declared and requires reviewer attention".to_owned(),
+            evidence: json!({ "aiUse": true }),
+        });
+    }
+    let status = if evaluations
+        .iter()
+        .any(|evaluation| evaluation.status == "WARN")
+    {
+        "WARNING"
+    } else {
+        "PASSED"
+    };
+    let snapshot = json!({
+        "status": document.get("status").cloned().unwrap_or(Value::Null),
+        "domain": document.get("domain").cloned().unwrap_or(Value::Null),
+        "dataProduct": document.get("dataProduct").cloned().unwrap_or(Value::Null),
+        "description": document.get("description").cloned().unwrap_or(Value::Null),
+        "team": document.get("team").cloned().unwrap_or(Value::Null),
+        "slaProperties": document.get("slaProperties").cloned().unwrap_or_else(|| json!([])),
+        "customProperties": document.get("customProperties").cloned().unwrap_or_else(|| json!([])),
+        "syncState": &sync_state,
+        "latestQualityStatus": &latest_quality_status,
+    });
+    Ok(EvaluatedContract {
+        id,
+        version,
+        document_hash,
+        snapshot,
+        evaluations: serde_json::to_value(evaluations)?,
+        status,
+    })
+}
+
+fn contract_binding_error(
+    active_version: &str,
+    active_document_hash: &str,
+    sync_state: &str,
+    bound_version: &str,
+    bound_document_hash: &str,
+) -> Option<String> {
+    if sync_state != "IN_SYNC" {
+        return Some(format!(
+            "data contract is {sync_state}; reconcile it before approving or granting access"
+        ));
+    }
+    if active_version != bound_version || active_document_hash != bound_document_hash {
+        return Some(format!(
+            "data contract changed from version {bound_version} to {active_version}; submit a new request against the current terms"
+        ));
+    }
+    None
 }
 
 fn validate_duration(duration: i64) -> Result<(), AppError> {
@@ -1076,6 +1515,15 @@ mod tests {
             target_securable_type: "table".to_owned(),
             target_full_name: "main.analytics.orders".to_owned(),
             requested_privilege: "SELECT".to_owned(),
+            purpose_code: Some("ANALYTICS".to_owned()),
+            consumer_context: Some(ConsumerContext {
+                consumer_domain: "analytics".to_owned(),
+                processing_countries: vec!["VN".to_owned()],
+                cross_border_transfer: false,
+                ai_use: false,
+                intended_output: None,
+            }),
+            acknowledged_contract_terms: true,
             reason: "Investigate a customer incident".to_owned(),
             requested_duration_seconds: 3600,
             idempotency_key: None,
@@ -1131,5 +1579,95 @@ mod tests {
         }
 
         assert!(!privileges_for("metastore").contains(&"BROWSE"));
+    }
+
+    fn active_contract() -> Value {
+        json!({
+            "status": "active",
+            "domain": "hdbank",
+            "description": {
+                "usage": "Governed analytics",
+                "limitations": "Vietnam processing only"
+            },
+            "customProperties": [
+                { "property": "residencyCountries", "value": ["VN"] },
+                { "property": "crossBorderTransferAllowed", "value": false },
+                { "property": "maxAccessDurationHours", "value": 24 }
+            ],
+            "schema": [{ "quality": [{ "metric": "rowCount" }] }]
+        })
+    }
+
+    fn consumer_context() -> ConsumerContext {
+        ConsumerContext {
+            consumer_domain: "vietjet".to_owned(),
+            processing_countries: vec!["VN".to_owned()],
+            cross_border_transfer: false,
+            ai_use: false,
+            intended_output: Some("Group customer data product".to_owned()),
+        }
+    }
+
+    #[test]
+    fn contract_evaluation_blocks_processing_outside_residency() {
+        let mut context = consumer_context();
+        context.processing_countries = vec!["SG".to_owned()];
+
+        let error = evaluate_contract(
+            "contract-1".to_owned(),
+            "1.0.0".to_owned(),
+            active_contract(),
+            "hash".to_owned(),
+            "IN_SYNC".to_owned(),
+            "PASSED".to_owned(),
+            &context,
+            3600,
+        )
+        .err()
+        .expect("processing outside residency must fail");
+
+        assert!(
+            error
+                .to_string()
+                .contains("prohibits the requested cross-border")
+        );
+    }
+
+    #[test]
+    fn missing_quality_run_warns_and_prevents_auto_approval() {
+        let evaluated = evaluate_contract(
+            "contract-1".to_owned(),
+            "1.0.0".to_owned(),
+            active_contract(),
+            "hash".to_owned(),
+            "IN_SYNC".to_owned(),
+            String::new(),
+            &consumer_context(),
+            3600,
+        )
+        .expect("advisory quality state should not block the request");
+
+        assert_eq!(evaluated.status, "WARNING");
+        assert!(
+            evaluated
+                .evaluations
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|item| {
+                    item.get("rule_key").and_then(Value::as_str) == Some("quality.latest_run")
+                        && item.get("status").and_then(Value::as_str) == Some("WARN")
+                })
+        );
+    }
+
+    #[test]
+    fn fulfillment_rejects_a_changed_contract_binding() {
+        assert!(
+            contract_binding_error("2.0.0", "new", "IN_SYNC", "1.0.0", "old")
+                .unwrap()
+                .contains("changed from version 1.0.0 to 2.0.0")
+        );
+        assert!(contract_binding_error("1.0.0", "hash", "IN_SYNC", "1.0.0", "hash").is_none());
     }
 }

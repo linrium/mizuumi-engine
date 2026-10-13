@@ -9,9 +9,25 @@ pub struct CreateAccessRequest {
     pub target_securable_type: String,
     pub target_full_name: String,
     pub requested_privilege: String,
+    pub purpose_code: Option<String>,
+    pub consumer_context: Option<ConsumerContext>,
+    #[serde(default)]
+    pub acknowledged_contract_terms: bool,
     pub reason: String,
     pub requested_duration_seconds: i64,
     pub idempotency_key: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct ConsumerContext {
+    pub consumer_domain: String,
+    #[serde(default)]
+    pub processing_countries: Vec<String>,
+    #[serde(default)]
+    pub cross_border_transfer: bool,
+    #[serde(default)]
+    pub ai_use: bool,
+    pub intended_output: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -78,6 +94,9 @@ pub struct AccessRequest {
     pub routed_for_team: String,
     pub target_securable_type: String,
     pub target_full_name: String,
+    pub contract: Option<RequestContractBinding>,
+    pub purpose_code: Option<String>,
+    pub consumer_context: Value,
     pub reason: String,
     pub status: String,
     pub requested_duration_seconds: i64,
@@ -92,6 +111,17 @@ pub struct AccessRequest {
     pub guardrails: Vec<RequestGuardrail>,
     pub reviews: Vec<RequestReview>,
     pub events: Vec<RequestEvent>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct RequestContractBinding {
+    pub id: String,
+    pub version: String,
+    pub document_hash: String,
+    pub evaluation_status: String,
+    pub evaluated_at: String,
+    pub snapshot: Value,
+    pub evaluations: Value,
 }
 
 #[derive(Debug, Serialize)]
@@ -150,6 +180,12 @@ mod tests {
             "target_securable_type": "table",
             "target_full_name": "main.analytics.orders",
             "requested_privilege": "SELECT",
+            "purpose_code": "ANALYTICS",
+            "consumer_context": {
+                "consumer_domain": "analytics",
+                "processing_countries": ["VN"]
+            },
+            "acknowledged_contract_terms": true,
             "reason": "Investigate a customer incident",
             "requested_duration_seconds": 3600
         })

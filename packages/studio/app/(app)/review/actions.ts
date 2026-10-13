@@ -218,6 +218,10 @@ export async function createAccessRequest(
           target_securable_type: input.target_securable_type,
           target_full_name: input.target_full_name,
           requested_privilege: input.requested_privilege,
+          purpose_code: input.purpose_code ?? null,
+          consumer_context: input.consumer_context ?? null,
+          acknowledged_contract_terms:
+            input.acknowledged_contract_terms ?? false,
           reason: input.reason,
           requested_duration_seconds: input.duration_hours * 3600,
           idempotency_key: null,
