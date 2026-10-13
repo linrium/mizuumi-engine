@@ -5,8 +5,13 @@
   "type": "module",
   "scripts": {
     "generate": "node --import tsx src/cli.ts",
+    "publish:minh-anh": "node --import tsx src/publish-minh-anh.ts",
+    "cleanup:topics": "node --import tsx src/cleanup-topics.ts",
     "build": "tsc",
     "test": "node --import tsx --test test/*.test.ts"
+  },
+  "dependencies": {
+    "kafkajs": "^2.2.4"
   },
   "devDependencies": {
     "@types/node": "^20.17.6",
