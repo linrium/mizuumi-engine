@@ -297,6 +297,7 @@ elif [[ "$application_source" == rustfs ]]; then
   )
 fi
 
+# Bash 3.2 with nounset rejects a direct expansion when this array is empty.
 helm upgrade --install "$application_release" "$repo_root/k8s/spark" \
   --namespace "$job_namespace" \
   --set-string "image.repository=$image_repository" \
@@ -305,7 +306,7 @@ helm upgrade --install "$application_release" "$repo_root/k8s/spark" \
   --set-string "trustSecretName=$trust_secret" \
   --set-string "spark.catalog.name=$catalog" \
   --set-string "spark.catalog.storageRoot=$storage_root" \
-  "${application_options[@]}" \
+  ${application_options[@]+"${application_options[@]}"} \
   "$@"
 
 echo "Spark Operator and Unity Catalog / RustFS example are installed."

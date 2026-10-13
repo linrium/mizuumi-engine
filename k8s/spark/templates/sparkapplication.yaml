@@ -65,8 +65,14 @@ spec:
       mizuumi.io/script-revision: {{ .Values.application.scriptRevision | quote }}
     {{- end }}
     cores: {{ .Values.application.driver.cores }}
+    {{- with .Values.application.driver.coreRequest }}
+    coreRequest: {{ . | quote }}
+    {{- end }}
     coreLimit: {{ .Values.application.driver.coreLimit | quote }}
     memory: {{ .Values.application.driver.memory | quote }}
+    {{- with .Values.application.driver.memoryOverhead }}
+    memoryOverhead: {{ . | quote }}
+    {{- end }}
     serviceAccount: {{ .Values.serviceAccountName }}
     {{- if .Values.application.artifact.enabled }}
     initContainers:
@@ -153,6 +159,10 @@ spec:
             name: {{ .Values.credentialsSecretName }}
             key: S3_SECRET_KEY
             optional: true
+      {{- range $name, $value := .Values.application.env }}
+      - name: {{ $name }}
+        value: {{ $value | quote }}
+      {{- end }}
     volumeMounts:
       - name: rustfs-trust
         mountPath: /opt/spark/trust
@@ -170,8 +180,14 @@ spec:
   executor:
     instances: {{ .Values.application.executor.instances }}
     cores: {{ .Values.application.executor.cores }}
+    {{- with .Values.application.executor.coreRequest }}
+    coreRequest: {{ . | quote }}
+    {{- end }}
     coreLimit: {{ .Values.application.executor.coreLimit | quote }}
     memory: {{ .Values.application.executor.memory | quote }}
+    {{- with .Values.application.executor.memoryOverhead }}
+    memoryOverhead: {{ . | quote }}
+    {{- end }}
     {{- if .Values.flare.enabled }}
     javaOptions: >-
       -Djavax.net.ssl.trustStore=/opt/spark/trust/cacerts

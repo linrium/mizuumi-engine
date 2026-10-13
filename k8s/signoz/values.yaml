@@ -12,6 +12,14 @@ clickhouse:
     size: 10Gi
   zookeeper:
     replicaCount: 1
+    # The upstream 1 GiB fixed heap is excessive for one local ClickHouse node.
+    heapSize: 256
+    resources:
+      requests:
+        cpu: 50m
+        memory: 384Mi
+      limits:
+        memory: 512Mi
     persistence:
       enabled: true
       size: 2Gi

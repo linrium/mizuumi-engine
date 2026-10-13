@@ -68,6 +68,8 @@ spec:
               value: http
             - name: KC_HEALTH_ENABLED
               value: "true"
+            - name: JAVA_OPTS_KC_HEAP
+              value: {{ printf "-XX:InitialRAMPercentage=%v -XX:MaxRAMPercentage=%v" .Values.keycloak.jvmHeap.initialRamPercentage .Values.keycloak.jvmHeap.maxRamPercentage | quote }}
 {{- if .Values.keycloak.telemetry.enabled }}
             - name: K8S_NAMESPACE
               valueFrom:

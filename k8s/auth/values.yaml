@@ -26,10 +26,13 @@ keycloak:
       level: INFO
   resources:
     requests:
-      cpu: 500m
-      memory: 1Gi
+      cpu: 100m
+      memory: 512Mi
     limits:
-      memory: 2Gi
+      memory: 1280Mi
+  jvmHeap:
+    initialRamPercentage: 25
+    maxRamPercentage: 50
 
 # The Secret must contain ADMIN_PASSWORD and DB_PASSWORD keys.
 credentials:

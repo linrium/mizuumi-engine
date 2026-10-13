@@ -13,6 +13,7 @@ LABEL org.opencontainers.image.title="mizuumi-engine Spark base" \
       org.opencontainers.image.source="https://github.com/linrium/mizuumi-engine"
 
 USER root
+COPY --chown=185:185 streamings /opt/spark/work-dir/streamings
 COPY dependency_warmup.py /tmp/dependency_warmup.py
 RUN ivy_dir=/tmp/spark-ivy && \
     dependency_root=/opt/spark/dependencies && \
