@@ -23,8 +23,13 @@ rustfs:
 
 unityCatalog:
   endpoint: http://unitycatalog-server.tower.svc.cluster.local:8080
-  catalog: unity
-  defaultSchema: demo
+  catalogs:
+    - name: unity
+      alias: unity
+      defaultSchema: demo
+    - name: payments
+      alias: payments
+      defaultSchema: bronze
   introspectionUrl: https://auth.mizuumi.test/realms/sovico/protocol/openid-connect/token/introspect
 
 resources:

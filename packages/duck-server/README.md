@@ -3,8 +3,9 @@
 This package runs DuckDB 1.5.6 as a Quack server. The DuckDB catalog is
 stored on the Kubernetes PVC, while the `rustfs_events` view reads Parquet data
 from the dedicated `duck-server` RustFS bucket. A separate HTTP query endpoint
-accepts a signed-in user's Keycloak bearer token and attaches Mizuumi Unity
-Catalog as `unity` only for that request. Unity Catalog therefore authorizes
+accepts a signed-in user's Keycloak bearer token and attaches the Mizuumi Unity
+Catalog catalogs `unity` and `payments` only for that request. Their default
+schemas are `demo` and `bronze`, respectively. Unity Catalog therefore authorizes
 metadata access and temporary S3 credentials as the user, not as Duck server or
 the Spark writer. The per-request catalog attachment is read-only, so `SELECT`
 queries request read-only temporary credentials and never require `MODIFY`.
@@ -39,6 +40,12 @@ The example connects to `quack:query.mizuumi.test:443` and queries the local
 Keycloak client. Its credentials are used only to introspect incoming user
 tokens. The user's access token is passed to Unity Catalog for each query and is
 never stored in Kubernetes or attached to the persistent Quack database.
+
+Catalog attachments are configured by the `unityCatalog.catalogs` Helm value.
+Each entry has a remote `name`, a DuckDB `alias`, and a `defaultSchema`. Direct
+runs can provide the same array as JSON in `UNITY_CATALOGS`; the legacy
+`UNITY_CATALOG_NAME` and `UNITY_CATALOG_DEFAULT_SCHEMA` variables remain the
+single-catalog fallback when `UNITY_CATALOGS` is unset.
 
 The explicit port is required because Quack URIs otherwise default to port
 9494, even when a non-local hostname makes the client select HTTPS.

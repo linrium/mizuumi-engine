@@ -10,6 +10,8 @@ credentials_secret="${DUCK_SERVER_CREDENTIALS_SECRET:-duck-server-credentials}"
 trust_secret="${DUCK_SERVER_TRUST_SECRET:-duck-server-trust}"
 uc_catalog="${DUCK_SERVER_UNITY_CATALOG:-unity}"
 uc_schema="${DUCK_SERVER_UNITY_SCHEMA:-demo}"
+payments_catalog="${DUCK_SERVER_PAYMENTS_CATALOG:-payments}"
+payments_schema="${DUCK_SERVER_PAYMENTS_SCHEMA:-bronze}"
 if [[ -n "${DUCK_SERVER_IMAGE_TAG:-}" ]]; then
   image_tag="$DUCK_SERVER_IMAGE_TAG"
 elif [[ "$skip_image_build" == 1 ]]; then
@@ -37,6 +39,8 @@ Environment overrides:
   DUCK_SERVER_TRUST_SECRET      CA Secret (default: duck-server-trust)
   DUCK_SERVER_UNITY_CATALOG     Unity Catalog name (default: unity)
   DUCK_SERVER_UNITY_SCHEMA      Unity Catalog schema (default: demo)
+  DUCK_SERVER_PAYMENTS_CATALOG  Payments catalog name (default: payments)
+  DUCK_SERVER_PAYMENTS_SCHEMA   Payments catalog schema (default: bronze)
 EOF
 }
 
@@ -119,8 +123,12 @@ helm upgrade --install "$release" "$repo_root/k8s/duck-server" \
   --set-string "image.tag=$image_tag" \
   --set-string "credentialsSecretName=$credentials_secret" \
   --set-string "trustSecretName=$trust_secret" \
-  --set-string "unityCatalog.catalog=$uc_catalog" \
-  --set-string "unityCatalog.defaultSchema=$uc_schema" \
+  --set-string "unityCatalog.catalogs[0].name=$uc_catalog" \
+  --set-string "unityCatalog.catalogs[0].alias=unity" \
+  --set-string "unityCatalog.catalogs[0].defaultSchema=$uc_schema" \
+  --set-string "unityCatalog.catalogs[1].name=$payments_catalog" \
+  --set-string "unityCatalog.catalogs[1].alias=payments" \
+  --set-string "unityCatalog.catalogs[1].defaultSchema=$payments_schema" \
   --wait --timeout 10m "$@"
 
 kubectl -n "$namespace" rollout restart deployment/"$release"

@@ -51,7 +51,7 @@ RUN groupadd --system --gid 65532 duckdb \
   && useradd --system --uid 65532 --gid duckdb --home-dir /home/duckdb --create-home duckdb \
   && mkdir -p /var/lib/duckdb \
   && chown duckdb:duckdb /var/lib/duckdb \
-  && pip install --no-cache-dir "duckdb==${DUCKDB_VERSION}"
+  && pip install --no-cache-dir "duckdb==${DUCKDB_VERSION}" "pytz==2026.5"
 
 ENV HOME=/home/duckdb \
   PYTHONUNBUFFERED=1

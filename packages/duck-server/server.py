@@ -34,6 +34,51 @@ def sql_string(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
 
 
+def sql_identifier(value: str) -> str:
+    return '"' + value.replace('"', '""') + '"'
+
+
+def configured_unity_catalogs() -> list[tuple[str, str, str]]:
+    raw_catalogs = os.environ.get("UNITY_CATALOGS", "")
+    if not raw_catalogs:
+        catalog = os.environ.get("UNITY_CATALOG_NAME", "unity")
+        default_schema = os.environ.get("UNITY_CATALOG_DEFAULT_SCHEMA", "demo")
+        return [(catalog, "unity", default_schema)]
+
+    try:
+        catalogs = json.loads(raw_catalogs)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError("UNITY_CATALOGS must be valid JSON") from exc
+    if not isinstance(catalogs, list) or not catalogs:
+        raise RuntimeError("UNITY_CATALOGS must be a non-empty JSON array")
+
+    configured: list[tuple[str, str, str]] = []
+    aliases: set[str] = set()
+    for index, catalog in enumerate(catalogs):
+        if not isinstance(catalog, dict):
+            raise RuntimeError(f"UNITY_CATALOGS[{index}] must be an object")
+        name = catalog.get("name")
+        alias = catalog.get("alias", name)
+        default_schema = catalog.get("defaultSchema")
+        for field, value in (
+            ("name", name),
+            ("alias", alias),
+            ("defaultSchema", default_schema),
+        ):
+            if not isinstance(value, str) or not value.strip():
+                raise RuntimeError(
+                    f"UNITY_CATALOGS[{index}].{field} must be a non-empty string"
+                )
+        assert isinstance(name, str)
+        assert isinstance(alias, str)
+        assert isinstance(default_schema, str)
+        if alias in aliases:
+            raise RuntimeError(f"duplicate Unity Catalog alias: {alias}")
+        aliases.add(alias)
+        configured.append((name, alias, default_schema))
+    return configured
+
+
 def keycloak_ssl_context() -> ssl.SSLContext:
     ca_certificate = required_env("KEYCLOAK_CA_CERT")
     if not os.path.isfile(ca_certificate):
@@ -111,12 +156,10 @@ def configure_rustfs(connection: duckdb.DuckDBPyConnection) -> str:
     return bucket
 
 
-def configure_unity_catalog(
+def configure_unity_catalogs(
     connection: duckdb.DuckDBPyConnection, access_token: str
-) -> str:
+) -> list[str]:
     extension_dir = os.environ.get("DUCKDB_EXTENSION_DIR", "/opt/duckdb/extensions")
-    catalog = os.environ.get("UNITY_CATALOG_NAME", "unity")
-    default_schema = os.environ.get("UNITY_CATALOG_DEFAULT_SCHEMA", "demo")
     endpoint = required_env("UNITY_CATALOG_ENDPOINT")
     s3_endpoint = required_env("S3_ENDPOINT")
     region = os.environ.get("S3_REGION", "us-east-1")
@@ -144,17 +187,20 @@ def configure_unity_catalog(
         )
         """
     )
-    connection.execute(
-        f"""
-        ATTACH {sql_string(catalog)} AS unity (
-          TYPE unity_catalog,
-          READ_ONLY,
-          SECRET unity_catalog_auth,
-          DEFAULT_SCHEMA {sql_string(default_schema)}
+    aliases = []
+    for catalog, alias, default_schema in configured_unity_catalogs():
+        connection.execute(
+            f"""
+            ATTACH {sql_string(catalog)} AS {sql_identifier(alias)} (
+              TYPE unity_catalog,
+              READ_ONLY,
+              SECRET unity_catalog_auth,
+              DEFAULT_SCHEMA {sql_string(default_schema)}
+            )
+            """
         )
-        """
-    )
-    return catalog
+        aliases.append(alias)
+    return aliases
 
 
 def json_value(value: object) -> object:
@@ -187,7 +233,7 @@ def execute_identity_query(query: str, access_token: str) -> dict[str, object]:
     timeout = threading.Timer(QUERY_TIMEOUT_SECONDS, connection.interrupt)
     try:
         ensure_read_only(connection, query)
-        configure_unity_catalog(connection, access_token)
+        configure_unity_catalogs(connection, access_token)
         timeout.start()
         result = connection.execute(query)
         description = result.description or []
@@ -385,7 +431,7 @@ def main() -> int:
 
     print(
         f"DuckDB Quack is listening at {result[0]}; RustFS bucket: {bucket}; "
-        "Unity Catalog is attached only for authenticated user requests"
+        "Unity catalogs are attached only for authenticated user requests"
     )
 
     stopped = threading.Event()

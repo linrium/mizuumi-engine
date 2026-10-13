@@ -51,10 +51,8 @@ spec:
               value: /etc/duck-server/trust/rustfs-ca.crt
             - name: UNITY_CATALOG_ENDPOINT
               value: {{ .Values.unityCatalog.endpoint | quote }}
-            - name: UNITY_CATALOG_NAME
-              value: {{ .Values.unityCatalog.catalog | quote }}
-            - name: UNITY_CATALOG_DEFAULT_SCHEMA
-              value: {{ .Values.unityCatalog.defaultSchema | quote }}
+            - name: UNITY_CATALOGS
+              value: {{ .Values.unityCatalog.catalogs | toJson | quote }}
             - name: KEYCLOAK_INTROSPECTION_URL
               value: {{ .Values.unityCatalog.introspectionUrl | quote }}
             - name: KEYCLOAK_CA_CERT
