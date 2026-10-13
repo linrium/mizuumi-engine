@@ -1,4 +1,7 @@
 export * from "./generator.js"
+export * from "./events.js"
+export * from "./incremental.js"
+export * from "./incremental-store.js"
 export * from "./generators/index.js"
 export * from "./redpanda.js"
 export * from "./schemas/common.js"

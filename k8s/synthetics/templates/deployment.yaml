@@ -6,6 +6,8 @@ metadata:
     {{- include "synthetics.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.replicas }}
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       {{- include "synthetics.selectorLabels" . | nindent 6 }}
@@ -35,6 +37,8 @@ spec:
               value: "0.0.0.0"
             - name: PORT
               value: {{ .Values.service.port | quote }}
+            - name: SYNTHETICS_DB_PATH
+              value: /data/synthetics.db
             - name: REDPANDA_BROKERS
               value: {{ .Values.redpanda.brokers | quote }}
             - name: REDPANDA_CLIENT_ID
@@ -83,11 +87,20 @@ spec:
               drop: ["ALL"]
             readOnlyRootFilesystem: true
           volumeMounts:
+            - name: data
+              mountPath: /data
             - name: tmp
               mountPath: /tmp
             - name: home
               mountPath: /home/synthetics
       volumes:
+        - name: data
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "synthetics.fullname" . }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
         - name: tmp
           emptyDir: {}
         - name: home

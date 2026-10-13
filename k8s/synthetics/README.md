@@ -27,5 +27,16 @@ Delete only the eight regional synthetics topics with:
 
 The cleanup script does not uninstall the Helm release or delete the `synthetics` namespace.
 
+Generate one persistent user once, or continuously, with:
+
+```bash
+./scripts/synthetics/generate-one-user.sh
+./scripts/synthetics/generate-one-user.sh --watch
+```
+
+The script publishes one source projection per iteration and rotates through all four sources by
+default. It keeps `initialPopulation: 1`, `newPeoplePerDay: 0`, and `newPeople: 0`, so the stream
+never grows beyond the original person.
+
 For SASL, create a Secret containing `REDPANDA_SASL_USERNAME`, `REDPANDA_SASL_PASSWORD`, and
 optionally `REDPANDA_SASL_MECHANISM`, then set `redpanda.saslSecretName`.

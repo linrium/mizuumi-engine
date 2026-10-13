@@ -104,6 +104,7 @@ export type GeneratedSyntheticData = {
 export type GenerateOptions = {
   count: number
   seed: number
+  sequenceStart?: number
   region?: RegionCode
   generatedAt?: Date
   scenario?: ScenarioName
@@ -516,6 +517,10 @@ export function generateSyntheticData(options: GenerateOptions): GeneratedSynthe
   if (!Number.isInteger(options.seed) || options.seed < 0 || options.seed > 2_147_483_647) {
     throw new RangeError("seed must be an integer between 0 and 2147483647")
   }
+  const sequenceStart = options.sequenceStart ?? 0
+  if (!Number.isInteger(sequenceStart) || sequenceStart < 0) {
+    throw new RangeError("sequenceStart must be a non-negative integer")
+  }
   const scenario = options.scenario ?? "realistic"
   const anomalyRate = options.anomalyRate ?? scenarioAnomalyRates[scenario]
   if (!Number.isFinite(anomalyRate) || anomalyRate < 0 || anomalyRate > 1) {
@@ -551,7 +556,7 @@ export function generateSyntheticData(options: GenerateOptions): GeneratedSynthe
   const crmPollBatches: CrmPollBatch[] = []
 
   for (let index = 0; index < options.count; index += 1) {
-    const sequence = index + 1
+    const sequence = sequenceStart + index + 1
     const suffix = `${region}-${options.seed}-${String(sequence).padStart(4, "0")}`
     const canonical = engine.createPerson(
       randomFor(options.seed, sequence, "identity"),

@@ -184,6 +184,144 @@ curl -X POST http://localhost:4020/api/v1/generate \
 The deployed endpoint is
 `https://api.synthetics.mizuumi.test/api/v1/generate`.
 
+## Incremental streams
+
+Snapshot mode is useful for one-off datasets, but a continuous feed must remember what happened
+before. Set `mode: "incremental"` to create a named stream whose people, source records, balances,
+products, anomalies, logical clock, and event versions persist in SQLite. A stream is deterministic
+for its seed and sequence of `asOf` advances.
+
+Initialize a stream once:
+
+```bash
+curl -X POST http://localhost:4020/api/v1/generate \
+  -H 'content-type: application/json' \
+  -d '{
+    "mode": "incremental",
+    "operation": "initialize",
+    "streamId": "vn-continuous-demo",
+    "region": "vn",
+    "asOf": "2026-10-13T01:00:00.000Z",
+    "initialPopulation": 100,
+    "seed": 42,
+    "scenario": "realistic",
+    "sourceMode": "sampled",
+    "sources": ["hdbank", "vikkiBank"],
+    "newPeoplePerDay": 1
+  }'
+```
+
+Advance its logical clock later. `sources` controls what lands during this call, so CRM or VietJet
+can arrive after the bank sources without regenerating different customers:
+
+```bash
+curl -X POST http://localhost:4020/api/v1/generate \
+  -H 'content-type: application/json' \
+  -d '{
+    "mode": "incremental",
+    "operation": "advance",
+    "streamId": "vn-continuous-demo",
+    "asOf": "2026-10-14T01:00:00.000Z",
+    "sources": ["vietjetAir", "crm"]
+  }'
+```
+
+Initialization fields:
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `streamId` | required | Stable stream identity; letters, digits, `.`, `_`, and `-` |
+| `asOf` | required | Initial logical time in ISO 8601 format |
+| `initialPopulation` | `100` | Starting people, from 1 to 1,000 |
+| `newPeoplePerDay` | `1` | Mean Poisson arrival rate for later advances |
+| `region`, `seed`, `scenario`, `sourceMode`, `sources` | snapshot defaults | Frozen generation settings except `sources` |
+| `maxEvents` | `10000` | Safety limit; the transaction is rejected if exceeded |
+
+Advance fields:
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `streamId` | required | Existing stream to advance |
+| `asOf` | required | New logical time; it cannot move backwards |
+| `sources` | all | Sources allowed to publish in this advance |
+| `newPeople` | sampled | Optional exact arrivals from 0 to 100; otherwise Poisson sampled |
+| `emitCurrentRecord` | `false` | Emit and coalesce one current record per selected person/source |
+| `maxEvents` | `10000` | Safety limit for this atomic advance |
+
+Calling `advance` again with the current `asOf` is idempotent: it creates no new state transition.
+It still retries any events left in the outbox by an earlier Redpanda failure. Event IDs are derived
+from stream, tick, person, source, version, and operation, while Kafka keys remain source-local IDs.
+
+### Continuously generate one user
+
+The repository includes a runner that initializes one person, sets both arrival controls to zero,
+and then keeps advancing that same stream. Each iteration selects one source projection, so every
+published record belongs to the same canonical person. In `auto` mode the runner rotates HDBank,
+Vikki Bank, VietJet Air, and CRM.
+
+```bash
+# Perform one incremental generation, suitable for cron
+./scripts/synthetics/generate-one-user.sh
+
+# Keep running every 60 seconds
+./scripts/synthetics/generate-one-user.sh --watch
+
+# Thai user, matcher-demo anomalies, and a five-minute interval
+SYNTHETICS_REGION=th \
+SYNTHETICS_STREAM_ID=single-user-th \
+SYNTHETICS_SCENARIO=matcher-demo \
+SYNTHETICS_INTERVAL_SECONDS=300 \
+./scripts/synthetics/generate-one-user.sh --watch
+```
+
+The script uses `emitCurrentRecord: true`, so one-user plus one-source iteration produces exactly
+one Redpanda record even when no probabilistic lifecycle change occurs. Multiple changes for that
+source are coalesced into the final current record. It defaults to
+`https://api.synthetics.mizuumi.test/api/v1/generate`. Override it with
+`SYNTHETICS_API_URL` for local development. Set `SYNTHETICS_SOURCE` to a specific source to stop
+rotation. The script creates or advances one user per iteration; a source record can contain several
+coherent nested changes, such as a booking and its linked payment.
+
+### Time-aware model
+
+For an event rate `lambda` per day and elapsed time `delta`, occurrence probability is:
+
+```text
+P(event during delta) = 1 - exp(-lambda * delta)
+```
+
+This makes a seven-day advance meaningfully different from seven rapid calls at the same time. The
+engine currently evolves:
+
+- new-person arrivals with a Poisson process;
+- ordinary bank debits capped by current balance and disposable income;
+- due HDBank loan installments, including affordable payments and overdue state;
+- Vikki wallet adoption for eligible account holders;
+- new VietJet bookings bounded by disposable income and live bank funds, with linked T24 payments;
+- confirmed flights becoming flown after their scheduled arrival;
+- CRM campaign interactions;
+- real phone or email changes that propagate to other sources after a 1–14 day delay;
+- temporary name, phone, or email drift, followed by probabilistic correction.
+
+Missing sources and missing products remain normal states. A source first selected on a later call
+receives a `CREATE`; already published records receive versioned `UPDATE` events. Anomalies are
+tracked as active or corrected rather than being independently redrawn on every request. If a
+source is omitted while its state evolves, its next selected call emits one full-record catch-up
+`UPDATE`, so consumers do not remain permanently stale.
+
+### Persistence and delivery
+
+SQLite is accessed through Drizzle ORM. `synthetic_streams` stores the full stream checkpoint and
+`synthetic_outbox` stores unpublished events. State and outbox rows commit in one transaction; rows
+are marked published only after Redpanda acknowledges the batch. This provides at-least-once
+delivery with deterministic event IDs for consumer deduplication.
+
+Set `SYNTHETICS_DB_PATH` to choose the database file; it defaults to `/data/synthetics.db`. The Helm
+chart mounts a 1 GiB `ReadWriteOnce` persistent volume at `/data`, uses a `Recreate` deployment
+strategy, and defaults to one replica because a single SQLite file is not a horizontally scalable
+coordination store. Disable `persistence.enabled` only for disposable environments. Use an external
+transactional database before scaling this service beyond one writer.
+
 ## Redpanda topics
 
 The service publishes one CloudEvent for each source record that exists:
@@ -218,6 +356,5 @@ import {
 } from "@mizuumi/synthetics"
 ```
 
-SQLite is not required. Stable substream seeds make source-specific generation reproducible without
-persisting canonical people. A database can be added later if runs need mutable lifecycle state or
-scheduled replay checkpoints.
+Snapshot requests remain stateless and do not read or write SQLite. Incremental requests lazily open
+the configured database and retain mutable lifecycle state across process restarts.

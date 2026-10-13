@@ -9,6 +9,13 @@ service:
   type: ClusterIP
   port: 4020
 
+persistence:
+  enabled: true
+  size: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: ""
+
 redpanda:
   brokers: redpanda.redpanda.svc.cluster.local:9092
   clientId: mizuumi-synthetics

@@ -1,11 +1,13 @@
 import { randomUUID } from "node:crypto"
 import { Kafka, logLevel, type Producer, type SASLOptions } from "kafkajs"
-import type {
-  GeneratedPersonRecords,
-  GeneratedSyntheticData,
-  SourceName,
+import {
+  sourceNames,
+  type GeneratedPersonRecords,
+  type GeneratedSyntheticData,
+  type SourceName,
 } from "./generator.js"
 import type { RegionCode } from "./generators/index.js"
+import type { IncrementalEvent, IncrementalPublishSummary } from "./events.js"
 
 export type PublishSummary = {
   region: RegionCode
@@ -26,10 +28,15 @@ export type PublishSummary = {
 
 export interface SyntheticPublisher {
   publish(generated: GeneratedSyntheticData): Promise<PublishSummary>
+  publishIncremental(events: IncrementalEvent[]): Promise<IncrementalPublishSummary>
   close(): Promise<void>
 }
 
 type OrganizationName = SourceName
+
+function sourceSlug(source: SourceName) {
+  return source === "vikkiBank" ? "vikki" : source === "vietjetAir" ? "vietjetair" : source
+}
 
 type SyntheticCloudEvent<T> = {
   specversion: "1.0"
@@ -57,12 +64,7 @@ function event<T>(input: {
   generatedAt: string
   data: T
 }): SyntheticCloudEvent<T> {
-  const organizationSlug =
-    input.organization === "vikkiBank"
-      ? "vikki"
-      : input.organization === "vietjetAir"
-        ? "vietjetair"
-        : input.organization
+  const organizationSlug = sourceSlug(input.organization)
   return {
     specversion: "1.0",
     id: randomUUID(),
@@ -248,6 +250,60 @@ export class RedpandaPublisher implements SyntheticPublisher {
           crmMessages.length,
       },
     }
+  }
+
+  async publishIncremental(events: IncrementalEvent[]): Promise<IncrementalPublishSummary> {
+    const region = events[0]?.region ?? "vn"
+    const topics = this.topics[region]
+    const grouped: Record<OrganizationName, IncrementalEvent[]> = {
+      hdbank: [],
+      vikkiBank: [],
+      vietjetAir: [],
+      crm: [],
+    }
+    for (const incrementalEvent of events) grouped[incrementalEvent.source].push(incrementalEvent)
+    const topicMessages = sourceNames
+      .map((source) => ({
+        topic: topics[source],
+        messages: grouped[source].map((incrementalEvent) => {
+          const payload = {
+            specversion: "1.0",
+            id: incrementalEvent.id,
+            source: `/mizuumi/synthetics/${incrementalEvent.region}/${sourceSlug(source)}/${incrementalEvent.streamId}`,
+            type: incrementalEvent.type,
+            time: incrementalEvent.time,
+            datacontenttype: "application/json",
+            subject: incrementalEvent.subject,
+            data: incrementalEvent.data,
+          }
+          return {
+            key: incrementalEvent.subject,
+            value: JSON.stringify(payload),
+            headers: {
+              "ce-id": payload.id,
+              "ce-source": payload.source,
+              "ce-specversion": payload.specversion,
+              "ce-subject": payload.subject,
+              "ce-time": payload.time,
+              "ce-type": payload.type,
+              "content-type": payload.datacontenttype,
+            },
+          }
+        }),
+      }))
+      .filter((topic) => topic.messages.length > 0)
+    if (topicMessages.length > 0) {
+      await this.connect()
+      await this.producer.sendBatch({ topicMessages })
+    }
+    const messages = {
+      hdbank: grouped.hdbank.length,
+      vikkiBank: grouped.vikkiBank.length,
+      vietjetAir: grouped.vietjetAir.length,
+      crm: grouped.crm.length,
+      total: events.length,
+    }
+    return { region, topics, messages }
   }
 
   async close() {
