@@ -1,4 +1,10 @@
+"use client"
+
+import { IconLoader2, IconPlayerPlay } from "@tabler/icons-react"
+import { useState, useTransition } from "react"
+import { materializeAsset } from "@/app/(app)/pipelines/assets/actions"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import {
   Table,
   TableBody,
@@ -43,11 +49,49 @@ function formatTimestamp(value?: string) {
 }
 
 export function AssetsView({ initialAssets, initialError }: Props) {
+  const [feedback, setFeedback] = useState<
+    { kind: "error" | "success"; message: string } | undefined
+  >(initialError ? { kind: "error", message: initialError } : undefined)
+  const [pendingAsset, setPendingAsset] = useState<string>()
+  const [isPending, startTransition] = useTransition()
+
+  const materialize = (asset: DagsterAsset) => {
+    const key = asset.assetKey.path.join("\u0000")
+    setPendingAsset(key)
+    setFeedback(undefined)
+    startTransition(async () => {
+      try {
+        const { runId } = await materializeAsset(
+          asset.assetKey.path,
+          asset.repository.name,
+          asset.repository.location.name,
+        )
+        setFeedback({
+          kind: "success",
+          message: `Materialization launched for ${assetName(asset)} (run ${runId}).`,
+        })
+      } catch (error) {
+        setFeedback({
+          kind: "error",
+          message: error instanceof Error ? error.message : "Unknown error",
+        })
+      } finally {
+        setPendingAsset(undefined)
+      }
+    })
+  }
+
   return (
     <div className="flex flex-col gap-4">
-      {initialError ? (
-        <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
-          {initialError}
+      {feedback ? (
+        <div
+          className={
+            feedback.kind === "error"
+              ? "rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive"
+              : "rounded-md border border-emerald-500/40 bg-emerald-500/5 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-400"
+          }
+        >
+          {feedback.message}
         </div>
       ) : null}
 
@@ -59,8 +103,8 @@ export function AssetsView({ initialAssets, initialError }: Props) {
               <TableHead>Group</TableHead>
               <TableHead>Kinds</TableHead>
               <TableHead>Definition</TableHead>
-              <TableHead>Repository</TableHead>
               <TableHead>Last event</TableHead>
+              <TableHead className="w-[120px] text-right">Action</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -120,12 +164,6 @@ export function AssetsView({ initialAssets, initialError }: Props) {
                       </div>
                     </TableCell>
                     <TableCell className="text-xs">
-                      <div>{asset.repository.name}</div>
-                      <div className="text-muted-foreground">
-                        {asset.repository.location.name}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-xs">
                       {event ? (
                         <>
                           <div>{event.label}</div>
@@ -135,6 +173,28 @@ export function AssetsView({ initialAssets, initialError }: Props) {
                         </>
                       ) : (
                         <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {asset.isMaterializable ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={isPending || asset.jobNames.length === 0}
+                          onClick={() => materialize(asset)}
+                          aria-label={`Materialize ${assetName(asset)}`}
+                        >
+                          {isPending &&
+                          pendingAsset ===
+                            asset.assetKey.path.join("\u0000") ? (
+                            <IconLoader2 className="animate-spin" />
+                          ) : (
+                            <IconPlayerPlay />
+                          )}
+                          Materialize
+                        </Button>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
                       )}
                     </TableCell>
                   </TableRow>

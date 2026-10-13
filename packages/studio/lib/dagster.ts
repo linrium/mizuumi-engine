@@ -60,6 +60,8 @@ const ASSETS_QUERY = gql`
       kinds
       isMaterializable
       isObservable
+      jobNames
+      opName
       repository {
         name
         location {
@@ -107,6 +109,34 @@ const RUNS_QUERY = gql`
   }
 `
 
+const LAUNCH_ASSET_MATERIALIZATION = gql`
+  mutation LaunchAssetMaterialization($executionParams: ExecutionParams!) {
+    launchPipelineExecution(executionParams: $executionParams) {
+      __typename
+      ... on LaunchRunSuccess {
+        run {
+          runId
+        }
+      }
+      ... on Error {
+        message
+      }
+      ... on RunConfigValidationInvalid {
+        errors {
+          message
+        }
+      }
+      ... on InvalidStepError {
+        invalidStepKey
+      }
+      ... on InvalidOutputError {
+        invalidOutputName
+        stepKey
+      }
+    }
+  }
+`
+
 type AssetKey = {
   path: string[]
 }
@@ -123,6 +153,8 @@ export type DagsterAsset = {
   kinds: string[]
   isMaterializable: boolean
   isObservable: boolean
+  jobNames: string[]
+  opName: string | null
   repository: {
     name: string
     location: {
@@ -202,6 +234,29 @@ type RunsData = {
       }
 }
 
+type LaunchAssetMaterializationData = {
+  launchPipelineExecution: {
+    __typename: string
+    errors?: { message: string }[]
+    invalidOutputName?: string
+    invalidStepKey?: string
+    message?: string
+    run?: { runId: string }
+    stepKey?: string
+  }
+}
+
+type LaunchAssetMaterializationVariables = {
+  executionParams: {
+    selector: {
+      assetSelection: AssetKey[]
+      jobName: string
+      repositoryLocationName: string
+      repositoryName: string
+    }
+  }
+}
+
 const dagster = new GraphQLClient(
   process.env.DAGSTER_GRAPHQL_URL ?? "https://api.dagster.mizuumi.test/graphql",
   {
@@ -246,4 +301,60 @@ export async function getRuns(): Promise<DagsterRun[]> {
   }
 
   return result.results
+}
+
+export async function launchAssetMaterialization({
+  assetKeys,
+  jobName,
+  repositoryLocationName,
+  repositoryName,
+}: {
+  assetKeys: string[][]
+  jobName: string
+  repositoryLocationName: string
+  repositoryName: string
+}): Promise<{ runId: string }> {
+  const response = await dagster.rawRequest<
+    LaunchAssetMaterializationData,
+    LaunchAssetMaterializationVariables
+  >(LAUNCH_ASSET_MATERIALIZATION, {
+    executionParams: {
+      selector: {
+        assetSelection: assetKeys.map((path) => ({ path })),
+        jobName,
+        repositoryLocationName,
+        repositoryName,
+      },
+    },
+  })
+
+  if (response.errors?.length) {
+    throw new Error(response.errors.map((error) => error.message).join("; "))
+  }
+
+  const result = response.data.launchPipelineExecution
+  if (result.__typename === "LaunchRunSuccess" && result.run) return result.run
+  if (result.__typename === "RunConfigValidationInvalid") {
+    throw new Error(
+      result.errors?.map((error) => error.message).join("; ") ||
+        "Dagster rejected the run configuration",
+    )
+  }
+  if (result.__typename === "InvalidStepError") {
+    throw new Error(`Invalid step: ${result.invalidStepKey ?? "unknown"}`)
+  }
+  if (result.__typename === "InvalidOutputError") {
+    throw new Error(
+      `Invalid output ${result.invalidOutputName ?? "unknown"} for step ${result.stepKey ?? "unknown"}`,
+    )
+  }
+  if (result.__typename === "InvalidSubsetError") {
+    throw new DagsterInvalidSubsetError(result.message)
+  }
+
+  throw new Error(result.message ?? `Dagster returned ${result.__typename}`)
+}
+
+export class DagsterInvalidSubsetError extends Error {
+  override name = "DagsterInvalidSubsetError"
 }
