@@ -1,6 +1,6 @@
 "use client"
 
-import { IconTable } from "@tabler/icons-react"
+import { IconCircleCheck, IconLoader2, IconTable } from "@tabler/icons-react"
 import {
   Background,
   BackgroundVariant,
@@ -12,8 +12,11 @@ import {
   type NodeProps,
   Position,
   ReactFlow,
+  type ReactFlowInstance,
 } from "@xyflow/react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import "@xyflow/react/dist/style.css"
+import { expandLineageNode } from "@/app/(app)/unitycatalog/(browser)/[catalog]/[schema]/[table]/lineage/actions"
 import type { LineageAssetNode, TableLineageNode } from "@/lib/dagster"
 
 const NODE_WIDTH = 288
@@ -27,6 +30,9 @@ const GROUP_PADDING_BOTTOM = 32
 type AssetNodeData = Record<string, unknown> & {
   asset: LineageAssetNode
   current: boolean
+  expanded: boolean
+  loading: boolean
+  onExpand: (asset: LineageAssetNode) => void
 }
 
 type GroupNodeData = Record<string, unknown> & {
@@ -41,7 +47,11 @@ type PositionedAsset = {
 }
 
 function assetId(asset: LineageAssetNode) {
-  return `asset:${JSON.stringify(asset.assetKey.path)}`
+  return assetPathId(asset.assetKey.path)
+}
+
+function assetPathId(path: string[]) {
+  return `asset:${JSON.stringify(path)}`
 }
 
 function groupId(asset: LineageAssetNode) {
@@ -58,7 +68,7 @@ function formatTimestamp(timestamp: string | undefined) {
 }
 
 function AssetNode({ data }: NodeProps<Node<AssetNodeData, "asset">>) {
-  const { asset, current } = data
+  const { asset, current, expanded, loading, onExpand } = data
   const latestMaterialization = formatTimestamp(
     asset.assetMaterializations[0]?.timestamp,
   )
@@ -79,14 +89,31 @@ function AssetNode({ data }: NodeProps<Node<AssetNodeData, "asset">>) {
 
   return (
     <div
-      className={`flex h-[192px] w-[288px] flex-col overflow-hidden rounded-md border bg-card ${
-        current ? "border-primary ring-1 ring-primary/30" : "border-border"
+      className={`relative flex h-[192px] w-[288px] flex-col overflow-hidden rounded-md border bg-card transition-colors ${
+        current
+          ? "border-primary ring-1 ring-primary/30"
+          : expanded
+            ? "border-border"
+            : "border-border hover:border-primary/60"
       }`}
     >
+      <button
+        type="button"
+        className="absolute inset-0 z-10 rounded-md bg-transparent disabled:cursor-default enabled:cursor-pointer"
+        aria-label={
+          loading
+            ? `Loading neighbors for ${asset.assetKey.path.join(".")}`
+            : expanded
+              ? `Neighbors loaded for ${asset.assetKey.path.join(".")}`
+              : `Expand neighbors for ${asset.assetKey.path.join(".")}`
+        }
+        disabled={expanded || loading}
+        onClick={() => onExpand(asset)}
+      />
       <Handle type="target" position={Position.Left} className="opacity-0" />
       <div className="flex min-h-12 items-start gap-2 border-b bg-muted/45 px-3 py-2.5">
         <IconTable className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-        <div className="min-w-0 font-mono">
+        <div className="min-w-0 flex-1 font-mono">
           <div className="truncate text-sm font-semibold">
             {asset.assetKey.path.at(-1)}
           </div>
@@ -94,6 +121,11 @@ function AssetNode({ data }: NodeProps<Node<AssetNodeData, "asset">>) {
             {asset.assetKey.path.join(".")}
           </div>
         </div>
+        {loading ? (
+          <IconLoader2 className="mt-0.5 size-3.5 shrink-0 animate-spin text-primary" />
+        ) : expanded ? (
+          <IconCircleCheck className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+        ) : null}
       </div>
       <p className="line-clamp-3 h-[72px] shrink-0 px-3 py-2 text-[11px] leading-[1.125rem] text-muted-foreground">
         {asset.description ?? "No description"}
@@ -141,30 +173,85 @@ function centeredY(index: number, count: number, maxRows: number) {
   return ((maxRows - count) / 2 + index) * ROW_GAP
 }
 
-function createElements(current: TableLineageNode) {
-  const upstream = current.dependencies.map(({ asset }) => asset)
-  const downstream = current.dependedBy.map(({ asset }) => asset)
-  const maxRows = Math.max(upstream.length, downstream.length, 1)
-  const positioned: PositionedAsset[] = [
-    ...upstream.map((asset, index) => ({
-      asset,
-      current: false,
-      position: { x: 0, y: centeredY(index, upstream.length, maxRows) },
-    })),
-    {
-      asset: current,
-      current: true,
-      position: { x: COLUMN_GAP, y: centeredY(0, 1, maxRows) },
-    },
-    ...downstream.map((asset, index) => ({
-      asset,
-      current: false,
-      position: {
-        x: COLUMN_GAP * 2,
-        y: centeredY(index, downstream.length, maxRows),
-      },
-    })),
-  ]
+function createElements(
+  lineageNodes: TableLineageNode[],
+  rootId: string,
+  loadingIds: Set<string>,
+  onExpand: (asset: LineageAssetNode) => void,
+) {
+  const expandedIds = new Set(lineageNodes.map(assetId))
+  const assets = new Map<string, LineageAssetNode>()
+  const edgeMap = new Map<string, Edge>()
+
+  for (const node of lineageNodes) assets.set(assetId(node), node)
+
+  for (const node of lineageNodes) {
+    const nodeId = assetId(node)
+    for (const { asset } of node.dependencies) {
+      const upstreamId = assetId(asset)
+      if (!assets.has(upstreamId)) assets.set(upstreamId, asset)
+      edgeMap.set(`${upstreamId}->${nodeId}`, {
+        id: `${upstreamId}->${nodeId}`,
+        source: upstreamId,
+        target: nodeId,
+      })
+    }
+    for (const { asset } of node.dependedBy) {
+      const downstreamId = assetId(asset)
+      if (!assets.has(downstreamId)) assets.set(downstreamId, asset)
+      edgeMap.set(`${nodeId}->${downstreamId}`, {
+        id: `${nodeId}->${downstreamId}`,
+        source: nodeId,
+        target: downstreamId,
+      })
+    }
+  }
+
+  const depths = new Map<string, number>([[rootId, 0]])
+  for (let pass = 0; pass < assets.size; pass += 1) {
+    let changed = false
+    for (const edge of edgeMap.values()) {
+      const sourceDepth = depths.get(edge.source)
+      const targetDepth = depths.get(edge.target)
+      if (sourceDepth !== undefined && targetDepth === undefined) {
+        depths.set(edge.target, sourceDepth + 1)
+        changed = true
+      } else if (sourceDepth === undefined && targetDepth !== undefined) {
+        depths.set(edge.source, targetDepth - 1)
+        changed = true
+      }
+    }
+    if (!changed) break
+  }
+
+  const assetsByDepth = new Map<number, LineageAssetNode[]>()
+  for (const asset of assets.values()) {
+    const depth = depths.get(assetId(asset)) ?? 0
+    assetsByDepth.set(depth, [...(assetsByDepth.get(depth) ?? []), asset])
+  }
+  for (const column of assetsByDepth.values()) {
+    column.sort((a, b) =>
+      `${a.groupName}:${assetId(a)}`.localeCompare(
+        `${b.groupName}:${assetId(b)}`,
+      ),
+    )
+  }
+
+  const minDepth = Math.min(...assetsByDepth.keys())
+  const maxRows = Math.max(...[...assetsByDepth.values()].map((v) => v.length))
+  const positioned: PositionedAsset[] = []
+  for (const [depth, column] of assetsByDepth) {
+    column.forEach((asset, index) => {
+      positioned.push({
+        asset,
+        current: assetId(asset) === rootId,
+        position: {
+          x: (depth - minDepth) * COLUMN_GAP,
+          y: centeredY(index, column.length, maxRows),
+        },
+      })
+    })
+  }
 
   const groups = new Map<string, PositionedAsset[]>()
   for (const item of positioned) {
@@ -216,34 +303,75 @@ function createElements(current: TableLineageNode) {
           x: item.position.x - minX + GROUP_PADDING_X,
           y: item.position.y - minY + GROUP_HEADER_HEIGHT,
         },
-        data: { asset: item.asset, current: item.current },
+        data: {
+          asset: item.asset,
+          current: item.current,
+          expanded: expandedIds.has(assetId(item.asset)),
+          loading: loadingIds.has(assetId(item.asset)),
+          onExpand,
+        },
         draggable: false,
       })
     }
   }
 
-  const currentId = assetId(current)
-  const edges: Edge[] = [
-    ...upstream.map((asset) => ({
-      id: `${assetId(asset)}->${currentId}`,
-      source: assetId(asset),
-      target: currentId,
-    })),
-    ...downstream.map((asset) => ({
-      id: `${currentId}->${assetId(asset)}`,
-      source: currentId,
-      target: assetId(asset),
-    })),
-  ]
-
-  return { nodes: [...groupNodes, ...assetNodes], edges }
+  return { nodes: [...groupNodes, ...assetNodes], edges: [...edgeMap.values()] }
 }
 
 export function LineageGraph({ current }: { current: TableLineageNode }) {
-  const { nodes, edges } = createElements(current)
+  const rootId = assetId(current)
+  const [expandedNodes, setExpandedNodes] = useState<
+    Record<string, TableLineageNode>
+  >({ [rootId]: current })
+  const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set())
+  const [error, setError] = useState<string>()
+  const [flow, setFlow] = useState<ReactFlowInstance | null>(null)
+
+  const expand = useCallback(
+    async (asset: LineageAssetNode) => {
+      const id = assetId(asset)
+      if (expandedNodes[id] || loadingIds.has(id)) return
+
+      setError(undefined)
+      setLoadingIds((previous) => new Set(previous).add(id))
+      const result = await expandLineageNode(asset.assetKey.path)
+
+      if (result.node) {
+        setExpandedNodes((previous) => ({
+          ...previous,
+          [id]: result.node as TableLineageNode,
+        }))
+      } else {
+        setError(result.error ?? "Unable to load neighboring assets.")
+      }
+
+      setLoadingIds((previous) => {
+        const next = new Set(previous)
+        next.delete(id)
+        return next
+      })
+    },
+    [expandedNodes, loadingIds],
+  )
+
+  const { nodes, edges } = useMemo(
+    () =>
+      createElements(Object.values(expandedNodes), rootId, loadingIds, expand),
+    [expandedNodes, rootId, loadingIds, expand],
+  )
+
+  useEffect(() => {
+    if (!flow || nodes.length === 0) return
+    void flow.fitView({ padding: 0.1, maxZoom: 1.05, duration: 300 })
+  }, [flow, nodes.length])
 
   return (
-    <div className="h-[clamp(480px,62vh,680px)] overflow-hidden rounded-lg border bg-muted/20 shadow-inner">
+    <div className="relative h-[clamp(480px,62vh,680px)] overflow-hidden rounded-lg border bg-muted/20 shadow-inner">
+      {error ? (
+        <div className="absolute top-3 left-1/2 z-20 -translate-x-1/2 rounded-md border border-destructive/30 bg-background px-3 py-2 text-xs text-destructive shadow-sm">
+          {error}
+        </div>
+      ) : null}
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -254,6 +382,7 @@ export function LineageGraph({ current }: { current: TableLineageNode }) {
         maxZoom={1.5}
         nodesConnectable={false}
         nodesDraggable={false}
+        onInit={setFlow}
         defaultEdgeOptions={{
           type: "smoothstep",
           zIndex: 2,
