@@ -30,6 +30,18 @@ unityCatalog:
     - name: payments
       alias: payments
       defaultSchema: bronze
+    - name: vietjet
+      alias: vietjet
+      defaultSchema: bronze
+    - name: hdbank
+      alias: hdbank
+      defaultSchema: bronze
+    - name: vikki
+      alias: vikki
+      defaultSchema: bronze
+    - name: crm
+      alias: crm
+      defaultSchema: bronze
   introspectionUrl: https://auth.mizuumi.test/realms/sovico/protocol/openid-connect/token/introspect
 
 resources:

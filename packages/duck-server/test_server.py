@@ -23,11 +23,22 @@ class ConfiguredUnityCatalogsTest(unittest.TestCase):
         catalogs = [
             {"name": "unity", "alias": "unity", "defaultSchema": "demo"},
             {"name": "payments", "alias": "payments", "defaultSchema": "bronze"},
+            {"name": "vietjet", "alias": "vietjet", "defaultSchema": "bronze"},
+            {"name": "hdbank", "alias": "hdbank", "defaultSchema": "bronze"},
+            {"name": "vikki", "alias": "vikki", "defaultSchema": "bronze"},
+            {"name": "crm", "alias": "crm", "defaultSchema": "bronze"},
         ]
         with patch.dict(os.environ, {"UNITY_CATALOGS": json.dumps(catalogs)}, clear=True):
             self.assertEqual(
                 configured_unity_catalogs(),
-                [("unity", "unity", "demo"), ("payments", "payments", "bronze")],
+                [
+                    ("unity", "unity", "demo"),
+                    ("payments", "payments", "bronze"),
+                    ("vietjet", "vietjet", "bronze"),
+                    ("hdbank", "hdbank", "bronze"),
+                    ("vikki", "vikki", "bronze"),
+                    ("crm", "crm", "bronze"),
+                ],
             )
 
     def test_alias_defaults_to_catalog_name(self) -> None:
@@ -86,6 +97,10 @@ class ConfigureUnityCatalogsTest(unittest.TestCase):
         catalogs = [
             {"name": "unity", "alias": "unity", "defaultSchema": "demo"},
             {"name": "payments", "alias": "payments", "defaultSchema": "bronze"},
+            {"name": "vietjet", "alias": "vietjet", "defaultSchema": "bronze"},
+            {"name": "hdbank", "alias": "hdbank", "defaultSchema": "bronze"},
+            {"name": "vikki", "alias": "vikki", "defaultSchema": "bronze"},
+            {"name": "crm", "alias": "crm", "defaultSchema": "bronze"},
         ]
         environment = {
             "UNITY_CATALOGS": json.dumps(catalogs),
@@ -100,15 +115,24 @@ class ConfigureUnityCatalogsTest(unittest.TestCase):
                 "user-token",
             )
 
-        self.assertEqual(aliases, ["unity", "payments"])
+        self.assertEqual(
+            aliases, ["unity", "payments", "vietjet", "hdbank", "vikki", "crm"]
+        )
         attach_statements = [
             statement for statement in connection.statements if "ATTACH" in statement
         ]
-        self.assertEqual(len(attach_statements), 2)
+        self.assertEqual(len(attach_statements), 6)
         self.assertIn("ATTACH 'unity' AS \"unity\"", attach_statements[0])
         self.assertIn("DEFAULT_SCHEMA 'demo'", attach_statements[0])
         self.assertIn("ATTACH 'payments' AS \"payments\"", attach_statements[1])
         self.assertIn("DEFAULT_SCHEMA 'bronze'", attach_statements[1])
+        for index, catalog in enumerate(
+            ["vietjet", "hdbank", "vikki", "crm"], start=2
+        ):
+            self.assertIn(
+                f"ATTACH '{catalog}' AS \"{catalog}\"", attach_statements[index]
+            )
+            self.assertIn("DEFAULT_SCHEMA 'bronze'", attach_statements[index])
 
 
 if __name__ == "__main__":

@@ -12,6 +12,14 @@ uc_catalog="${DUCK_SERVER_UNITY_CATALOG:-unity}"
 uc_schema="${DUCK_SERVER_UNITY_SCHEMA:-demo}"
 payments_catalog="${DUCK_SERVER_PAYMENTS_CATALOG:-payments}"
 payments_schema="${DUCK_SERVER_PAYMENTS_SCHEMA:-bronze}"
+vietjet_catalog="${DUCK_SERVER_VIETJET_CATALOG:-vietjet}"
+vietjet_schema="${DUCK_SERVER_VIETJET_SCHEMA:-bronze}"
+hdbank_catalog="${DUCK_SERVER_HDBANK_CATALOG:-hdbank}"
+hdbank_schema="${DUCK_SERVER_HDBANK_SCHEMA:-bronze}"
+vikki_catalog="${DUCK_SERVER_VIKKI_CATALOG:-vikki}"
+vikki_schema="${DUCK_SERVER_VIKKI_SCHEMA:-bronze}"
+crm_catalog="${DUCK_SERVER_CRM_CATALOG:-crm}"
+crm_schema="${DUCK_SERVER_CRM_SCHEMA:-bronze}"
 if [[ -n "${DUCK_SERVER_IMAGE_TAG:-}" ]]; then
   image_tag="$DUCK_SERVER_IMAGE_TAG"
 elif [[ "$skip_image_build" == 1 ]]; then
@@ -41,6 +49,14 @@ Environment overrides:
   DUCK_SERVER_UNITY_SCHEMA      Unity Catalog schema (default: demo)
   DUCK_SERVER_PAYMENTS_CATALOG  Payments catalog name (default: payments)
   DUCK_SERVER_PAYMENTS_SCHEMA   Payments catalog schema (default: bronze)
+  DUCK_SERVER_VIETJET_CATALOG   VietJet catalog name (default: vietjet)
+  DUCK_SERVER_VIETJET_SCHEMA    VietJet catalog schema (default: bronze)
+  DUCK_SERVER_HDBANK_CATALOG    HDBank catalog name (default: hdbank)
+  DUCK_SERVER_HDBANK_SCHEMA     HDBank catalog schema (default: bronze)
+  DUCK_SERVER_VIKKI_CATALOG     Vikki catalog name (default: vikki)
+  DUCK_SERVER_VIKKI_SCHEMA      Vikki catalog schema (default: bronze)
+  DUCK_SERVER_CRM_CATALOG       CRM catalog name (default: crm)
+  DUCK_SERVER_CRM_SCHEMA        CRM catalog schema (default: bronze)
 EOF
 }
 
@@ -129,6 +145,18 @@ helm upgrade --install "$release" "$repo_root/k8s/duck-server" \
   --set-string "unityCatalog.catalogs[1].name=$payments_catalog" \
   --set-string "unityCatalog.catalogs[1].alias=payments" \
   --set-string "unityCatalog.catalogs[1].defaultSchema=$payments_schema" \
+  --set-string "unityCatalog.catalogs[2].name=$vietjet_catalog" \
+  --set-string "unityCatalog.catalogs[2].alias=vietjet" \
+  --set-string "unityCatalog.catalogs[2].defaultSchema=$vietjet_schema" \
+  --set-string "unityCatalog.catalogs[3].name=$hdbank_catalog" \
+  --set-string "unityCatalog.catalogs[3].alias=hdbank" \
+  --set-string "unityCatalog.catalogs[3].defaultSchema=$hdbank_schema" \
+  --set-string "unityCatalog.catalogs[4].name=$vikki_catalog" \
+  --set-string "unityCatalog.catalogs[4].alias=vikki" \
+  --set-string "unityCatalog.catalogs[4].defaultSchema=$vikki_schema" \
+  --set-string "unityCatalog.catalogs[5].name=$crm_catalog" \
+  --set-string "unityCatalog.catalogs[5].alias=crm" \
+  --set-string "unityCatalog.catalogs[5].defaultSchema=$crm_schema" \
   --wait --timeout 10m "$@"
 
 kubectl -n "$namespace" rollout restart deployment/"$release"

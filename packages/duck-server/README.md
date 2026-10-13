@@ -4,11 +4,12 @@ This package runs DuckDB 1.5.6 as a Quack server. The DuckDB catalog is
 stored on the Kubernetes PVC, while the `rustfs_events` view reads Parquet data
 from the dedicated `duck-server` RustFS bucket. A separate HTTP query endpoint
 accepts a signed-in user's Keycloak bearer token and attaches the Mizuumi Unity
-Catalog catalogs `unity` and `payments` only for that request. Their default
-schemas are `demo` and `bronze`, respectively. Unity Catalog therefore authorizes
-metadata access and temporary S3 credentials as the user, not as Duck server or
-the Spark writer. The per-request catalog attachment is read-only, so `SELECT`
-queries request read-only temporary credentials and never require `MODIFY`.
+Catalog catalogs `unity`, `payments`, `vietjet`, `hdbank`, `vikki`, and `crm`
+only for that request. The `unity` catalog defaults to the `demo` schema; the
+other catalogs default to `bronze`. Unity Catalog therefore authorizes metadata
+access and temporary S3 credentials as the user, not as Duck server or the Spark
+writer. The per-request catalog attachment is read-only, so `SELECT` queries
+request read-only temporary credentials and never require `MODIFY`.
 
 The image builds `unity_catalog` and its matching `delta` extension from the
 fork in `packages/duck-uc-extension`. It does not install DuckDB's official
