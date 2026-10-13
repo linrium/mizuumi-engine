@@ -13,3 +13,8 @@ dependencies = [
     "opentelemetry-sdk>=1.45.1",
     "pyspark>=4.2.0",
 ]
+
+[tool.uv.workspace]
+members = [
+    "packages/synthetic",
+]
