@@ -172,6 +172,8 @@ impl GrantService for DefaultGrantService {
         full_name: String,
         request: UpdatePermissions,
     ) -> Result<PermissionsList, AppError> {
+        validate_browse_scope(securable_type, &request)?;
+
         let mut client = self.pool.get().await?;
         let resource_id = get_resource_id(&client, securable_type, &full_name).await?;
         let transaction = client.transaction().await?;
@@ -321,9 +323,32 @@ fn rows_to_permissions(rows: Vec<queries::ListPermissions>) -> Result<Permission
     })
 }
 
+fn validate_browse_scope(
+    securable_type: SecurableType,
+    request: &UpdatePermissions,
+) -> Result<(), AppError> {
+    let supports_browse = matches!(
+        securable_type,
+        SecurableType::Catalog | SecurableType::Schema
+    );
+    let adds_browse = request
+        .changes
+        .iter()
+        .any(|change| change.add.contains(&Privilege::Browse));
+
+    if adds_browse && !supports_browse {
+        return Err(AppError::InvalidParameter(
+            "BROWSE can only be granted on catalogs and schemas".to_string(),
+        ));
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::features::grants::dtos::PermissionsChange;
 
     #[test]
     fn groups_permissions_by_principal() {
@@ -351,6 +376,48 @@ mod tests {
             permissions.privilege_assignments[1].privileges,
             vec![Privilege::UseCatalog]
         );
+    }
+
+    #[test]
+    fn browse_can_only_be_added_to_catalogs_and_schemas() {
+        for securable_type in [SecurableType::Catalog, SecurableType::Schema] {
+            assert!(
+                validate_browse_scope(securable_type, &update(vec![Privilege::Browse])).is_ok()
+            );
+        }
+
+        assert!(matches!(
+            validate_browse_scope(SecurableType::Table, &update(vec![Privilege::Browse])),
+            Err(AppError::InvalidParameter(_))
+        ));
+        assert!(
+            validate_browse_scope(SecurableType::Table, &update(vec![Privilege::Select])).is_ok()
+        );
+    }
+
+    #[test]
+    fn legacy_table_browse_can_be_removed() {
+        let request = UpdatePermissions {
+            changes: vec![PermissionsChange {
+                principal: "reader@example.com".to_string(),
+                add: vec![],
+                remove: vec![Privilege::Browse],
+                expires_at: None,
+            }],
+        };
+
+        assert!(validate_browse_scope(SecurableType::Table, &request).is_ok());
+    }
+
+    fn update(add: Vec<Privilege>) -> UpdatePermissions {
+        UpdatePermissions {
+            changes: vec![PermissionsChange {
+                principal: "reader@example.com".to_string(),
+                add,
+                remove: vec![],
+                expires_at: None,
+            }],
+        }
     }
 
     fn row(principal: &str, privilege: &str) -> queries::ListPermissions {

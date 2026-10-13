@@ -132,14 +132,6 @@ pub async fn can_read_table(
         &[Privilege::Browse],
     )
     .await?
-        || has(
-            state,
-            principal,
-            SecurableType::Table,
-            &table_name,
-            &[Privilege::Browse],
-        )
-        .await?
     {
         return Ok(true);
     }

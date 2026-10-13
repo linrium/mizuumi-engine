@@ -6,11 +6,11 @@ Each connector version has a dependency classpath under
 `/opt/spark/dependencies`; the chart selects one without asking the Spark
 Operator to run Ivy or download Maven packages.
 
-Application code is not coupled to the image. Setup uploads each Python entry
-point to a content-addressed RustFS object and stores a short-lived presigned
-GET URL in a Kubernetes Secret. A driver init container downloads the object
-to an `emptyDir` before Spark starts. The presigned URL grants access to only
-that object, so no long-lived RustFS key is mounted in the driver or executor.
+Example application code is not coupled to the image. Setup uploads each Python
+entry point to a content-addressed RustFS object and stores a short-lived
+presigned GET URL in a Kubernetes Secret. A driver init container downloads the
+object to an `emptyDir` before Spark starts. The source-domain streaming and ETL
+jobs are baked into the image so their shared modules are deployed together.
 
 `examples/minimal` writes a tiny bronze/silver/gold Delta pipeline through the
 Unity Catalog connector and reads the result back for validation. The catalog
@@ -34,3 +34,12 @@ its Keycloak service-principal credential for a short-lived catalog token.
 
 For a single managed Delta table, see `examples/managed` and deploy it with
 `./scripts/spark/setup-managed.sh`.
+
+The applications under `streamings/` ingest the four synthetic source topics
+into bronze event tables. The applications under `jobs/` parse those events
+into typed source-domain silver tables. Deploy them with:
+
+```bash
+./scripts/spark/deploy-streamings.sh
+./scripts/spark/deploy-jobs.sh
+```

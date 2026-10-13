@@ -41,7 +41,7 @@ const PRIVILEGES_BY_TYPE: Record<SecurableType, string[]> = {
     "MODIFY",
   ],
   schema: ["BROWSE", "USE SCHEMA", "CREATE TABLE", "SELECT", "MODIFY"],
-  table: ["BROWSE", "SELECT", "MODIFY"],
+  table: ["SELECT", "MODIFY"],
 }
 
 export function PermissionsView({

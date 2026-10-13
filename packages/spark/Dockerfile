@@ -14,6 +14,7 @@ LABEL org.opencontainers.image.title="mizuumi-engine Spark base" \
 
 USER root
 COPY --chown=185:185 streamings /opt/spark/work-dir/streamings
+COPY --chown=185:185 jobs /opt/spark/work-dir/jobs
 COPY dependency_warmup.py /tmp/dependency_warmup.py
 RUN ivy_dir=/tmp/spark-ivy && \
     dependency_root=/opt/spark/dependencies && \

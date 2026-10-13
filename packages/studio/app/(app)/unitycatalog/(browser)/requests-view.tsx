@@ -70,7 +70,7 @@ const PRIVILEGES_BY_TYPE = {
     "CREATE VOLUME",
     "CREATE MODEL",
   ],
-  table: ["BROWSE", "SELECT", "MODIFY"],
+  table: ["SELECT", "MODIFY"],
 } as const
 
 type RequestSecurableType = keyof typeof PRIVILEGES_BY_TYPE
