@@ -17,6 +17,7 @@ export function TableNav({
   const base = `/unitycatalog/${encodeURIComponent(catalog)}/${encodeURIComponent(schema)}/${encodeURIComponent(table)}`
   const tabs = [
     { href: base, label: "Overview" },
+    { href: `${base}/lineage`, label: "Lineage" },
     { href: `${base}/preview`, label: "Preview" },
     { href: `${base}/permissions`, label: "Permissions" },
     { href: `${base}/requests`, label: "Requests" },
