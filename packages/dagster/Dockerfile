@@ -10,6 +10,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY managed_spark ./managed_spark
+COPY sovico ./sovico
 
 RUN mkdir -p "$DAGSTER_HOME"
 
