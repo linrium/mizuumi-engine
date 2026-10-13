@@ -1,6 +1,0 @@
-apiVersion: v2
-name: synthetics
-description: Mizuumi synthetic data generator and Redpanda publisher
-type: application
-version: 0.1.0
-appVersion: "0.1.0"
