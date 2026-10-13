@@ -58,7 +58,7 @@ type AssetEvent = {
   timestamp: string
 }
 
-type LineageAssetNode = {
+export type LineageAssetNode = {
   assetKey: AssetKey
   description: string | null
   groupName: string
@@ -75,13 +75,15 @@ type LineageAssetNode = {
   assetObservations: AssetEvent[]
 }
 
+export type TableLineageNode = LineageAssetNode & {
+  __typename: "AssetNode"
+  dependencies: { asset: LineageAssetNode }[]
+  dependedBy: { asset: LineageAssetNode }[]
+}
+
 type TableLineageData = {
   assetNodeOrError:
-    | (LineageAssetNode & {
-        __typename: "AssetNode"
-        dependencies: { asset: LineageAssetNode }[]
-        dependedBy: { asset: LineageAssetNode }[]
-      })
+    | TableLineageNode
     | {
         __typename: "AssetNotFoundError"
         message: string

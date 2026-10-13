@@ -1,3 +1,4 @@
+import { LineageGraph } from "@/app/(app)/unitycatalog/(browser)/[catalog]/[schema]/[table]/lineage/lineage-graph"
 import { getTableLineage } from "@/lib/dagster"
 
 export default async function TableLineagePage({
@@ -7,6 +8,11 @@ export default async function TableLineagePage({
 }) {
   const { catalog, schema, table } = await params
   const response = await getTableLineage([catalog, schema, table])
+  const result = response.data.assetNodeOrError
 
-  return <pre>{JSON.stringify(response, null, 2)}</pre>
+  if (result.__typename !== "AssetNode") {
+    return <pre>{JSON.stringify(response, null, 2)}</pre>
+  }
+
+  return <LineageGraph current={result} />
 }
