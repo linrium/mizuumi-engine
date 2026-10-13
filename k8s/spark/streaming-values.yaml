@@ -3,6 +3,15 @@ spark:
   extraSparkConf:
     spark.sql.streaming.schemaInference: "true"
 
+flare:
+  enabled: true
+  driverServiceName: t24-payment-events-bronze-driver
+  executorServiceName: t24-payment-events-bronze-executor
+  # A continuously running query can create unbounded task and stage spans.
+  # Job-level tracing retains micro-batch latency while Flare still exports
+  # stage and task aggregate metrics.
+  traceGranularity: jobs
+
 application:
   restartPolicy:
     type: Always

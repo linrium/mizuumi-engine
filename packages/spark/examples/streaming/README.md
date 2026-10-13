@@ -15,8 +15,26 @@ Redpanda are up:
 
 The script creates the `payments` catalog with a `bronze` schema and the
 required grants, uploads `main.py` to RustFS, and submits the
-`t24-payment-events-bronze` SparkApplication. The Spark driver pulls the
-`spark-sql-kafka-0-10_2.13:4.0.1` connector via `--packages` on startup.
+`t24-payment-events-bronze` SparkApplication. The reusable Spark image contains
+the Kafka connector, Flare extension, and matching OpenTelemetry Java agent, so
+the driver and executors do not resolve those dependencies at startup.
+
+Flare exports Spark traces and metrics over OTLP/HTTP to the in-cluster SigNoz
+collector. The streaming deployment uses job-level trace granularity: each
+micro-batch keeps its SQL and job latency without creating a span for every
+executor task in a continuously running application. Aggregate task duration,
+throughput, shuffle, stage, JVM, and exporter metrics remain enabled. Driver
+telemetry uses service `t24-payment-events-bronze-driver`; executor telemetry
+uses `t24-payment-events-bronze-executor`. The existing Kubernetes collector
+continues to collect pod logs, so Flare's OTLP log exporter remains disabled to
+avoid duplicates.
+
+Install SigNoz and its infrastructure collector before submitting the example:
+
+```bash
+./scripts/signoz/setup.sh
+./scripts/signoz/setup-k8s-infra.sh
+```
 
 Environment overrides consumed by `main.py`:
 
