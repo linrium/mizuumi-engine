@@ -1,6 +1,6 @@
-# Bronze-to-silver ETL jobs
+# Bronze-to-silver batch jobs
 
-The four source-domain Spark Structured Streaming jobs read the existing
+The four source-domain Spark batch jobs read the existing
 `<catalog>.bronze.events` table and write each CloudEvent type to a typed table in the
 same catalog's `silver` schema.
 
@@ -24,13 +24,20 @@ Deploy every ETL job from the repository root:
 ./scripts/spark/deploy-jobs.sh
 ```
 
-The jobs use independent table checkpoints under
-`s3a://unitycatalog/<catalog>/_checkpoints/silver/`. The deployment is idempotent and
-accepts Helm options, for example:
+Each invocation reads the complete bronze table and atomically overwrites each derived
+silver table. This makes scheduled retries idempotent and avoids streaming checkpoints.
+Run the deployment script again, or submit the same Spark application from Dagster, to
+trigger another batch run.
+
+The SparkApplication uses `k8s/spark/job-values.yaml`, has a `Never` restart policy,
+contains no streaming-specific Spark configuration, and uses the Unity Catalog `0.6.0`
+connector required for the configured Keycloak OAuth scope.
+
+The deployment accepts additional Helm options:
 
 ```bash
-./scripts/spark/deploy-jobs.sh --set-string application.env.ETL_TRIGGER=availableNow
+./scripts/spark/deploy-jobs.sh --set-string application.driver.memory=2g
 ```
 
 Supported runtime environment overrides are `BRONZE_SCHEMA_NAME`, `BRONZE_TABLE_NAME`,
-`SILVER_SCHEMA_NAME`, `ETL_TRIGGER`, and `ETL_CHECKPOINT_ROOT`.
+and `SILVER_SCHEMA_NAME`.

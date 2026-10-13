@@ -1,4 +1,4 @@
-"""Shared bronze-to-silver Structured Streaming ETL support."""
+"""Shared bronze-to-silver batch ETL support."""
 
 from __future__ import annotations
 
@@ -55,6 +55,10 @@ def checked_identifier(value: str, label: str) -> str:
     return value
 
 
+def escaped_sql_string(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("'", "\\'")
+
+
 def configure_spark(spark: SparkSession, catalog: str) -> None:
     s3_access_key = os.environ.get("S3_ACCESS_KEY", "").strip()
     s3_secret_key = os.environ.get("S3_SECRET_KEY", "").strip()
@@ -73,7 +77,7 @@ def configure_spark(spark: SparkSession, catalog: str) -> None:
 
 def create_table(spark: SparkSession, table_name: str, table: Table) -> None:
     columns = [
-        f"{column.name} {column.data_type} COMMENT '{column.comment.replace(chr(39), chr(39) * 2)}'"
+        f"{column.name} {column.data_type} COMMENT '{escaped_sql_string(column.comment)}'"
         for column in table.columns
     ]
     columns.extend(
@@ -113,21 +117,14 @@ def run(config: JobConfig) -> None:
     silver_schema = checked_identifier(
         os.environ.get("SILVER_SCHEMA_NAME", "silver"), "silver schema name"
     )
-    trigger_mode = os.environ.get("ETL_TRIGGER", "30 seconds").strip()
-    storage_root = os.environ.get("UNITY_STORAGE_ROOT", f"s3://unitycatalog/{catalog}").rstrip("/")
-    checkpoint_root = os.environ.get(
-        "ETL_CHECKPOINT_ROOT",
-        f"{storage_root.replace('s3://', 's3a://', 1)}/_checkpoints/silver",
-    ).rstrip("/")
     bronze_name = f"{catalog}.{bronze_schema}.{bronze_table}"
-    query_prefix = f"{config.source}-bronze-to-silver"
+    job_name = f"{config.source}-bronze-to-silver"
 
-    spark = SparkSession.builder.appName(query_prefix).getOrCreate()
-    queries = []
+    spark = SparkSession.builder.appName(job_name).getOrCreate()
     try:
         spark.sparkContext.setLogLevel("WARN")
         configure_spark(spark, catalog)
-        bronze = spark.readStream.table(bronze_name)
+        bronze = spark.read.table(bronze_name)
 
         for table in config.tables:
             checked_identifier(table.name, "silver table name")
@@ -135,31 +132,6 @@ def run(config: JobConfig) -> None:
                 checked_identifier(column.name, f"column name in {table.name}")
             table_name = f"{catalog}.{silver_schema}.{table.name}"
             create_table(spark, table_name, table)
-            writer = (
-                silver_rows(bronze, table)
-                .writeStream.format("delta")
-                .option("checkpointLocation", f"{checkpoint_root}/{table.name}")
-                .outputMode("append")
-                .queryName(f"{query_prefix}-{table.name}")
-            )
-            if trigger_mode == "availableNow":
-                query = writer.trigger(availableNow=True).toTable(table_name)
-            elif trigger_mode == "once":
-                query = writer.trigger(once=True).toTable(table_name)
-            else:
-                query = writer.trigger(processingTime=trigger_mode).toTable(table_name)
-            queries.append(query)
-
-        if trigger_mode in ("availableNow", "once"):
-            for query in queries:
-                query.awaitTermination()
-        else:
-            spark.streams.awaitAnyTermination()
-        failures = [query.exception() for query in queries if query.exception() is not None]
-        if failures:
-            raise RuntimeError(f"Silver streaming query failed: {failures[0]}")
+            silver_rows(bronze, table).write.insertInto(table_name, overwrite=True)
     finally:
-        for query in queries:
-            if query.isActive:
-                query.stop()
         spark.stop()

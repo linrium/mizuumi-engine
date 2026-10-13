@@ -35,9 +35,10 @@ its Keycloak service-principal credential for a short-lived catalog token.
 For a single managed Delta table, see `examples/managed` and deploy it with
 `./scripts/spark/setup-managed.sh`.
 
-The applications under `streamings/` ingest the four synthetic source topics
-into bronze event tables. The applications under `jobs/` parse those events
-into typed source-domain silver tables. Deploy them with:
+The continuously running applications under `streamings/` ingest the four synthetic
+source topics into bronze event tables. The finite batch applications under `jobs/`
+rebuild typed source-domain silver tables and are suitable for an external scheduler
+such as Dagster. Deploy them with:
 
 ```bash
 ./scripts/spark/deploy-streamings.sh
