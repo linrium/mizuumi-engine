@@ -19,6 +19,7 @@ export function TableNav({
     { href: base, label: "Overview" },
     { href: `${base}/lineage`, label: "Lineage" },
     { href: `${base}/preview`, label: "Preview" },
+    { href: `${base}/contract`, label: "Data contract" },
     { href: `${base}/permissions`, label: "Permissions" },
     { href: `${base}/requests`, label: "Requests" },
   ]
