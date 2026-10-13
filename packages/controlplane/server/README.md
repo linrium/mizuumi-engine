@@ -1,9 +1,13 @@
 # Control Plane server
 
-The server exposes health, policy-template, and access-request workflow APIs.
+The server exposes health, ODCS data-contract, policy-template, and access-request
+workflow APIs.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
+| `PUT` | `/api/data-contracts/{catalog.schema.table}/versions/{version}` | Validate, store, and activate an immutable ODCS v3.1.0 table contract. |
+| `GET` | `/api/data-contracts/{catalog.schema.table}` | Get the active contract and its latest reconciliation state. |
+| `POST` | `/api/data-contracts/{catalog.schema.table}/reconcile` | Compare the active contract with the observed Unity Catalog table. |
 | `POST` | `/api/policy-templates` | Create and publish version 1 of a policy template. |
 | `GET` | `/api/policy-templates?affected_team=<team>` | List published templates, optionally filtered by affected team. |
 | `GET` | `/api/policy-templates/{template_id}` | Get a template with its fixed grant, teams, and guardrails. |
@@ -15,6 +19,12 @@ The server exposes health, policy-template, and access-request workflow APIs.
 | `POST` | `/api/access-requests/{request_id}/approve` | Record an approval and apply the template quorum. |
 | `POST` | `/api/access-requests/{request_id}/reject` | Reject a pending request. |
 | `POST` | `/api/access-requests/{request_id}/cancel` | Cancel an awaiting request owned by the requester. |
+
+Data contracts are stored as complete JSONB documents with indexed table bindings,
+immutable semantic versions, full-document and physical-schema SHA-256 hashes, and the
+latest Unity Catalog observation. The initial implementation supports one physical table
+object per ODCS document. Reconciliation checks ordered column names, physical types,
+nullability, partition positions, and the `mizuumi.odcs.*` Delta table properties.
 
 Template creation publishes the initial version immediately. Manual templates route matching
 requests to `AWAITING_APPROVAL`: `ANY` templates are approved when one team's quorum is met and

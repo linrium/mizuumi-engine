@@ -14,9 +14,14 @@ same catalog's `silver` schema.
 All fields from the synthetic source CSV schemas are cast to appropriate Spark SQL
 types. Every silver table also contains `kafka_ts`, copied from the bronze Kafka record
 timestamp, and `ingest_ts`, copied from the bronze ingestion timestamp. Every business
-and ingestion column has a Unity Catalog comment when its table is created. Because the
-jobs use `CREATE TABLE IF NOT EXISTS`, redeploying does not change comments on tables
-that already exist.
+and ingestion column has a Unity Catalog comment when its table is created.
+
+Before writing, each job publishes an ODCS v3.1.0 contract version to the Control Plane,
+validates the outgoing DataFrame against it, and stamps the contract ID, version, document
+hash, and schema hash into the Delta table properties. Contract versions are immutable: a
+schema change must also increment the table's `contract_version`. After writing, the job
+asks the Control Plane to reconcile the active contract with Unity Catalog and fails if the
+table is still drifted.
 
 Deploy every ETL job from the repository root:
 
@@ -40,4 +45,4 @@ The deployment accepts additional Helm options:
 ```
 
 Supported runtime environment overrides are `BRONZE_SCHEMA_NAME`, `BRONZE_TABLE_NAME`,
-and `SILVER_SCHEMA_NAME`.
+`SILVER_SCHEMA_NAME`, and `CONTROLPLANE_URL`.

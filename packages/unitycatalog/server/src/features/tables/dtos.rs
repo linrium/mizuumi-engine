@@ -77,6 +77,12 @@ pub struct GetTableRequest {
     pub read_materialized_view_as_managed: Option<bool>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct UpdateTableRequest {
+    pub comment: Option<String>,
+    pub properties: Option<BTreeMap<String, String>>,
+}
+
 #[derive(Debug, Serialize)]
 pub struct TableInfo {
     pub name: String,

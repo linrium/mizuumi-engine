@@ -230,7 +230,11 @@ impl DeltaCommitService for DefaultDeltaCommitService {
                     "UPDATE uc_tables \
                      SET comment = COALESCE($2, comment), \
                          columns = COALESCE($3::jsonb, columns), \
-                         properties = COALESCE($4::jsonb, properties), \
+                         properties = COALESCE($4::jsonb, properties) || COALESCE(( \
+                             SELECT jsonb_object_agg(entry.key, entry.value) \
+                             FROM jsonb_each(properties) entry \
+                             WHERE entry.key LIKE 'mizuumi.odcs.%' \
+                         ), '{}'::jsonb), \
                          updated_at = (EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::bigint \
                      WHERE id = $1",
                     &[

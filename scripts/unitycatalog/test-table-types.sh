@@ -116,11 +116,17 @@ managed_response="$(request POST /tables "$managed_body")"
 printf '%s' "$managed_response" | jq -e --arg id "$staging_id" --arg location "$staging_location" \
   '.table_type == "MANAGED" and .table_id == $id and .storage_location == $location' >/dev/null
 
+request PATCH "/tables/$catalog.$schema.$managed" \
+  '{"properties":{"mizuumi.odcs.id":"contract-test"}}' >/dev/null
+
 commit_file="00000000000000000001.$suffix.json"
 commit_body="$(jq -cn --arg id "$staging_id" --arg uri "$staging_location" --arg file "$commit_file" \
-  '{table_id:$id,table_uri:$uri,commit_info:{version:1,timestamp:1,file_name:$file,file_size:1,file_modification_timestamp:1}}')"
+  '{table_id:$id,table_uri:$uri,commit_info:{version:1,timestamp:1,file_name:$file,file_size:1,file_modification_timestamp:1},metadata:{properties:{properties:{"delta.test":"present"}}}}')"
 request POST /delta/preview/commits "$commit_body" >/dev/null
 request POST /delta/preview/commits "$commit_body" >/dev/null
+managed_response="$(request GET "/tables/$catalog.$schema.$managed")"
+printf '%s' "$managed_response" | jq -e \
+  '.properties["mizuumi.odcs.id"] == "contract-test" and .properties["delta.test"] == "present"' >/dev/null
 get_commits_body="$(jq -cn --arg id "$staging_id" --arg uri "$staging_location" \
   '{table_id:$id,table_uri:$uri,start_version:0}')"
 commits="$(request GET /delta/preview/commits "$get_commits_body")"

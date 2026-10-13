@@ -3,8 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 import os
 import re
+from typing import Any
+import urllib.error
+import urllib.parse
+import urllib.request
+import uuid
 
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql.functions import col
@@ -25,6 +31,7 @@ class Table:
     name: str
     event_type: str
     columns: tuple[Column, ...]
+    contract_version: str = "1.0.0"
 
 
 @dataclass(frozen=True)
@@ -75,7 +82,133 @@ def configure_spark(spark: SparkSession, catalog: str) -> None:
     spark.conf.set(f"{catalog_auth}.oauth.scope", "openid")
 
 
-def create_table(spark: SparkSession, table_name: str, table: Table) -> None:
+def normalized_type(value: str) -> str:
+    return "".join(value.upper().split())
+
+
+def logical_type(physical_type: str) -> str:
+    normalized = normalized_type(physical_type)
+    if normalized == "STRING":
+        return "string"
+    if normalized == "DATE":
+        return "date"
+    if normalized == "TIMESTAMP":
+        return "timestamp"
+    if normalized in {"BIGINT", "INT"}:
+        return "integer"
+    if normalized == "BOOLEAN":
+        return "boolean"
+    if normalized.startswith("DECIMAL("):
+        return "number"
+    raise RuntimeError(f"Unsupported ODCS physical type: {physical_type}")
+
+
+def contract_property(full_name: str, column: Column) -> dict[str, Any]:
+    return {
+        "id": str(uuid.uuid5(uuid.NAMESPACE_URL, f"{full_name}#{column.name}")),
+        "name": column.name,
+        "logicalType": logical_type(column.data_type),
+        "physicalType": column.data_type,
+        "required": False,
+        "description": column.comment,
+    }
+
+
+def contract_document(config: JobConfig, table: Table, full_name: str) -> dict[str, Any]:
+    technical_columns = (
+        Column(
+            "kafka_ts",
+            TIMESTAMP,
+            "Timestamp assigned to the source record by Kafka",
+        ),
+        Column(
+            "ingest_ts",
+            TIMESTAMP,
+            "Timestamp when the record was ingested into the bronze table",
+        ),
+    )
+    return {
+        "apiVersion": "v3.1.0",
+        "kind": "DataContract",
+        "id": str(uuid.uuid5(uuid.NAMESPACE_URL, full_name)),
+        "name": full_name,
+        "version": table.contract_version,
+        "status": "active",
+        "domain": config.source,
+        "description": {
+            "purpose": f"Typed silver table generated from {table.event_type} bronze events"
+        },
+        "schema": [
+            {
+                "id": str(uuid.uuid5(uuid.NAMESPACE_URL, f"{full_name}#table")),
+                "name": table.name,
+                "logicalType": "object",
+                "physicalType": "table",
+                "physicalName": full_name,
+                "properties": [
+                    contract_property(full_name, column)
+                    for column in (*table.columns, *technical_columns)
+                ],
+            }
+        ],
+    }
+
+
+def controlplane_request(
+    method: str, path: str, body: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    base_url = required_env("CONTROLPLANE_URL").rstrip("/")
+    data = None if body is None else json.dumps(body).encode("utf-8")
+    request = urllib.request.Request(
+        f"{base_url}{path}",
+        data=data,
+        headers={"Content-Type": "application/json"},
+        method=method,
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            return json.load(response)
+    except urllib.error.HTTPError as error:
+        detail = error.read().decode("utf-8", errors="replace")
+        raise RuntimeError(
+            f"Control Plane {method} {path} returned HTTP {error.code}: {detail}"
+        ) from error
+    except urllib.error.URLError as error:
+        raise RuntimeError(f"Control Plane {method} {path} failed: {error.reason}") from error
+
+
+def publish_contract(config: JobConfig, table: Table, full_name: str) -> dict[str, Any]:
+    encoded_name = urllib.parse.quote(full_name, safe="")
+    encoded_version = urllib.parse.quote(table.contract_version, safe="")
+    return controlplane_request(
+        "PUT",
+        f"/api/data-contracts/{encoded_name}/versions/{encoded_version}",
+        {
+            "document": contract_document(config, table, full_name),
+            "created_by": f"spark:{config.source}-bronze-to-silver",
+        },
+    )
+
+
+def contract_table_properties(contract: dict[str, Any]) -> dict[str, str]:
+    return {
+        "mizuumi.odcs.id": contract["id"],
+        "mizuumi.odcs.version": contract["version"],
+        "mizuumi.odcs.documentHash": contract["document_hash"],
+        "mizuumi.odcs.schemaHash": contract["schema_hash"],
+    }
+
+
+def table_properties_sql(properties: dict[str, str]) -> str:
+    return ", ".join(
+        f"'{escaped_sql_string(key)}' = '{escaped_sql_string(value)}'"
+        for key, value in properties.items()
+    )
+
+
+def create_table(
+    spark: SparkSession, table_name: str, table: Table, contract: dict[str, Any]
+) -> None:
     columns = [
         f"{column.name} {column.data_type} COMMENT '{escaped_sql_string(column.comment)}'"
         for column in table.columns
@@ -86,7 +219,11 @@ def create_table(spark: SparkSession, table_name: str, table: Table) -> None:
             "ingest_ts TIMESTAMP COMMENT 'Timestamp when the record was ingested into the bronze table'",
         ]
     )
-    spark.sql(f"CREATE TABLE IF NOT EXISTS {table_name} ({', '.join(columns)}) USING DELTA")
+    properties = table_properties_sql(contract_table_properties(contract))
+    spark.sql(
+        f"CREATE TABLE IF NOT EXISTS {table_name} ({', '.join(columns)}) "
+        f"USING DELTA TBLPROPERTIES ({properties})"
+    )
 
 
 def silver_rows(bronze: DataFrame, table: Table) -> DataFrame:
@@ -99,6 +236,37 @@ def silver_rows(bronze: DataFrame, table: Table) -> DataFrame:
         col("kafka_timestamp").alias("kafka_ts"),
         col("ingest_ts"),
     )
+
+
+def validate_dataframe(rows: DataFrame, contract: dict[str, Any]) -> None:
+    properties = contract["document"]["schema"][0]["properties"]
+    expected = [
+        (
+            property["name"],
+            normalized_type(property["physicalType"]),
+            property.get("required", False),
+        )
+        for property in properties
+    ]
+    actual = [
+        (field.name, normalized_type(field.dataType.simpleString()), not field.nullable)
+        for field in rows.schema.fields
+    ]
+    if actual != expected:
+        raise RuntimeError(
+            "Outgoing DataFrame does not satisfy the active data contract: "
+            f"expected={expected!r}, actual={actual!r}"
+        )
+
+
+def reconcile_contract(full_name: str) -> None:
+    encoded_name = urllib.parse.quote(full_name, safe="")
+    result = controlplane_request("POST", f"/api/data-contracts/{encoded_name}/reconcile")
+    if result["sync_state"] != "IN_SYNC":
+        raise RuntimeError(
+            f"Data contract reconciliation for {full_name} is {result['sync_state']}: "
+            f"{result['differences']}"
+        )
 
 
 def run(config: JobConfig) -> None:
@@ -131,7 +299,11 @@ def run(config: JobConfig) -> None:
             for column in table.columns:
                 checked_identifier(column.name, f"column name in {table.name}")
             table_name = f"{catalog}.{silver_schema}.{table.name}"
-            create_table(spark, table_name, table)
-            silver_rows(bronze, table).write.insertInto(table_name, overwrite=True)
+            contract = publish_contract(config, table, table_name)
+            create_table(spark, table_name, table, contract)
+            rows = silver_rows(bronze, table)
+            validate_dataframe(rows, contract)
+            rows.write.insertInto(table_name, overwrite=True)
+            reconcile_contract(table_name)
     finally:
         spark.stop()

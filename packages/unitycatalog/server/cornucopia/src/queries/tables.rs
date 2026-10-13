@@ -42,6 +42,22 @@ pub struct GetTableParams<T1: crate::StringSql, T2: crate::StringSql, T3: crate:
     pub name: T3,
 }
 #[derive(Debug)]
+pub struct UpdateTableParams<
+    T1: crate::StringSql,
+    T2: crate::JsonSql,
+    T3: crate::StringSql,
+    T4: crate::StringSql,
+    T5: crate::StringSql,
+    T6: crate::StringSql,
+> {
+    pub comment: T1,
+    pub properties: T2,
+    pub updated_by: T3,
+    pub catalog_name: T4,
+    pub schema_name: T5,
+    pub name: T6,
+}
+#[derive(Debug)]
 pub struct DeleteTableParams<T1: crate::StringSql, T2: crate::StringSql, T3: crate::StringSql> {
     pub catalog_name: T1,
     pub schema_name: T2,
@@ -293,6 +309,88 @@ impl<'a> From<GetTableBorrowed<'a>> for GetTable {
         }
     }
 }
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct UpdateTable {
+    pub name: String,
+    pub catalog_name: String,
+    pub schema_name: String,
+    pub table_type: String,
+    pub data_source_format: String,
+    pub columns: serde_json::Value,
+    pub storage_location: String,
+    pub comment: String,
+    pub properties: serde_json::Value,
+    pub owner: String,
+    pub created_at: i64,
+    pub created_by: String,
+    pub updated_at: i64,
+    pub updated_by: String,
+    pub table_id: String,
+    pub view_definition: String,
+    pub view_dependencies: serde_json::Value,
+}
+pub struct UpdateTableBorrowed<'a> {
+    pub name: &'a str,
+    pub catalog_name: &'a str,
+    pub schema_name: &'a str,
+    pub table_type: &'a str,
+    pub data_source_format: &'a str,
+    pub columns: postgres_types::Json<&'a serde_json::value::RawValue>,
+    pub storage_location: &'a str,
+    pub comment: &'a str,
+    pub properties: postgres_types::Json<&'a serde_json::value::RawValue>,
+    pub owner: &'a str,
+    pub created_at: i64,
+    pub created_by: &'a str,
+    pub updated_at: i64,
+    pub updated_by: &'a str,
+    pub table_id: &'a str,
+    pub view_definition: &'a str,
+    pub view_dependencies: postgres_types::Json<&'a serde_json::value::RawValue>,
+}
+impl<'a> From<UpdateTableBorrowed<'a>> for UpdateTable {
+    fn from(
+        UpdateTableBorrowed {
+            name,
+            catalog_name,
+            schema_name,
+            table_type,
+            data_source_format,
+            columns,
+            storage_location,
+            comment,
+            properties,
+            owner,
+            created_at,
+            created_by,
+            updated_at,
+            updated_by,
+            table_id,
+            view_definition,
+            view_dependencies,
+        }: UpdateTableBorrowed<'a>,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            catalog_name: catalog_name.into(),
+            schema_name: schema_name.into(),
+            table_type: table_type.into(),
+            data_source_format: data_source_format.into(),
+            columns: serde_json::from_str(columns.0.get()).unwrap(),
+            storage_location: storage_location.into(),
+            comment: comment.into(),
+            properties: serde_json::from_str(properties.0.get()).unwrap(),
+            owner: owner.into(),
+            created_at,
+            created_by: created_by.into(),
+            updated_at,
+            updated_by: updated_by.into(),
+            table_id: table_id.into(),
+            view_definition: view_definition.into(),
+            view_dependencies: serde_json::from_str(view_dependencies.0.get()).unwrap(),
+        }
+    }
+}
 use crate::client::async_::GenericClient;
 use futures::{self, StreamExt, TryStreamExt};
 pub struct CreateTableQuery<'c, 'a, 's, C: GenericClient, T, const N: usize> {
@@ -443,6 +541,73 @@ where
 {
     pub fn map<R>(self, mapper: fn(GetTableBorrowed) -> R) -> GetTableQuery<'c, 'a, 's, C, R, N> {
         GetTableQuery {
+            client: self.client,
+            params: self.params,
+            query: self.query,
+            cached: self.cached,
+            extractor: self.extractor,
+            mapper,
+        }
+    }
+    pub async fn one(self) -> Result<T, tokio_postgres::Error> {
+        let row =
+            crate::client::async_::one(self.client, self.query, &self.params, self.cached).await?;
+        Ok((self.mapper)((self.extractor)(&row)?))
+    }
+    pub async fn all(self) -> Result<Vec<T>, tokio_postgres::Error> {
+        self.iter().await?.try_collect().await
+    }
+    pub async fn opt(self) -> Result<Option<T>, tokio_postgres::Error> {
+        let opt_row =
+            crate::client::async_::opt(self.client, self.query, &self.params, self.cached).await?;
+        Ok(opt_row
+            .map(|row| {
+                let extracted = (self.extractor)(&row)?;
+                Ok((self.mapper)(extracted))
+            })
+            .transpose()?)
+    }
+    pub async fn iter(
+        self,
+    ) -> Result<
+        impl futures::Stream<Item = Result<T, tokio_postgres::Error>> + 'c,
+        tokio_postgres::Error,
+    > {
+        let stream = crate::client::async_::raw(
+            self.client,
+            self.query,
+            crate::slice_iter(&self.params),
+            self.cached,
+        )
+        .await?;
+        let mapped = stream
+            .map(move |res| {
+                res.and_then(|row| {
+                    let extracted = (self.extractor)(&row)?;
+                    Ok((self.mapper)(extracted))
+                })
+            })
+            .into_stream();
+        Ok(mapped)
+    }
+}
+pub struct UpdateTableQuery<'c, 'a, 's, C: GenericClient, T, const N: usize> {
+    client: &'c C,
+    params: [&'a (dyn postgres_types::ToSql + Sync); N],
+    query: &'static str,
+    cached: Option<&'s tokio_postgres::Statement>,
+    extractor: fn(&tokio_postgres::Row) -> Result<UpdateTableBorrowed, tokio_postgres::Error>,
+    mapper: fn(UpdateTableBorrowed) -> T,
+}
+impl<'c, 'a, 's, C, T: 'c, const N: usize> UpdateTableQuery<'c, 'a, 's, C, T, N>
+where
+    C: GenericClient,
+{
+    pub fn map<R>(
+        self,
+        mapper: fn(UpdateTableBorrowed) -> R,
+    ) -> UpdateTableQuery<'c, 'a, 's, C, R, N> {
+        UpdateTableQuery {
             client: self.client,
             params: self.params,
             query: self.query,
@@ -862,6 +1027,117 @@ impl<'c, 'a, 's, C: GenericClient, T1: crate::StringSql, T2: crate::StringSql, T
     ) -> GetTableQuery<'c, 'a, 's, C, GetTable, 3> {
         self.bind(
             client,
+            &params.catalog_name,
+            &params.schema_name,
+            &params.name,
+        )
+    }
+}
+pub struct UpdateTableStmt(&'static str, Option<tokio_postgres::Statement>);
+pub fn update_table() -> UpdateTableStmt {
+    UpdateTableStmt(
+        "WITH updated AS ( UPDATE uc_tables tables SET comment = COALESCE(NULLIF($1, ''), tables.comment), properties = tables.properties || COALESCE($2, '{}'::jsonb), updated_at = (EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::bigint, updated_by = $3 FROM uc_schemas schemas, uc_catalogs catalogs WHERE schemas.id = tables.schema_id AND catalogs.id = schemas.catalog_id AND catalogs.name = $4 AND schemas.name = $5 AND tables.name = $6 RETURNING tables.* ) SELECT updated.name, catalogs.name AS catalog_name, schemas.name AS schema_name, updated.table_type, COALESCE(updated.data_source_format, '') AS data_source_format, updated.columns, COALESCE(updated.storage_location, '') AS storage_location, COALESCE(updated.comment, '') AS comment, updated.properties, COALESCE(updated.owner, '') AS owner, updated.created_at, COALESCE(updated.created_by, '') AS created_by, updated.updated_at, COALESCE(updated.updated_by, '') AS updated_by, updated.id AS table_id, COALESCE(updated.view_definition, '') AS view_definition, COALESCE(updated.view_dependencies, 'null'::jsonb) AS view_dependencies FROM updated JOIN uc_schemas schemas ON schemas.id = updated.schema_id JOIN uc_catalogs catalogs ON catalogs.id = schemas.catalog_id",
+        None,
+    )
+}
+impl UpdateTableStmt {
+    pub async fn prepare<'a, C: GenericClient>(
+        mut self,
+        client: &'a C,
+    ) -> Result<Self, tokio_postgres::Error> {
+        self.1 = Some(client.prepare(self.0).await?);
+        Ok(self)
+    }
+    pub fn bind<
+        'c,
+        'a,
+        's,
+        C: GenericClient,
+        T1: crate::StringSql,
+        T2: crate::JsonSql,
+        T3: crate::StringSql,
+        T4: crate::StringSql,
+        T5: crate::StringSql,
+        T6: crate::StringSql,
+    >(
+        &'s self,
+        client: &'c C,
+        comment: &'a T1,
+        properties: &'a T2,
+        updated_by: &'a T3,
+        catalog_name: &'a T4,
+        schema_name: &'a T5,
+        name: &'a T6,
+    ) -> UpdateTableQuery<'c, 'a, 's, C, UpdateTable, 6> {
+        UpdateTableQuery {
+            client,
+            params: [
+                comment,
+                properties,
+                updated_by,
+                catalog_name,
+                schema_name,
+                name,
+            ],
+            query: self.0,
+            cached: self.1.as_ref(),
+            extractor:
+                |row: &tokio_postgres::Row| -> Result<UpdateTableBorrowed, tokio_postgres::Error> {
+                    Ok(UpdateTableBorrowed {
+                        name: row.try_get(0)?,
+                        catalog_name: row.try_get(1)?,
+                        schema_name: row.try_get(2)?,
+                        table_type: row.try_get(3)?,
+                        data_source_format: row.try_get(4)?,
+                        columns: row.try_get(5)?,
+                        storage_location: row.try_get(6)?,
+                        comment: row.try_get(7)?,
+                        properties: row.try_get(8)?,
+                        owner: row.try_get(9)?,
+                        created_at: row.try_get(10)?,
+                        created_by: row.try_get(11)?,
+                        updated_at: row.try_get(12)?,
+                        updated_by: row.try_get(13)?,
+                        table_id: row.try_get(14)?,
+                        view_definition: row.try_get(15)?,
+                        view_dependencies: row.try_get(16)?,
+                    })
+                },
+            mapper: |it| UpdateTable::from(it),
+        }
+    }
+}
+impl<
+    'c,
+    'a,
+    's,
+    C: GenericClient,
+    T1: crate::StringSql,
+    T2: crate::JsonSql,
+    T3: crate::StringSql,
+    T4: crate::StringSql,
+    T5: crate::StringSql,
+    T6: crate::StringSql,
+>
+    crate::client::async_::Params<
+        'c,
+        'a,
+        's,
+        UpdateTableParams<T1, T2, T3, T4, T5, T6>,
+        UpdateTableQuery<'c, 'a, 's, C, UpdateTable, 6>,
+        C,
+    > for UpdateTableStmt
+{
+    fn params(
+        &'s self,
+        client: &'c C,
+        params: &'a UpdateTableParams<T1, T2, T3, T4, T5, T6>,
+    ) -> UpdateTableQuery<'c, 'a, 's, C, UpdateTable, 6> {
+        self.bind(
+            client,
+            &params.comment,
+            &params.properties,
+            &params.updated_by,
             &params.catalog_name,
             &params.schema_name,
             &params.name,

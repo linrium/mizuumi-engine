@@ -128,6 +128,43 @@ WHERE catalogs.name = :catalog_name
   AND schemas.name = :schema_name
   AND tables.name = :name;
 
+--! update_table
+WITH updated AS (
+    UPDATE uc_tables tables
+    SET comment = COALESCE(NULLIF(:comment, ''), tables.comment),
+        properties = tables.properties || COALESCE(:properties, '{}'::jsonb),
+        updated_at = (EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::bigint,
+        updated_by = :updated_by
+    FROM uc_schemas schemas, uc_catalogs catalogs
+    WHERE schemas.id = tables.schema_id
+      AND catalogs.id = schemas.catalog_id
+      AND catalogs.name = :catalog_name
+      AND schemas.name = :schema_name
+      AND tables.name = :name
+    RETURNING tables.*
+)
+SELECT
+    updated.name,
+    catalogs.name AS catalog_name,
+    schemas.name AS schema_name,
+    updated.table_type,
+    COALESCE(updated.data_source_format, '') AS data_source_format,
+    updated.columns,
+    COALESCE(updated.storage_location, '') AS storage_location,
+    COALESCE(updated.comment, '') AS comment,
+    updated.properties,
+    COALESCE(updated.owner, '') AS owner,
+    updated.created_at,
+    COALESCE(updated.created_by, '') AS created_by,
+    updated.updated_at,
+    COALESCE(updated.updated_by, '') AS updated_by,
+    updated.id AS table_id,
+    COALESCE(updated.view_definition, '') AS view_definition,
+    COALESCE(updated.view_dependencies, 'null'::jsonb) AS view_dependencies
+FROM updated
+JOIN uc_schemas schemas ON schemas.id = updated.schema_id
+JOIN uc_catalogs catalogs ON catalogs.id = schemas.catalog_id;
+
 --! delete_table
 DELETE FROM uc_tables tables
 USING uc_schemas schemas, uc_catalogs catalogs

@@ -14,7 +14,7 @@ use crate::{
 
 use super::dtos::{
     CreateStagingTableRequest, CreateTableRequest, GetTableRequest, ListTablesRequest,
-    ListTablesResponse, StagingTableInfo, TableInfo,
+    ListTablesResponse, StagingTableInfo, TableInfo, UpdateTableRequest,
 };
 
 const TABLES_PATH: &str = "/api/2.1/unity-catalog/tables";
@@ -28,7 +28,7 @@ pub fn table_router() -> Router<AppState> {
         .route(TABLES_PATH, post(create_table).get(list_tables))
         .route(
             &format!("{TABLES_PATH}/{{full_name}}"),
-            get(get_table).delete(delete_table),
+            get(get_table).patch(update_table).delete(delete_table),
         )
 }
 
@@ -102,6 +102,26 @@ async fn delete_table(
     .await?;
     state.tables.delete_table(full_name).await?;
     Ok(StatusCode::OK)
+}
+
+async fn update_table(
+    State(state): State<AppState>,
+    Extension(principal): Extension<AuthenticatedPrincipal>,
+    Path(full_name): Path<String>,
+    Json(request): Json<UpdateTableRequest>,
+) -> Result<Json<TableInfo>, AppError> {
+    let (catalog, schema, table) = split_table_name(&full_name)?;
+    authorization::require_allowed(
+        authorization::can_delete_table(&state, &principal, catalog, schema, table).await?,
+        "update table",
+    )
+    .await?;
+    Ok(Json(
+        state
+            .tables
+            .update_table(full_name, request, principal.id)
+            .await?,
+    ))
 }
 
 fn split_table_name(full_name: &str) -> Result<(&str, &str, &str), AppError> {

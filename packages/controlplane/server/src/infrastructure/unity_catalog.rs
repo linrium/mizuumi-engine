@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use reqwest::{Certificate, Client, Url};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::time::Duration;
 use thiserror::Error;
 
@@ -18,6 +19,13 @@ pub enum UnityCatalogError {
 
 #[async_trait]
 pub trait UnityCatalog: Send + Sync {
+    async fn get_table(&self, full_name: &str) -> Result<Option<UnityTable>, UnityCatalogError>;
+    async fn update_table_properties(
+        &self,
+        full_name: &str,
+        properties: &BTreeMap<String, String>,
+    ) -> Result<UnityTable, UnityCatalogError>;
+
     async fn has_privilege(
         &self,
         securable_type: &str,
@@ -105,6 +113,15 @@ impl HttpUnityCatalog {
         Ok(url)
     }
 
+    fn table_url(&self, full_name: &str) -> Result<Url, UnityCatalogError> {
+        let mut url = self.base_url.clone();
+        url.path_segments_mut()
+            .map_err(|_| UnityCatalogError::Configuration("url cannot be a base URL".to_owned()))?
+            .pop_if_empty()
+            .extend(["api", "2.1", "unity-catalog", "tables", full_name]);
+        Ok(url)
+    }
+
     async fn access_token(&self) -> Result<String, UnityCatalogError> {
         let response = self
             .client
@@ -160,6 +177,48 @@ impl HttpUnityCatalog {
 
 #[async_trait]
 impl UnityCatalog for HttpUnityCatalog {
+    async fn get_table(&self, full_name: &str) -> Result<Option<UnityTable>, UnityCatalogError> {
+        let token = self.access_token().await?;
+        let response = self
+            .client
+            .get(self.table_url(full_name)?)
+            .bearer_auth(token)
+            .send()
+            .await?;
+        if response.status() == reqwest::StatusCode::NOT_FOUND {
+            return Ok(None);
+        }
+        if !response.status().is_success() {
+            return Err(UnityCatalogError::Response {
+                status: response.status().as_u16(),
+                body: response.text().await.unwrap_or_default(),
+            });
+        }
+        Ok(Some(response.json::<UnityTable>().await?))
+    }
+
+    async fn update_table_properties(
+        &self,
+        full_name: &str,
+        properties: &BTreeMap<String, String>,
+    ) -> Result<UnityTable, UnityCatalogError> {
+        let token = self.access_token().await?;
+        let response = self
+            .client
+            .patch(self.table_url(full_name)?)
+            .bearer_auth(token)
+            .json(&TablePropertiesUpdate { properties })
+            .send()
+            .await?;
+        if !response.status().is_success() {
+            return Err(UnityCatalogError::Response {
+                status: response.status().as_u16(),
+                body: response.text().await.unwrap_or_default(),
+            });
+        }
+        Ok(response.json::<UnityTable>().await?)
+    }
+
     async fn has_privilege(
         &self,
         securable_type: &str,
@@ -250,6 +309,31 @@ struct PermissionChange<'a> {
     remove: &'a [&'a str],
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct UnityTable {
+    pub table_id: String,
+    #[serde(default)]
+    pub columns: Vec<UnityColumn>,
+    #[serde(default)]
+    pub properties: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct UnityColumn {
+    pub name: Option<String>,
+    pub type_text: Option<String>,
+    pub type_name: Option<String>,
+    pub comment: Option<String>,
+    pub nullable: Option<bool>,
+    pub partition_index: Option<i32>,
+    pub position: Option<i32>,
+}
+
+#[derive(Serialize)]
+struct TablePropertiesUpdate<'a> {
+    properties: &'a BTreeMap<String, String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -274,6 +358,17 @@ mod tests {
         assert_eq!(
             url.as_str(),
             "http://unitycatalog:8080/api/2.1/unity-catalog/permissions/table/catalog.schema%2Ftable"
+        );
+    }
+
+    #[test]
+    fn table_url_encodes_the_full_name_as_one_path_segment() {
+        let client = HttpUnityCatalog::new(&settings()).unwrap();
+        let url = client.table_url("catalog.schema/table").unwrap();
+
+        assert_eq!(
+            url.as_str(),
+            "http://unitycatalog:8080/api/2.1/unity-catalog/tables/catalog.schema%2Ftable"
         );
     }
 

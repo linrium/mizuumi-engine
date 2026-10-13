@@ -1,3 +1,5 @@
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 CREATE TABLE IF NOT EXISTS controlplane_metadata (
     singleton BOOLEAN PRIMARY KEY DEFAULT TRUE CHECK (singleton),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -6,6 +8,65 @@ CREATE TABLE IF NOT EXISTS controlplane_metadata (
 INSERT INTO controlplane_metadata (singleton)
 VALUES (TRUE)
 ON CONFLICT DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS data_contracts (
+    id TEXT PRIMARY KEY CHECK (BTRIM(id) <> ''),
+    catalog_name TEXT NOT NULL CHECK (BTRIM(catalog_name) <> ''),
+    schema_name TEXT NOT NULL CHECK (BTRIM(schema_name) <> ''),
+    table_name TEXT NOT NULL CHECK (BTRIM(table_name) <> ''),
+    active_version TEXT,
+    created_by TEXT NOT NULL CHECK (BTRIM(created_by) <> ''),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (catalog_name, schema_name, table_name)
+);
+
+CREATE TABLE IF NOT EXISTS data_contract_versions (
+    contract_id TEXT NOT NULL REFERENCES data_contracts(id) ON DELETE CASCADE,
+    version TEXT NOT NULL CHECK (BTRIM(version) <> ''),
+    document JSONB NOT NULL CHECK (jsonb_typeof(document) = 'object'),
+    document_hash TEXT NOT NULL CHECK (BTRIM(document_hash) <> ''),
+    schema_hash TEXT NOT NULL CHECK (BTRIM(schema_hash) <> ''),
+    created_by TEXT NOT NULL CHECK (BTRIM(created_by) <> ''),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (contract_id, version)
+);
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'data_contracts_active_version_fkey'
+    ) THEN
+        ALTER TABLE data_contracts
+            ADD CONSTRAINT data_contracts_active_version_fkey
+            FOREIGN KEY (id, active_version)
+            REFERENCES data_contract_versions(contract_id, version)
+            DEFERRABLE INITIALLY DEFERRED;
+    END IF;
+END
+$$;
+
+CREATE TABLE IF NOT EXISTS data_contract_observations (
+    contract_id TEXT PRIMARY KEY REFERENCES data_contracts(id) ON DELETE CASCADE,
+    contract_version TEXT NOT NULL,
+    unity_table_id TEXT,
+    state TEXT NOT NULL CHECK (
+        state IN ('PENDING_DEPLOYMENT', 'IN_SYNC', 'DRIFTED', 'TABLE_MISSING', 'ERROR')
+    ),
+    observed_columns JSONB NOT NULL DEFAULT '[]'::jsonb
+        CHECK (jsonb_typeof(observed_columns) = 'array'),
+    observed_properties JSONB NOT NULL DEFAULT '{}'::jsonb
+        CHECK (jsonb_typeof(observed_properties) = 'object'),
+    observed_schema_hash TEXT,
+    differences JSONB NOT NULL DEFAULT '[]'::jsonb
+        CHECK (jsonb_typeof(differences) = 'array'),
+    checked_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    FOREIGN KEY (contract_id, contract_version)
+        REFERENCES data_contract_versions(contract_id, version) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_data_contracts_table
+    ON data_contracts (catalog_name, schema_name, table_name);
 
 CREATE TABLE IF NOT EXISTS policy_templates (
     id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,

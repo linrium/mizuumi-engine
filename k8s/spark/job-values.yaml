@@ -8,6 +8,8 @@ flare:
   traceGranularity: jobs
 
 application:
+  env:
+    CONTROLPLANE_URL: http://controlplane-server.tower.svc.cluster.local:8080
   restartPolicy:
     type: Never
   driver:

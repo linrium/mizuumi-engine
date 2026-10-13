@@ -16,6 +16,8 @@ pub enum AppError {
     Postgres(#[from] tokio_postgres::Error),
     #[error("postgres pool failed")]
     Pool(#[from] deadpool_postgres::PoolError),
+    #[error("JSON serialization failed")]
+    Json(#[from] serde_json::Error),
     #[error("kubernetes api failed: {0}")]
     Kube(#[from] kube::Error),
     #[error("Unity Catalog synchronization failed: {0}")]
@@ -35,6 +37,7 @@ impl IntoResponse for AppError {
             AppError::Conflict(_) => StatusCode::CONFLICT,
             AppError::Forbidden(_) => StatusCode::FORBIDDEN,
             AppError::Postgres(_) | AppError::Pool(_) => StatusCode::SERVICE_UNAVAILABLE,
+            AppError::Json(_) => StatusCode::INTERNAL_SERVER_ERROR,
             AppError::Kube(kube::Error::Api(resp)) if resp.code == 404 => StatusCode::NOT_FOUND,
             AppError::Kube(_) | AppError::UnityCatalog(_) => StatusCode::BAD_GATEWAY,
         };

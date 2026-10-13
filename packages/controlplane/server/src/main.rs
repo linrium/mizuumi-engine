@@ -18,6 +18,7 @@ use crate::{
     config::Settings,
     features::{
         access_requests::{DefaultAccessRequestService, access_request_router},
+        data_contracts::{DefaultDataContractService, data_contract_router},
         health::{DefaultHealthService, health_router},
         pipelines::{DefaultPipelineService, pipeline_router},
         policy_templates::{DefaultPolicyTemplateService, policy_template_router},
@@ -58,14 +59,16 @@ async fn main() -> anyhow::Result<()> {
     let state = AppState {
         access_requests: Arc::new(DefaultAccessRequestService::new(
             pool.clone(),
-            unity_catalog,
+            unity_catalog.clone(),
         )),
+        data_contracts: Arc::new(DefaultDataContractService::new(pool.clone(), unity_catalog)),
         health: Arc::new(DefaultHealthService::new(pool.clone())),
         pipelines: Arc::new(DefaultPipelineService::new(kube_client)),
         policy_templates: Arc::new(DefaultPolicyTemplateService::new(pool)),
     };
     let app = Router::new()
         .merge(health_router())
+        .merge(data_contract_router())
         .merge(policy_template_router())
         .merge(access_request_router())
         .merge(pipeline_router())

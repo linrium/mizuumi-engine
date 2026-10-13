@@ -12,7 +12,7 @@ use crate::error::AppError;
 use super::{
     dtos::{
         CreateStagingTableRequest, CreateTableRequest, GetTableRequest, ListTablesRequest,
-        ListTablesResponse, StagingTableInfo, TableInfo,
+        ListTablesResponse, StagingTableInfo, TableInfo, UpdateTableRequest,
     },
     models::Table,
 };
@@ -45,6 +45,12 @@ pub trait TableService: Send + Sync {
         &self,
         full_name: String,
         request: GetTableRequest,
+    ) -> Result<TableInfo, AppError>;
+    async fn update_table(
+        &self,
+        full_name: String,
+        request: UpdateTableRequest,
+        principal: String,
     ) -> Result<TableInfo, AppError>;
     async fn delete_table(&self, full_name: String) -> Result<(), AppError>;
 }
@@ -349,6 +355,32 @@ impl TableService for DefaultTableService {
 
         Ok(())
     }
+
+    async fn update_table(
+        &self,
+        full_name: String,
+        request: UpdateTableRequest,
+        principal: String,
+    ) -> Result<TableInfo, AppError> {
+        let names = split_table_full_name(&full_name)?;
+        let client = self.pool.get().await?;
+        let properties = serde_json::to_value(request.properties.unwrap_or_default())?;
+        let comment = request.comment.unwrap_or_default();
+        let row = table_queries::update_table()
+            .bind(
+                &client,
+                &comment,
+                &properties,
+                &principal,
+                &names.catalog_name,
+                &names.schema_name,
+                &names.table_name,
+            )
+            .opt()
+            .await?
+            .ok_or_else(|| AppError::NotFound(format!("table {full_name}")))?;
+        Ok(row_to_table(row)?.into_info(false, false))
+    }
 }
 
 async fn ensure_schema_exists<C: GenericClient>(
@@ -565,5 +597,6 @@ macro_rules! impl_into_table_parts {
 }
 
 impl_into_table_parts!(table_queries::CreateTable);
+impl_into_table_parts!(table_queries::UpdateTable);
 impl_into_table_parts!(table_queries::ListTables);
 impl_into_table_parts!(table_queries::GetTable);
