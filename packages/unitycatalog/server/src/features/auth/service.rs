@@ -334,11 +334,6 @@ impl AuthService {
             http.path = %path,
         ),
     )]
-    #[chronicle_audit::audit(
-        action = "auth.authorize_role",
-        principal = &principal.id,
-        fields(method = method, path = path, is_admin = principal.is_admin),
-    )]
     fn authorize(
         &self,
         principal: &AuthenticatedPrincipal,
