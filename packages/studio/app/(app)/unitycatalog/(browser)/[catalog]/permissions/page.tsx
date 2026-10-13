@@ -15,6 +15,7 @@ export default function CatalogPermissionsPage({
       securableType="catalog"
       fullName={catalog}
       callbackURL={callbackURL}
+      tableVariant="columns"
     />
   )
 }

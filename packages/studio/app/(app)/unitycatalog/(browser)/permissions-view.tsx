@@ -1,15 +1,14 @@
 "use client"
 
-import { IconPlus, IconRefresh } from "@tabler/icons-react"
+import { IconPlus } from "@tabler/icons-react"
 import { cn } from "cn"
-import { useCallback, useEffect, useState, useTransition } from "react"
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react"
 import {
   getUnityCatalogPermissions,
   type PrivilegeAssignment,
   type SecurableType,
   updateUnityCatalogPermissions,
 } from "@/app/(app)/unitycatalog/actions"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -66,6 +65,17 @@ export function PermissionsView({
   const [principal, setPrincipal] = useState<string>("")
   const [checked, setChecked] = useState<Record<string, boolean>>({})
   const [isPending, startTransition] = useTransition()
+
+  const permissionRows = useMemo(
+    () =>
+      assignments.flatMap((assignment) =>
+        assignment.privileges.map((privilege) => ({
+          principal: assignment.principal,
+          privilege,
+        })),
+      ),
+    [assignments],
+  )
 
   const togglePrivilege = (p: string) =>
     setChecked((prev) => ({ ...prev, [p]: !prev[p] }))
@@ -134,14 +144,13 @@ export function PermissionsView({
     })
   }
 
-  const revoke = (a: PrivilegeAssignment) => {
-    if (a.privileges.length === 0) return
+  const revoke = (principal: string, privilege: string) => {
     startTransition(async () => {
       const res = await updateUnityCatalogPermissions({
         securableType,
         fullName,
-        principal: a.principal,
-        remove: a.privileges,
+        principal,
+        remove: [privilege],
       })
       if (res.needsReconnect) {
         await reconnect()
@@ -154,30 +163,18 @@ export function PermissionsView({
       setAssignments(res.data?.privilege_assignments ?? [])
       setMessage({
         kind: "success",
-        text: `Revoked all privileges from ${a.principal}.`,
+        text: `Revoked ${privilege} from ${principal}.`,
       })
     })
   }
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between gap-2">
-        <div></div>
-        <div className="flex gap-2">
-          <Button
-            size="sm"
-            variant="ghost"
-            disabled={isPending}
-            onClick={loadAssignments}
-          >
-            <IconRefresh className={cn(isPending && "animate-spin")} />
-            Reload
-          </Button>
-          <Button size="sm" onClick={() => setGrantOpen(true)}>
-            <IconPlus />
-            Grant
-          </Button>
-        </div>
+      <div className="flex justify-end">
+        <Button size="sm" onClick={() => setGrantOpen(true)}>
+          <IconPlus />
+          Grant
+        </Button>
       </div>
 
       {message ? (
@@ -228,7 +225,7 @@ export function PermissionsView({
                     "h-auto px-3 py-2 text-muted-foreground",
                 )}
               >
-                Privileges
+                Privilege
               </TableHead>
               <TableHead
                 className={cn(
@@ -239,7 +236,7 @@ export function PermissionsView({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {assignments.length === 0 ? (
+            {permissionRows.length === 0 ? (
               <TableRow className={cn(useColumnsTableStyle && "border-b-0")}>
                 <TableCell
                   colSpan={4}
@@ -252,9 +249,9 @@ export function PermissionsView({
                 </TableCell>
               </TableRow>
             ) : (
-              assignments.map((a, index) => (
+              permissionRows.map((permission, index) => (
                 <TableRow
-                  key={a.principal}
+                  key={`${permission.principal}-${permission.privilege}`}
                   className={cn(
                     useColumnsTableStyle &&
                       "border-t border-b-0 hover:bg-muted/30",
@@ -275,18 +272,12 @@ export function PermissionsView({
                       useColumnsTableStyle && "px-3 py-1.5",
                     )}
                   >
-                    {a.principal}
+                    {permission.principal}
                   </TableCell>
                   <TableCell
                     className={cn(useColumnsTableStyle && "px-3 py-1.5")}
                   >
-                    <div className="flex flex-wrap gap-1">
-                      {a.privileges.map((p) => (
-                        <Badge key={p} variant="secondary">
-                          {p}
-                        </Badge>
-                      ))}
-                    </div>
+                    <span className="font-mono">{permission.privilege}</span>
                   </TableCell>
                   <TableCell
                     className={cn(
@@ -298,7 +289,9 @@ export function PermissionsView({
                       size={useColumnsTableStyle ? "xs" : "sm"}
                       variant="outline"
                       disabled={isPending}
-                      onClick={() => revoke(a)}
+                      onClick={() =>
+                        revoke(permission.principal, permission.privilege)
+                      }
                     >
                       Revoke
                     </Button>

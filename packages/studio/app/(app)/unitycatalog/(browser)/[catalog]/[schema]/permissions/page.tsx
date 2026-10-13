@@ -16,6 +16,7 @@ export default function SchemaPermissionsPage({
       securableType="schema"
       fullName={fullName}
       callbackURL={callbackURL}
+      tableVariant="columns"
     />
   )
 }

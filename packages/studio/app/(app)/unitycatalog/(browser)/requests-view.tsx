@@ -1,8 +1,7 @@
 "use client"
 
-import { IconPlus, IconRefresh } from "@tabler/icons-react"
+import { IconPlus } from "@tabler/icons-react"
 import { cn } from "cn"
-import { useRouter } from "next/navigation"
 import { useEffect, useState, useTransition } from "react"
 import {
   cancelAccessRequest,
@@ -89,7 +88,6 @@ export function RequestsView({
   initialError?: string
 }) {
   const privileges = PRIVILEGES_BY_TYPE[securableType]
-  const router = useRouter()
   const [requests, setRequests] = useState(initialRequests)
   const [message, setMessage] = useState<{
     kind: "error" | "success"
@@ -192,22 +190,10 @@ export function RequestsView({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between gap-2">
-        <div></div>
-        <div className="flex gap-2">
-          <Button
-            size="sm"
-            variant="ghost"
-            disabled={isPending}
-            onClick={() => startTransition(() => router.refresh())}
-          >
-            <IconRefresh className={cn(isPending && "animate-spin")} />
-            Reload
-          </Button>
-          <Button size="sm" onClick={() => setCreateOpen(true)}>
-            <IconPlus /> Request
-          </Button>
-        </div>
+      <div className="flex justify-end">
+        <Button size="sm" onClick={() => setCreateOpen(true)}>
+          <IconPlus /> Request
+        </Button>
       </div>
 
       {message ? (
