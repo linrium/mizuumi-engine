@@ -1,2 +1,8 @@
 spark:
   dependenciesPath: /opt/spark/dependencies/0.6.0/*
+
+flare:
+  enabled: true
+  driverServiceName: unity-catalog-managed-driver
+  executorServiceName: unity-catalog-managed-executor
+  traceGranularity: all

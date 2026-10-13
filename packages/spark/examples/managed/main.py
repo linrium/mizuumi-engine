@@ -69,7 +69,7 @@ def service_principal_token() -> str:
     return token
 
 
-def verify_managed_table(catalog_uri: str, table_name: str) -> None:
+def verify_managed_table(catalog_uri: str, table_name: str) -> dict[str, object]:
     table_url = (
         f"{catalog_uri.rstrip('/')}/api/2.1/unity-catalog/tables/"
         f"{parse.quote(table_name, safe='')}"
@@ -88,6 +88,7 @@ def verify_managed_table(catalog_uri: str, table_name: str) -> None:
         raise RuntimeError(
             f"Expected a MANAGED table, got {metadata.get('table_type')!r}"
         )
+    return metadata
 
 
 def main() -> None:
@@ -114,7 +115,7 @@ def main() -> None:
             f"CREATE TABLE IF NOT EXISTS {table_name} ("
             "order_id BIGINT, product STRING, quantity INT) USING DELTA"
         )
-        verify_managed_table(
+        metadata = verify_managed_table(
             spark.conf.get(f"spark.sql.catalog.{catalog}.uri"), table_name
         )
 
@@ -123,10 +124,21 @@ def main() -> None:
             "(1, 'tea', 2), (2, 'rice', 1), (3, 'tea', 3)"
         )
         result = spark.table(table_name)
-        row_count = result.count()
-        quantity_sum = result.agg({"quantity": "sum"}).first()[0]
+        rows = [row.asDict() for row in result.orderBy("order_id").collect()]
+        row_count = len(rows)
+        quantity_sum = sum(row["quantity"] for row in rows)
         if row_count != 3 or quantity_sum != 6:
             raise RuntimeError("Managed table validation failed")
+        print(
+            json.dumps(
+                {
+                    "event": "managed_table.validated",
+                    "storage_location": metadata.get("storage_location"),
+                    "rows": rows,
+                },
+                sort_keys=True,
+            )
+        )
     finally:
         spark.stop()
 

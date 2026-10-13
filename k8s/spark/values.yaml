@@ -11,6 +11,17 @@ keycloak:
   tokenUrl: https://auth.mizuumi.test/realms/sovico/protocol/openid-connect/token
   caCertificatePath: /opt/spark/trust/keycloak-ca.crt
 
+flare:
+  enabled: false
+  endpoint: http://signoz-otel-collector.signoz.svc.cluster.local:4318
+  protocol: http/protobuf
+  compression: gzip
+  logsExporter: none
+  driverServiceName: spark-driver
+  executorServiceName: spark-executor
+  resourceAttributes: deployment.environment=local,service.namespace=spark
+  traceGranularity: stages
+
 spark:
   version: "4.0.1"
   scalaVersion: "2.13"

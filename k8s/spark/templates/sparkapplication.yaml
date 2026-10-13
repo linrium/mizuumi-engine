@@ -32,6 +32,11 @@ spec:
     spark.hadoop.fs.s3a.path.style.access: "true"
     spark.hadoop.fs.s3a.connection.ssl.enabled: "true"
     spark.kubernetes.executor.deleteOnTermination: "true"
+    {{- if .Values.flare.enabled }}
+    spark.plugins: io.flare.spark.plugin.FlareSparkPlugin
+    spark.driver.extraClassPath: /opt/flare/flare-spark.jar
+    spark.executor.extraClassPath: /opt/flare/flare-spark.jar
+    {{- end }}
     {{- range $key, $value := .Values.spark.extraSparkConf }}
     {{ $key }}: {{ $value | quote }}
     {{- end }}
@@ -94,9 +99,24 @@ spec:
           - name: application-artifact
             mountPath: {{ .Values.application.artifact.mountPath | quote }}
     {{- end }}
+    {{- if .Values.flare.enabled }}
     javaOptions: >-
       -Djavax.net.ssl.trustStore=/opt/spark/trust/cacerts
       -Djavax.net.ssl.trustStorePassword=changeit
+      -javaagent:/opt/flare/opentelemetry-javaagent.jar
+      -Dotel.javaagent.extensions=/opt/flare/flare-spark.jar
+      -Dotel.exporter.otlp.endpoint={{ .Values.flare.endpoint }}
+      -Dotel.exporter.otlp.protocol={{ .Values.flare.protocol }}
+      -Dotel.exporter.otlp.compression={{ .Values.flare.compression }}
+      -Dotel.service.name={{ .Values.flare.driverServiceName }}
+      -Dotel.resource.attributes={{ .Values.flare.resourceAttributes }},k8s.namespace.name={{ .Release.Namespace }}
+      -Dotel.logs.exporter={{ .Values.flare.logsExporter }}
+      -DFLARE_TRACE_GRANULARITY={{ .Values.flare.traceGranularity }}
+    {{- else }}
+    javaOptions: >-
+      -Djavax.net.ssl.trustStore=/opt/spark/trust/cacerts
+      -Djavax.net.ssl.trustStorePassword=changeit
+    {{- end }}
     env:
       - name: SPARK_DIST_CLASSPATH
         value: {{ .Values.spark.dependenciesPath | quote }}
@@ -152,9 +172,24 @@ spec:
     cores: {{ .Values.application.executor.cores }}
     coreLimit: {{ .Values.application.executor.coreLimit | quote }}
     memory: {{ .Values.application.executor.memory | quote }}
+    {{- if .Values.flare.enabled }}
     javaOptions: >-
       -Djavax.net.ssl.trustStore=/opt/spark/trust/cacerts
       -Djavax.net.ssl.trustStorePassword=changeit
+      -javaagent:/opt/flare/opentelemetry-javaagent.jar
+      -Dotel.javaagent.extensions=/opt/flare/flare-spark.jar
+      -Dotel.exporter.otlp.endpoint={{ .Values.flare.endpoint }}
+      -Dotel.exporter.otlp.protocol={{ .Values.flare.protocol }}
+      -Dotel.exporter.otlp.compression={{ .Values.flare.compression }}
+      -Dotel.service.name={{ .Values.flare.executorServiceName }}
+      -Dotel.resource.attributes={{ .Values.flare.resourceAttributes }},k8s.namespace.name={{ .Release.Namespace }}
+      -Dotel.logs.exporter={{ .Values.flare.logsExporter }}
+      -DFLARE_TRACE_GRANULARITY={{ .Values.flare.traceGranularity }}
+    {{- else }}
+    javaOptions: >-
+      -Djavax.net.ssl.trustStore=/opt/spark/trust/cacerts
+      -Djavax.net.ssl.trustStorePassword=changeit
+    {{- end }}
     env:
       - name: SPARK_DIST_CLASSPATH
         value: {{ .Values.spark.dependenciesPath | quote }}

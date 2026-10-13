@@ -51,4 +51,11 @@ RUN ivy_dir=/tmp/spark-ivy && \
       done; \
     done && \
     rm -rf /tmp/dependency_warmup.py "$ivy_dir"
+RUN mkdir -p /opt/flare
+ADD --chmod=0444 --checksum=sha256:7e4dfe8e7dd4d5ac720434c700b665c5242e244e4de3f4feb1e727777f87638e \
+    https://github.com/Neutrinic/flare/releases/download/v1.4.0/flare-spark-4-0_2.13-1.4.0.jar \
+    /opt/flare/flare-spark.jar
+ADD --chmod=0444 --checksum=sha256:bbf83c151b6400709e2f225bdd07a04f839d9d13b8b93464241333fd25d3e3ba \
+    https://repo1.maven.org/maven2/io/opentelemetry/javaagent/opentelemetry-javaagent/2.31.1/opentelemetry-javaagent-2.31.1.jar \
+    /opt/flare/opentelemetry-javaagent.jar
 USER 185

@@ -12,23 +12,20 @@ services are set up, deploy with:
 ./scripts/spark/setup-managed.sh
 ```
 
-The script initializes the `demo` schema and its grants, uploads `main.py` to a
-content-addressed object in RustFS, builds the reusable Spark base image,
-installs the Spark Operator, and submits `unity-catalog-managed`. The driver
-downloads the script through a one-object presigned URL before Spark starts.
-It accepts the same environment overrides and extra Helm options as
-`scripts/spark/setup.sh`. For an image already available to the cluster:
+The script initializes the `demo` schema and its grants, mounts `main.py` from
+a ConfigMap, builds the reusable Spark base image, installs the Spark Operator,
+and submits `unity-catalog-managed`. It accepts the same environment overrides
+and extra Helm options as `scripts/spark/setup.sh`. For an updated image that is
+already available to the cluster:
 
 ```bash
 SPARK_BUILD_IMAGE=false ./scripts/spark/setup-managed.sh
 ```
 
-The base image preloads the Maven artifacts used by both examples. Rebuild it
-only when Spark, Delta Lake, Hadoop AWS, or a Unity Catalog connector version
-changes; editing `main.py` requires only another setup run and RustFS upload.
-The presigned URL expires after one hour by default. Set
-`SPARK_APPLICATION_URL_EXPIRATION` (up to 604800 seconds) when a queued job may
-take longer to start.
+The base image preloads the Maven artifacts, Flare extension, and matching
+OpenTelemetry Java agent used by the examples. Rebuild it when Spark, Delta
+Lake, Hadoop AWS, Unity Catalog connector, Flare, or OpenTelemetry agent
+versions change; editing `main.py` requires only another setup run.
 
 The managed deployment uses Unity Catalog Spark connector `0.6.0` because its
 OAuth provider supports the Keycloak `openid` scope. The Spark catalog uses the
@@ -48,3 +45,20 @@ kubectl -n spark logs unity-catalog-managed-driver --tail=-1
 The final log prints the allocated storage location and three rows. Re-running
 the setup script resubmits the application, keeps the same table, and replaces
 its data.
+
+The managed example uses Flare `1.4.0` with OpenTelemetry Java agent `2.31.1`
+to export traces and metrics over OTLP/HTTP to the in-cluster SigNoz collector.
+Flare traces the Spark application, SQL executions, jobs, stages, and executor
+tasks without application-level instrumentation. Install SigNoz before
+submitting the example:
+
+```bash
+./scripts/signoz/setup.sh
+./scripts/signoz/setup-k8s-infra.sh
+```
+
+The infrastructure collector continues to supply the Spark pod logs and
+Kubernetes resource metrics. Flare's OTLP log exporter is disabled to avoid
+duplicating those logs. In SigNoz, start with service
+`unity-catalog-managed-driver`; executor task spans use service
+`unity-catalog-managed-executor` in the same distributed trace.
