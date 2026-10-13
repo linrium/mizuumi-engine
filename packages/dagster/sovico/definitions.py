@@ -10,9 +10,27 @@ from __future__ import annotations
 import os
 import shlex
 from collections.abc import Mapping
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from typing import Any
 
-from dagster import AssetsDefinition, Definitions, graph_asset
+from dagster import (
+    AssetIn,
+    AssetKey,
+    AssetObservation,
+    AssetSpec,
+    AssetsDefinition,
+    DefaultSensorStatus,
+    Definitions,
+    Nothing,
+    SensorEvaluationContext,
+    SensorResult,
+    graph_asset,
+    sensor,
+)
 from dagster_k8s import k8s_job_op
+from kubernetes import client, config
+from kubernetes.client.exceptions import ApiException
 
 
 SPARK_NAMESPACE = os.environ.get("SPARK_NAMESPACE", "spark")
@@ -53,7 +71,36 @@ JVM_TRUST_OPTIONS = (
     "-Djavax.net.ssl.trustStorePassword=changeit"
 )
 
-SOURCES = ("crm", "hdbank", "vikki", "vietjet")
+SPARK_APPLICATION_GROUP = "sparkoperator.k8s.io"
+SPARK_APPLICATION_VERSION = "v1beta2"
+SPARK_APPLICATION_PLURAL = "sparkapplications"
+
+
+@dataclass(frozen=True)
+class StreamingSource:
+    name: str
+    topic: str
+
+    @property
+    def application_name(self) -> str:
+        return f"{self.name}-events-bronze"
+
+    @property
+    def topic_asset_key(self) -> AssetKey:
+        return AssetKey(["redpanda", "topics", self.topic])
+
+    @property
+    def bronze_asset_key(self) -> AssetKey:
+        return AssetKey([self.name, "bronze", "events"])
+
+
+STREAMING_SOURCES = (
+    StreamingSource("crm", "vn.crm.events"),
+    StreamingSource("hdbank", "vn.hdbank.t24.events"),
+    StreamingSource("vikki", "vn.vikki.t24.events"),
+    StreamingSource("vietjet", "vn.vietjet.events"),
+)
+SOURCES = tuple(source.name for source in STREAMING_SOURCES)
 
 
 def _credentials_secret(source: str) -> str:
@@ -178,12 +225,21 @@ def _build_asset(source: str) -> AssetsDefinition:
         name=f"submit_{source}_bronze_to_silver_spark_job",
     )
 
-    def source_asset():
-        return submit_op()
+    def source_asset(bronze_events):
+        # k8s_job_op's start_after input is Nothing-typed. It records the
+        # ordering dependency without asking an IO manager to load the
+        # externally managed Delta table into this process.
+        return submit_op(start_after=bronze_events)
 
     source_asset.__name__ = f"{source}_bronze_to_silver"
     return graph_asset(
         key=[source, "silver"],
+        ins={
+            "bronze_events": AssetIn(
+                key=AssetKey([source, "bronze", "events"]),
+                dagster_type=Nothing,
+            )
+        },
         kinds={"spark"},
         group_name="sovico",
         description=(
@@ -191,6 +247,181 @@ def _build_asset(source: str) -> AssetsDefinition:
             "with the source-domain Spark batch job."
         ),
     )(source_asset)
+
+
+def _build_external_streaming_assets() -> list[AssetSpec]:
+    assets: list[AssetSpec] = []
+    for source in STREAMING_SOURCES:
+        assets.extend(
+            [
+                AssetSpec(
+                    key=source.topic_asset_key,
+                    group_name="sovico_streaming",
+                    kinds={"kafka", "redpanda", "streaming"},
+                    description=(
+                        f"Redpanda topic consumed by the {source.name} "
+                        "Spark Structured Streaming application."
+                    ),
+                    metadata={
+                        "topic": source.topic,
+                        "bootstrap_servers": (
+                            "redpanda.redpanda.svc.cluster.local:9092"
+                        ),
+                        "managed_by": "Redpanda",
+                    },
+                ),
+                AssetSpec(
+                    key=source.bronze_asset_key,
+                    deps=[source.topic_asset_key],
+                    group_name="sovico_streaming",
+                    kinds={"delta", "spark", "streaming"},
+                    description=(
+                        f"Unity Catalog bronze table continuously populated from "
+                        f"{source.topic} by an external Spark application."
+                    ),
+                    metadata={
+                        "table": f"{source.name}.bronze.events",
+                        "catalog_type": "Unity Catalog",
+                        "spark_application": source.application_name,
+                        "kubernetes_namespace": SPARK_NAMESPACE,
+                        "checkpoint": (
+                            f"s3://unitycatalog/{source.name}/_checkpoints/"
+                            f"{source.topic.replace('.', '_')}"
+                        ),
+                    },
+                ),
+            ]
+        )
+    return assets
+
+
+def _copy_if_present(
+    metadata: dict[str, Any], key: str, value: Any
+) -> None:
+    if value is not None and value != "":
+        metadata[key] = value
+
+
+def _application_observation(
+    source: StreamingSource,
+    custom_api,
+    core_api,
+    context: SensorEvaluationContext,
+) -> AssetObservation:
+    observed_at = datetime.now(timezone.utc).isoformat()
+    metadata: dict[str, Any] = {
+        "observed_at": observed_at,
+        "spark_application": source.application_name,
+        "kubernetes_namespace": SPARK_NAMESPACE,
+        "topic": source.topic,
+        "table": f"{source.name}.bronze.events",
+    }
+
+    try:
+        application = custom_api.get_namespaced_custom_object(
+            group=SPARK_APPLICATION_GROUP,
+            version=SPARK_APPLICATION_VERSION,
+            namespace=SPARK_NAMESPACE,
+            plural=SPARK_APPLICATION_PLURAL,
+            name=source.application_name,
+        )
+    except ApiException as error:
+        if error.status != 404:
+            raise
+        context.log.warning(
+            "SparkApplication %s/%s does not exist",
+            SPARK_NAMESPACE,
+            source.application_name,
+        )
+        metadata.update(
+            {
+                "stream_health": "missing",
+                "application_state": "NOT_FOUND",
+            }
+        )
+        return AssetObservation(asset_key=source.bronze_asset_key, metadata=metadata)
+
+    status = application.get("status") or {}
+    application_state = (status.get("applicationState") or {}).get("state", "UNKNOWN")
+    driver_info = status.get("driverInfo") or {}
+    driver_pod_name = driver_info.get("podName")
+
+    metadata["application_state"] = application_state
+    _copy_if_present(
+        metadata,
+        "application_error",
+        status.get("errorMessage")
+        or (status.get("applicationState") or {}).get("errorMessage"),
+    )
+    _copy_if_present(metadata, "spark_application_id", status.get("sparkApplicationId"))
+    _copy_if_present(metadata, "last_submission_at", status.get("lastSubmissionAttemptTime"))
+    _copy_if_present(metadata, "termination_at", status.get("terminationTime"))
+    _copy_if_present(metadata, "execution_attempts", status.get("executionAttempts"))
+    _copy_if_present(metadata, "submission_attempts", status.get("submissionAttempts"))
+    _copy_if_present(metadata, "driver_pod", driver_pod_name)
+    _copy_if_present(metadata, "spark_ui_service", driver_info.get("webUIServiceName"))
+
+    driver_phase = None
+    if driver_pod_name:
+        try:
+            driver_pod = core_api.read_namespaced_pod(
+                name=driver_pod_name,
+                namespace=SPARK_NAMESPACE,
+            )
+        except ApiException as error:
+            if error.status != 404:
+                raise
+            context.log.warning(
+                "Driver pod %s/%s does not exist",
+                SPARK_NAMESPACE,
+                driver_pod_name,
+            )
+            driver_phase = "NOT_FOUND"
+            metadata["driver_pod_phase"] = "NOT_FOUND"
+        else:
+            driver_phase = driver_pod.status.phase
+            _copy_if_present(metadata, "driver_pod_phase", driver_phase)
+            container_statuses = driver_pod.status.container_statuses or []
+            metadata["driver_restart_count"] = sum(
+                container_status.restart_count
+                for container_status in container_statuses
+            )
+            if driver_pod.metadata.creation_timestamp:
+                metadata["driver_started_at"] = (
+                    driver_pod.metadata.creation_timestamp.isoformat()
+                )
+
+    if application_state == "RUNNING" and driver_phase == "Running":
+        stream_health = "healthy"
+    elif application_state in {"FAILED", "FAILED_SUBMISSION", "INVALIDATING"}:
+        stream_health = "failed"
+    else:
+        stream_health = "degraded"
+    metadata["stream_health"] = stream_health
+
+    return AssetObservation(asset_key=source.bronze_asset_key, metadata=metadata)
+
+
+@sensor(
+    name="external_spark_streaming_observation",
+    minimum_interval_seconds=60,
+    default_status=DefaultSensorStatus.RUNNING,
+    description=(
+        "Observe externally managed Spark Structured Streaming applications "
+        "and attach their Kubernetes health to bronze assets."
+    ),
+)
+def external_spark_streaming_observation(
+    context: SensorEvaluationContext,
+) -> SensorResult:
+    config.load_incluster_config()
+    custom_api = client.CustomObjectsApi()
+    core_api = client.CoreV1Api()
+    observations = [
+        _application_observation(source, custom_api, core_api, context)
+        for source in STREAMING_SOURCES
+    ]
+    return SensorResult(asset_events=observations)
 
 
 (
@@ -207,4 +438,9 @@ sovico_assets = [
     vietjet_bronze_to_silver,
 ]
 
-defs = Definitions(assets=sovico_assets)
+external_streaming_assets = _build_external_streaming_assets()
+
+defs = Definitions(
+    assets=[*external_streaming_assets, *sovico_assets],
+    sensors=[external_spark_streaming_observation],
+)

@@ -6,9 +6,11 @@ Mizuumi user-code deployment in `packages/dagster/`.
 
 ## Architecture
 
-Dagster is the orchestrator for the managed-orders Spark workload. There is
-**no** Kubeflow Spark Operator dependency at runtime; each materialization
-runs `spark-submit --deploy-mode cluster` directly.
+The optional `managed_spark` code location orchestrates the managed-orders
+Spark workload. It has **no** Kubeflow Spark Operator dependency at runtime;
+each materialization runs `spark-submit --deploy-mode cluster` directly. The
+default `sovico` code location uses the operator API only to observe external
+streaming applications; it does not manage their lifecycle.
 
 Per schedule tick (`*/10 * * * *` UTC) Dagster materializes the asset
 `unity/demo/orders` by:
@@ -58,6 +60,20 @@ Open the asset `unity/demo/orders` under group `unity_catalog`, enable the
 kubectl -n spark get pods -l 'spark-role in (driver,executor)' -w
 ```
 
+When the `sovico` code location is selected (the default in
+`scripts/dagster/setup.sh`), Dagster also models and observes the externally
+managed source-domain streaming pipelines:
+
+```text
+Redpanda topic -> <source>/bronze/events -> <source>/silver
+```
+
+The `external_spark_streaming_observation` sensor starts enabled and polls the
+CRM, HDBank, Vikki, and VietJet `SparkApplication` resources once per minute.
+It records application state, driver pod state and restarts, submission
+attempts, and Spark UI metadata on each bronze asset. These observations do
+not start, stop, or restart the streaming applications.
+
 Clean up completed and failed Dagster run-worker Jobs and their owned pods:
 
 ```bash
@@ -74,9 +90,9 @@ when using a non-default installation.
 The chart creates two bindings:
 
 - `<release>-spark-trigger` — Role in the Spark namespace granting the Dagster
-  SA (`mizuumi-dagster`) permission to CRUD `batch/jobs` and read `pods` /
-  `pods/log` so the run worker can launch the submission Job and tail its
-  logs.
+  SA (`mizuumi-dagster`) permission to CRUD `batch/jobs`, read pods, and read
+  `SparkApplication` status so the run worker can launch submission Jobs and
+  the observation sensor can report external stream health.
 - `dagster-spark-submit` — ServiceAccount + Role in the Spark namespace that
   `spark-submit` uses to create the driver pod, services, configmaps, and
   PVCs it needs (per Apache Spark's documented
@@ -85,8 +101,8 @@ The chart creates two bindings:
 ## Layout
 
 - `Chart.yaml` / `values.yaml` — umbrella chart referencing the upstream chart.
-- `templates/spark-trigger-rbac.yaml` — Role for Dagster to manage `jobs`
-  and tail pod logs in the Spark namespace.
+- `templates/spark-trigger-rbac.yaml` — Role for Dagster to manage Jobs and
+  read pod and SparkApplication status in the Spark namespace.
 - `templates/spark-submit-rbac.yaml` — ServiceAccount + Role that
   `spark-submit` uses in-cluster.
 - `templates/job-launcher-rbac.yaml` — Role for the K8sRunLauncher to launch

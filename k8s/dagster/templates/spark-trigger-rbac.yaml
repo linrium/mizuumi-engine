@@ -4,9 +4,9 @@ metadata:
   name: {{ include "dagster-umbrella.sparkAccessRoleName" . }}
   namespace: {{ .Values.sparkJobNamespace | quote }}
 rules:
-  # The Dagster k8s job op creates and waits for the spark-submit Job. Pod log
-  # access is intentionally omitted because this asset only needs completion
-  # status; Spark driver output remains available through Kubernetes itself.
+  # Dagster launches short-lived spark-submit Jobs and observes external
+  # SparkApplication and driver pod health. Pod log access is intentionally
+  # omitted; Spark driver output remains available through Kubernetes itself.
   - apiGroups: ["batch"]
     resources: ["jobs"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
@@ -18,6 +18,9 @@ rules:
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   - apiGroups: [""]
     resources: ["pods/status"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["sparkoperator.k8s.io"]
+    resources: ["sparkapplications", "sparkapplications/status"]
     verbs: ["get", "list", "watch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
