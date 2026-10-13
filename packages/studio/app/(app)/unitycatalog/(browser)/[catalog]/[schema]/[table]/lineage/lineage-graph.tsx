@@ -17,11 +17,11 @@ import "@xyflow/react/dist/style.css"
 import type { LineageAssetNode, TableLineageNode } from "@/lib/dagster"
 
 const NODE_WIDTH = 288
-const NODE_HEIGHT = 168
+const NODE_HEIGHT = 192
 const COLUMN_GAP = 480
 const ROW_GAP = 220
 const GROUP_PADDING_X = 32
-const GROUP_HEADER_HEIGHT = 64
+const GROUP_HEADER_HEIGHT = 74
 const GROUP_PADDING_BOTTOM = 32
 
 type AssetNodeData = Record<string, unknown> & {
@@ -79,7 +79,7 @@ function AssetNode({ data }: NodeProps<Node<AssetNodeData, "asset">>) {
 
   return (
     <div
-      className={`flex h-[168px] w-[288px] flex-col overflow-hidden rounded-xl border bg-card text-card-foreground shadow-sm ${
+      className={`flex h-[192px] w-[288px] flex-col overflow-hidden rounded-md border bg-card ${
         current ? "border-primary ring-1 ring-primary/30" : "border-border"
       }`}
     >
@@ -95,7 +95,7 @@ function AssetNode({ data }: NodeProps<Node<AssetNodeData, "asset">>) {
           </div>
         </div>
       </div>
-      <p className="line-clamp-2 min-h-0 flex-1 px-3 py-2 text-[11px] leading-[1.125rem] text-muted-foreground">
+      <p className="line-clamp-3 h-[72px] shrink-0 px-3 py-2 text-[11px] leading-[1.125rem] text-muted-foreground">
         {asset.description ?? "No description"}
       </p>
       <div
@@ -121,12 +121,12 @@ function AssetNode({ data }: NodeProps<Node<AssetNodeData, "asset">>) {
 
 function GroupNode({ data }: NodeProps<Node<GroupNodeData, "lineageGroup">>) {
   return (
-    <div className="size-full overflow-hidden rounded-2xl border border-border bg-card/75 shadow-sm backdrop-blur-sm">
-      <div className="flex h-16 flex-col justify-center border-b border-border/80 bg-muted/35 px-4">
+    <div className="size-full overflow-hidden rounded-lg border border-border bg-card/75">
+      <div className="flex h-10 flex-col justify-center border-b border-border/80 bg-muted/35 px-4">
         <div className="font-mono text-sm font-semibold">{data.groupName}</div>
-        <div className="mt-0.5 font-mono text-[10px] text-muted-foreground">
+        {/*<div className="mt-0.5 font-mono text-[10px] text-muted-foreground">
           {data.locationName}
-        </div>
+        </div>*/}
       </div>
     </div>
   )
@@ -243,7 +243,7 @@ export function LineageGraph({ current }: { current: TableLineageNode }) {
   const { nodes, edges } = createElements(current)
 
   return (
-    <div className="h-[clamp(480px,62vh,680px)] overflow-hidden rounded-xl border bg-muted/20 shadow-inner">
+    <div className="h-[clamp(480px,62vh,680px)] overflow-hidden rounded-lg border bg-muted/20 shadow-inner">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -271,7 +271,7 @@ export function LineageGraph({ current }: { current: TableLineageNode }) {
         />
         <Controls
           showInteractive={false}
-          className="overflow-hidden rounded-lg border border-border bg-card shadow-sm"
+          className="overflow-hidden rounded-md border border-border bg-card shadow-sm"
         />
       </ReactFlow>
     </div>
