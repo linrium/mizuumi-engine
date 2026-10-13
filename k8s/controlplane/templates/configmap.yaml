@@ -26,3 +26,6 @@ data:
     client_id = ""
     client_secret = ""
 
+    [duck_query]
+    url = {{ .Values.duckQuery.url | quote }}
+

@@ -31,7 +31,7 @@ class Table:
     name: str
     event_type: str
     columns: tuple[Column, ...]
-    contract_version: str = "1.0.0"
+    contract_version: str = "1.1.0"
 
 
 @dataclass(frozen=True)
@@ -103,15 +103,82 @@ def logical_type(physical_type: str) -> str:
     raise RuntimeError(f"Unsupported ODCS physical type: {physical_type}")
 
 
-def contract_property(full_name: str, column: Column) -> dict[str, Any]:
-    return {
+def contract_property(
+    full_name: str, column: Column, *, primary_key: bool = False
+) -> dict[str, Any]:
+    property_document: dict[str, Any] = {
         "id": str(uuid.uuid5(uuid.NAMESPACE_URL, f"{full_name}#{column.name}")),
         "name": column.name,
         "logicalType": logical_type(column.data_type),
         "physicalType": column.data_type,
         "required": False,
+        "primaryKey": primary_key,
         "description": column.comment,
     }
+    if primary_key:
+        property_document["quality"] = [
+            {
+                "id": f"{column.name}_not_null",
+                "type": "library",
+                "metric": "nullValues",
+                "mustBe": 0,
+                "unit": "rows",
+                "dimension": "completeness",
+                "severity": "error",
+                "description": f"{column.name} must be present on every row",
+            }
+        ]
+    return property_document
+
+
+def contract_team(source: str) -> dict[str, Any]:
+    return {
+        "id": f"{source}_data_team",
+        "name": f"{source.upper()} Data Team",
+        "description": f"Accountable team for the {source} source domain",
+        "members": [
+            {
+                "id": f"{source}_owner",
+                "username": f"data-owner@{source}.mizuumi.test",
+                "role": "Owner",
+            },
+            {
+                "id": f"{source}_steward",
+                "username": f"data-steward@{source}.mizuumi.test",
+                "role": "Data Steward",
+            },
+        ],
+    }
+
+
+def contract_sla(table: Table) -> list[dict[str, Any]]:
+    return [
+        {
+            "id": "refresh_frequency",
+            "property": "frequency",
+            "value": 10,
+            "unit": "minutes",
+            "element": f"{table.name}.ingest_ts",
+            "driver": "operational",
+            "description": "Expected refresh interval for the silver table",
+        },
+        {
+            "id": "ingestion_latency",
+            "property": "latency",
+            "value": 15,
+            "unit": "minutes",
+            "element": f"{table.name}.ingest_ts",
+            "driver": "operational",
+            "description": "Maximum delay from ingestion to governed availability",
+        },
+        {
+            "id": "time_to_repair",
+            "property": "timeToRepair",
+            "value": 4,
+            "unit": "hours",
+            "driver": "operational",
+        },
+    ]
 
 
 def contract_document(config: JobConfig, table: Table, full_name: str) -> dict[str, Any]:
@@ -135,9 +202,37 @@ def contract_document(config: JobConfig, table: Table, full_name: str) -> dict[s
         "version": table.contract_version,
         "status": "active",
         "domain": config.source,
+        "dataProduct": f"{config.source} source-aligned silver data",
         "description": {
-            "purpose": f"Typed silver table generated from {table.event_type} bronze events"
+            "purpose": f"Typed silver table generated from {table.event_type} bronze events",
+            "limitations": (
+                "Data must remain in the Vietnam mesh unless an approved "
+                "cross-mesh transfer contract exists"
+            ),
+            "usage": "Governed analytics and approved cross-domain data products",
         },
+        "team": contract_team(config.source),
+        "slaProperties": contract_sla(table),
+        "customProperties": [
+            {
+                "id": "jurisdiction",
+                "property": "jurisdiction",
+                "value": "VN",
+                "description": "Legal jurisdiction governing this contract",
+            },
+            {
+                "id": "residency_countries",
+                "property": "residencyCountries",
+                "value": ["VN"],
+                "description": "Countries in which the governed data may reside",
+            },
+            {
+                "id": "cross_border_transfer",
+                "property": "crossBorderTransferAllowed",
+                "value": False,
+                "description": "Requires a separately approved transfer contract",
+            },
+        ],
         "schema": [
             {
                 "id": str(uuid.uuid5(uuid.NAMESPACE_URL, f"{full_name}#table")),
@@ -145,9 +240,28 @@ def contract_document(config: JobConfig, table: Table, full_name: str) -> dict[s
                 "logicalType": "object",
                 "physicalType": "table",
                 "physicalName": full_name,
+                "quality": [
+                    {
+                        "id": f"{table.name}_not_empty",
+                        "type": "library",
+                        "metric": "rowCount",
+                        "mustBeGreaterThan": 0,
+                        "unit": "rows",
+                        "dimension": "completeness",
+                        "severity": "error",
+                        "description": "The published table must contain data",
+                    }
+                ],
+                "customProperties": [
+                    {
+                        "id": "source_event_type",
+                        "property": "sourceEventType",
+                        "value": table.event_type,
+                    }
+                ],
                 "properties": [
-                    contract_property(full_name, column)
-                    for column in (*table.columns, *technical_columns)
+                    contract_property(full_name, column, primary_key=index == 0)
+                    for index, column in enumerate((*table.columns, *technical_columns))
                 ],
             }
         ],

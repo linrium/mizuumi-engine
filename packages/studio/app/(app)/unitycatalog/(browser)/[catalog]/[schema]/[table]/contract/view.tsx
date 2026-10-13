@@ -4,8 +4,12 @@ import {
   IconAlertTriangle,
   IconBraces,
   IconCircleCheck,
+  IconClock,
   IconLoader2,
+  IconPlayerPlay,
   IconRefresh,
+  IconShieldCheck,
+  IconUsers,
 } from "@tabler/icons-react"
 import { useState, useTransition } from "react"
 import { Badge } from "@/components/ui/badge"
@@ -18,12 +22,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { reconcileDataContract } from "./actions"
+import { reconcileDataContract, runDataQuality } from "./actions"
 import type {
   ContractTarget,
   DataContract,
   DataContractDifference,
+  DataQualityRun,
   OpenDataContractDocument,
+  OpenDataQualityRule,
 } from "./types"
 
 function formatDate(value?: string) {
@@ -47,6 +53,28 @@ function statusVariant(state: string): "secondary" | "destructive" | "outline" {
 function jsonValue(value: unknown) {
   if (value === null || value === undefined) return "—"
   return typeof value === "string" ? value : JSON.stringify(value, null, 2)
+}
+
+const EXPECTATION_KEYS = [
+  "mustBe",
+  "mustNotBe",
+  "mustBeGreaterThan",
+  "mustBeGreaterOrEqualTo",
+  "mustBeLessThan",
+  "mustBeLessOrEqualTo",
+  "mustBeBetween",
+  "mustNotBeBetween",
+]
+
+function ruleExpectation(rule: OpenDataQualityRule) {
+  const key = EXPECTATION_KEYS.find((candidate) => candidate in rule)
+  return key ? `${key} ${jsonValue(rule[key])}` : "Declarative"
+}
+
+function qualityStatusVariant(status: string) {
+  if (status === "PASSED") return "secondary" as const
+  if (status === "FAILED" || status === "ERROR") return "destructive" as const
+  return "outline" as const
 }
 
 function Difference({ difference }: { difference: DataContractDifference }) {
@@ -89,16 +117,23 @@ export function DataContractView({
   target,
   initialContract,
   initialError,
+  initialQualityRuns,
+  initialQualityError,
 }: {
   target: ContractTarget
   initialContract: DataContract | null
   initialError?: string
+  initialQualityRuns: DataQualityRun[]
+  initialQualityError?: string
 }) {
   const [contract, setContract] = useState(initialContract)
   const [message, setMessage] = useState<
     { kind: "error" | "success"; text: string } | undefined
   >(initialError ? { kind: "error", text: initialError } : undefined)
   const [isPending, startTransition] = useTransition()
+  const [qualityRuns, setQualityRuns] = useState(initialQualityRuns)
+  const [qualityLoadError, setQualityLoadError] = useState(initialQualityError)
+  const [isQualityPending, startQualityTransition] = useTransition()
 
   const reconcile = () => {
     setMessage(undefined)
@@ -115,6 +150,26 @@ export function DataContractView({
           result.data?.sync_state === "IN_SYNC"
             ? "The contract matches the Unity Catalog table."
             : `Reconciliation completed with state ${result.data?.sync_state ?? "UNKNOWN"}.`,
+      })
+    })
+  }
+
+  const runQuality = () => {
+    setMessage(undefined)
+    setQualityLoadError(undefined)
+    startQualityTransition(async () => {
+      const result = await runDataQuality(target)
+      if (!result.ok) {
+        setMessage({ kind: "error", text: result.error })
+        return
+      }
+      setQualityRuns((runs) => [
+        result.data,
+        ...runs.filter((run) => run.id !== result.data.id),
+      ])
+      setMessage({
+        kind: result.data.status === "PASSED" ? "success" : "error",
+        text: `Quality run ${result.data.status.toLowerCase()}: ${result.data.passed_count} passed, ${result.data.failed_count} failed, ${result.data.error_count} errors.`,
       })
     })
   }
@@ -152,6 +207,37 @@ export function DataContractView({
   const differences = Array.isArray(contract.differences)
     ? contract.differences
     : []
+  const team = document.team
+  const sla = document.slaProperties ?? []
+  const customProperties = [
+    ...(document.customProperties ?? []).map((property) => ({
+      scope: "contract",
+      property,
+    })),
+    ...(contractSchema?.customProperties ?? []).map((property) => ({
+      scope: contractSchema.name ?? "table",
+      property,
+    })),
+    ...properties.flatMap((column) =>
+      (column.customProperties ?? []).map((property) => ({
+        scope: column.name ?? "column",
+        property,
+      })),
+    ),
+  ]
+  const qualityRules = [
+    ...((contractSchema?.quality ?? []).map((rule) => ({
+      scope: contractSchema?.name ?? "table",
+      rule,
+    })) ?? []),
+    ...properties.flatMap((property) =>
+      (property.quality ?? []).map((rule) => ({
+        scope: property.name ?? "column",
+        rule,
+      })),
+    ),
+  ]
+  const latestQualityRun = qualityRuns[0]
 
   return (
     <div className="space-y-4">
@@ -207,6 +293,7 @@ export function DataContractView({
               ["Version", contract.version],
               ["Status", document.status ?? "—"],
               ["Domain", document.domain ?? "—"],
+              ["Data product", document.dataProduct ?? "—"],
               ["Created by", contract.created_by],
               ["Published", formatDate(contract.created_at)],
               ["Last checked", formatDate(contract.checked_at)],
@@ -223,6 +310,131 @@ export function DataContractView({
               </div>
             ))}
           </dl>
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <IconUsers className="size-4" />
+              Ownership
+            </CardTitle>
+            <CardDescription>
+              {team?.description ?? "Accountable team and contract stewards."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="font-medium">{team?.name ?? "—"}</div>
+            {(team?.members ?? []).map((member) => (
+              <div
+                key={member.id ?? member.username}
+                className="flex items-center justify-between gap-3 border-t pt-2"
+              >
+                <div className="min-w-0">
+                  <div className="truncate font-mono text-xs">
+                    {member.name ?? member.username}
+                  </div>
+                  {member.name ? (
+                    <div className="truncate text-xs text-muted-foreground">
+                      {member.username}
+                    </div>
+                  ) : null}
+                </div>
+                <Badge variant="outline">{member.role ?? "Member"}</Badge>
+              </div>
+            ))}
+            {!team?.members?.length ? (
+              <p className="text-muted-foreground">No team members declared.</p>
+            ) : null}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <IconShieldCheck className="size-4" />
+              Governance
+            </CardTitle>
+            <CardDescription>
+              Residency constraints and contract-specific properties.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {typeof document.description !== "string" &&
+            typeof document.description?.limitations === "string" ? (
+              <p>{document.description.limitations}</p>
+            ) : null}
+            <dl className="divide-y">
+              {customProperties.map(({ scope, property }, index) => (
+                <div
+                  key={property.id ?? `${property.property}-${index}`}
+                  className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)] gap-3 py-2"
+                >
+                  <dt className="min-w-0 font-mono text-muted-foreground">
+                    <span className="block truncate">
+                      {property.property ?? "property"}
+                    </span>
+                    <span className="block text-[0.625rem]">{scope}</span>
+                  </dt>
+                  <dd className="break-words text-right font-mono">
+                    {jsonValue(property.value)}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+            {customProperties.length === 0 ? (
+              <p className="text-muted-foreground">
+                No custom properties declared.
+              </p>
+            ) : null}
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <IconClock className="size-4" />
+            Service-level agreement
+          </CardTitle>
+          <CardDescription>
+            Availability, freshness, retention, and response commitments from
+            the contract.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {sla.map((item, index) => (
+              <div
+                key={item.id ?? `${item.property}-${index}`}
+                className="rounded-md border p-3"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-medium">{item.property}</span>
+                  {item.driver ? (
+                    <Badge variant="outline">{item.driver}</Badge>
+                  ) : null}
+                </div>
+                <div className="mt-1 font-mono text-sm">
+                  {jsonValue(item.value)} {item.unit ?? ""}
+                </div>
+                {item.element ? (
+                  <div className="mt-1 font-mono text-xs text-muted-foreground">
+                    {item.element}
+                  </div>
+                ) : null}
+                {item.description ? (
+                  <p className="mt-2 text-muted-foreground">
+                    {item.description}
+                  </p>
+                ) : null}
+              </div>
+            ))}
+          </div>
+          {sla.length === 0 ? (
+            <p className="text-muted-foreground">No SLA properties declared.</p>
+          ) : null}
         </CardContent>
       </Card>
 
@@ -261,6 +473,11 @@ export function DataContractView({
                 >
                   <td className="px-3 py-1.5 font-mono">
                     {property.name ?? "—"}
+                    {property.primaryKey ? (
+                      <Badge className="ml-2" variant="outline">
+                        PK
+                      </Badge>
+                    ) : null}
                   </td>
                   <td className="px-3 py-1.5">{property.logicalType ?? "—"}</td>
                   <td className="px-3 py-1.5">
@@ -290,6 +507,140 @@ export function DataContractView({
           </table>
         </div>
       </section>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Data quality</CardTitle>
+          <CardDescription>
+            ODCS rules executed as aggregate, read-only queries through DuckDB
+            using your Unity Catalog access.
+          </CardDescription>
+          <CardAction>
+            <Button
+              size="sm"
+              disabled={isQualityPending || qualityRules.length === 0}
+              onClick={runQuality}
+            >
+              {isQualityPending ? (
+                <IconLoader2 className="animate-spin" />
+              ) : (
+                <IconPlayerPlay />
+              )}
+              Run quality checks
+            </Button>
+          </CardAction>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {qualityLoadError ? (
+            <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-destructive">
+              {qualityLoadError}
+            </div>
+          ) : null}
+          {latestQualityRun ? (
+            <div className="flex flex-wrap items-center gap-2 rounded-md border p-3">
+              <Badge variant={qualityStatusVariant(latestQualityRun.status)}>
+                {latestQualityRun.status}
+              </Badge>
+              <span>{latestQualityRun.passed_count} passed</span>
+              <span>{latestQualityRun.failed_count} failed</span>
+              <span>{latestQualityRun.error_count} errors</span>
+              <span className="ml-auto text-muted-foreground">
+                {latestQualityRun.engine} ·{" "}
+                {formatDate(
+                  latestQualityRun.completed_at ?? latestQualityRun.started_at,
+                )}
+              </span>
+            </div>
+          ) : null}
+          <div className="overflow-hidden rounded-md ring-1 ring-foreground/10">
+            <table className="w-full text-xs">
+              <thead className="bg-muted/50 text-muted-foreground">
+                <tr>
+                  <th className="px-3 py-2 text-left font-medium">Rule</th>
+                  <th className="px-3 py-2 text-left font-medium">Scope</th>
+                  <th className="px-3 py-2 text-left font-medium">
+                    Expectation
+                  </th>
+                  <th className="px-3 py-2 text-left font-medium">Observed</th>
+                  <th className="px-3 py-2 text-left font-medium">Result</th>
+                </tr>
+              </thead>
+              <tbody>
+                {qualityRules.map(({ scope, rule }, index) => {
+                  const result = latestQualityRun?.results.find(
+                    (candidate) => candidate.rule_id === rule.id,
+                  )
+                  return (
+                    <tr
+                      key={rule.id ?? `${scope}-${index}`}
+                      className="border-t"
+                    >
+                      <td className="px-3 py-2">
+                        <div className="font-mono">
+                          {rule.id ?? rule.name ?? "rule"}
+                        </div>
+                        {rule.description ? (
+                          <div className="text-muted-foreground">
+                            {rule.description}
+                          </div>
+                        ) : null}
+                      </td>
+                      <td className="px-3 py-2 font-mono">{scope}</td>
+                      <td className="px-3 py-2 font-mono">
+                        {ruleExpectation(rule)}
+                      </td>
+                      <td className="px-3 py-2 font-mono">
+                        {result ? jsonValue(result.metric_value) : "—"}
+                      </td>
+                      <td className="px-3 py-2">
+                        {result ? (
+                          <Badge variant={qualityStatusVariant(result.status)}>
+                            {result.status}
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline">NOT RUN</Badge>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+                {qualityRules.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={5}
+                      className="px-3 py-6 text-center text-muted-foreground"
+                    >
+                      No data-quality rules declared.
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+          {qualityRuns.length > 1 ? (
+            <details>
+              <summary className="cursor-pointer text-xs font-medium">
+                Previous runs ({qualityRuns.length - 1})
+              </summary>
+              <div className="mt-2 divide-y rounded-md border px-3">
+                {qualityRuns.slice(1).map((run) => (
+                  <div key={run.id} className="flex items-center gap-2 py-2">
+                    <Badge variant={qualityStatusVariant(run.status)}>
+                      {run.status}
+                    </Badge>
+                    <span>
+                      {formatDate(run.completed_at ?? run.started_at)}
+                    </span>
+                    <span className="ml-auto text-muted-foreground">
+                      {run.triggered_by}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </details>
+          ) : null}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

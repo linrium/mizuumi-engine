@@ -22,6 +22,8 @@ pub enum AppError {
     Kube(#[from] kube::Error),
     #[error("Unity Catalog synchronization failed: {0}")]
     UnityCatalog(String),
+    #[error("data quality execution failed: {0}")]
+    DataQuality(String),
 }
 
 #[derive(Serialize)]
@@ -39,7 +41,9 @@ impl IntoResponse for AppError {
             AppError::Postgres(_) | AppError::Pool(_) => StatusCode::SERVICE_UNAVAILABLE,
             AppError::Json(_) => StatusCode::INTERNAL_SERVER_ERROR,
             AppError::Kube(kube::Error::Api(resp)) if resp.code == 404 => StatusCode::NOT_FOUND,
-            AppError::Kube(_) | AppError::UnityCatalog(_) => StatusCode::BAD_GATEWAY,
+            AppError::Kube(_) | AppError::UnityCatalog(_) | AppError::DataQuality(_) => {
+                StatusCode::BAD_GATEWAY
+            }
         };
         if status.is_server_error() {
             tracing::error!(error = %self, "request failed");

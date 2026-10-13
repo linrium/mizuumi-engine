@@ -11,6 +11,14 @@ pub struct Settings {
     pub postgres: PostgresSettings,
     #[serde(default)]
     pub unity_catalog: UnityCatalogSettings,
+    #[serde(default)]
+    pub duck_query: DuckQuerySettings,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct DuckQuerySettings {
+    #[serde(default = "default_duck_query_url")]
+    pub url: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -99,6 +107,14 @@ impl Default for UnityCatalogSettings {
     }
 }
 
+impl Default for DuckQuerySettings {
+    fn default() -> Self {
+        Self {
+            url: default_duck_query_url(),
+        }
+    }
+}
+
 fn default_host() -> IpAddr {
     [0, 0, 0, 0].into()
 }
@@ -137,4 +153,8 @@ fn default_unity_catalog_url() -> String {
 
 fn default_unity_catalog_token_url() -> String {
     "http://127.0.0.1:8080/realms/sovico/protocol/openid-connect/token".to_owned()
+}
+
+fn default_duck_query_url() -> String {
+    "http://127.0.0.1:9495/api/query".to_owned()
 }

@@ -68,6 +68,42 @@ CREATE TABLE IF NOT EXISTS data_contract_observations (
 CREATE INDEX IF NOT EXISTS idx_data_contracts_table
     ON data_contracts (catalog_name, schema_name, table_name);
 
+CREATE TABLE IF NOT EXISTS data_quality_runs (
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    contract_id TEXT NOT NULL,
+    contract_version TEXT NOT NULL,
+    engine TEXT NOT NULL CHECK (engine IN ('DUCKDB', 'SPARK')),
+    status TEXT NOT NULL CHECK (status IN ('RUNNING', 'PASSED', 'FAILED', 'ERROR')),
+    trigger_type TEXT NOT NULL CHECK (trigger_type IN ('MANUAL', 'MATERIALIZATION', 'SCHEDULE')),
+    triggered_by TEXT NOT NULL CHECK (BTRIM(triggered_by) <> ''),
+    started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    completed_at TIMESTAMPTZ,
+    passed_count INTEGER NOT NULL DEFAULT 0 CHECK (passed_count >= 0),
+    failed_count INTEGER NOT NULL DEFAULT 0 CHECK (failed_count >= 0),
+    error_count INTEGER NOT NULL DEFAULT 0 CHECK (error_count >= 0),
+    error TEXT,
+    FOREIGN KEY (contract_id, contract_version)
+        REFERENCES data_contract_versions(contract_id, version) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_data_quality_runs_contract
+    ON data_quality_runs (contract_id, started_at DESC);
+
+CREATE TABLE IF NOT EXISTS data_quality_results (
+    run_id TEXT NOT NULL REFERENCES data_quality_runs(id) ON DELETE CASCADE,
+    rule_id TEXT NOT NULL CHECK (BTRIM(rule_id) <> ''),
+    rule_scope TEXT NOT NULL CHECK (BTRIM(rule_scope) <> ''),
+    rule_type TEXT NOT NULL CHECK (BTRIM(rule_type) <> ''),
+    metric TEXT NOT NULL CHECK (BTRIM(metric) <> ''),
+    severity TEXT NOT NULL CHECK (BTRIM(severity) <> ''),
+    status TEXT NOT NULL CHECK (status IN ('PASSED', 'FAILED', 'ERROR')),
+    metric_value JSONB,
+    expectation JSONB NOT NULL DEFAULT '{}'::jsonb,
+    duration_ms BIGINT NOT NULL DEFAULT 0 CHECK (duration_ms >= 0),
+    message TEXT,
+    PRIMARY KEY (run_id, rule_id)
+);
+
 CREATE TABLE IF NOT EXISTS policy_templates (
     id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     key TEXT NOT NULL UNIQUE CHECK (BTRIM(key) <> ''),

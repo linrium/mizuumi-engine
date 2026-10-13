@@ -6,7 +6,9 @@ use std::{
 use async_trait::async_trait;
 use controlplane_queries::queries::data_contracts as queries;
 use deadpool_postgres::Pool;
-use serde_json::{Value, json};
+use serde::Deserialize;
+use serde_json::{Map, Value, json};
+use std::time::Instant;
 use tokio_postgres::error::SqlState;
 
 use crate::{
@@ -14,7 +16,10 @@ use crate::{
     infrastructure::unity_catalog::{UnityCatalog, UnityColumn, UnityTable},
 };
 
-use super::dtos::{DataContract, PutDataContractRequest};
+use super::dtos::{
+    DataContract, DataQualityResult, DataQualityRun, DataQualityRuns, PutDataContractRequest,
+    RunDataQualityRequest,
+};
 
 const CONTRACT_ID_PROPERTY: &str = "mizuumi.odcs.id";
 const CONTRACT_VERSION_PROPERTY: &str = "mizuumi.odcs.version";
@@ -31,18 +36,29 @@ pub trait DataContractService: Send + Sync {
     ) -> Result<DataContract, AppError>;
     async fn get_data_contract(&self, full_name: String) -> Result<DataContract, AppError>;
     async fn reconcile_data_contract(&self, full_name: String) -> Result<DataContract, AppError>;
+    async fn list_data_quality_runs(&self, full_name: String) -> Result<DataQualityRuns, AppError>;
+    async fn run_data_quality(
+        &self,
+        full_name: String,
+        authorization: String,
+        request: RunDataQualityRequest,
+    ) -> Result<DataQualityRun, AppError>;
 }
 
 pub struct DefaultDataContractService {
     pool: Pool,
     unity_catalog: Arc<dyn UnityCatalog>,
+    duck_query_url: String,
+    http: reqwest::Client,
 }
 
 impl DefaultDataContractService {
-    pub fn new(pool: Pool, unity_catalog: Arc<dyn UnityCatalog>) -> Self {
+    pub fn new(pool: Pool, unity_catalog: Arc<dyn UnityCatalog>, duck_query_url: String) -> Self {
         Self {
             pool,
             unity_catalog,
+            duck_query_url,
+            http: reqwest::Client::new(),
         }
     }
 }
@@ -216,6 +232,158 @@ impl DataContractService for DefaultDataContractService {
             .await?;
         load_active_contract(&client, &table_name).await
     }
+
+    async fn list_data_quality_runs(&self, full_name: String) -> Result<DataQualityRuns, AppError> {
+        let table = TableName::parse(&full_name)?;
+        let client = self.pool.get().await?;
+        load_quality_runs(&client, &table, 20).await
+    }
+
+    async fn run_data_quality(
+        &self,
+        full_name: String,
+        authorization: String,
+        request: RunDataQualityRequest,
+    ) -> Result<DataQualityRun, AppError> {
+        require_text("triggered_by", &request.triggered_by)?;
+        let table = TableName::parse(&full_name)?;
+        let client = self.pool.get().await?;
+        let contract = load_active_contract(&client, &table).await?;
+        let rules = executable_quality_rules(&contract.document, &table)?;
+        let created = queries::create_data_quality_run()
+            .bind(
+                &client,
+                &contract.id,
+                &contract.version,
+                &request.triggered_by,
+            )
+            .one()
+            .await?;
+
+        let mut passed_count = 0;
+        let mut failed_count = 0;
+        let mut error_count = 0;
+        for rule in rules {
+            let result = self.execute_quality_rule(&authorization, rule).await;
+            match result.status.as_str() {
+                "PASSED" => passed_count += 1,
+                "FAILED" => failed_count += 1,
+                _ => error_count += 1,
+            }
+            let message = result.message.as_deref().unwrap_or("");
+            queries::create_data_quality_result()
+                .bind(
+                    &client,
+                    &created.id,
+                    &result.rule_id,
+                    &result.rule_scope,
+                    &result.rule_type,
+                    &result.metric,
+                    &result.severity,
+                    &result.status,
+                    &result.metric_value.clone().unwrap_or(Value::Null),
+                    &result.expectation,
+                    &result.duration_ms,
+                    &message,
+                )
+                .await?;
+        }
+
+        let status = if error_count > 0 {
+            "ERROR"
+        } else if failed_count > 0 {
+            "FAILED"
+        } else {
+            "PASSED"
+        };
+        queries::complete_data_quality_run()
+            .bind(
+                &client,
+                &status,
+                &passed_count,
+                &failed_count,
+                &error_count,
+                &"",
+                &created.id,
+            )
+            .await?;
+
+        load_quality_runs(&client, &table, 20)
+            .await?
+            .quality_runs
+            .into_iter()
+            .find(|run| run.id == created.id)
+            .ok_or_else(|| AppError::DataQuality("completed run could not be loaded".to_owned()))
+    }
+}
+
+impl DefaultDataContractService {
+    async fn execute_quality_rule(
+        &self,
+        authorization: &str,
+        rule: ExecutableQualityRule,
+    ) -> DataQualityResult {
+        let started = Instant::now();
+        let response = self
+            .http
+            .post(&self.duck_query_url)
+            .header(reqwest::header::AUTHORIZATION, authorization)
+            .json(&json!({ "sql": rule.query }))
+            .send()
+            .await;
+        let duration_ms = started.elapsed().as_millis().try_into().unwrap_or(i64::MAX);
+
+        let (status, metric_value, message) = match response {
+            Ok(response) => {
+                let http_status = response.status();
+                match response.json::<DuckQueryResponse>().await {
+                    Ok(body) if http_status.is_success() => match body.metric_value() {
+                        Some(value) => match quality_rule_passes(&rule.expectation, &value) {
+                            Ok(true) => ("PASSED", Some(value), None),
+                            Ok(false) => (
+                                "FAILED",
+                                Some(value),
+                                Some("Observed value does not satisfy the contract".to_owned()),
+                            ),
+                            Err(error) => ("ERROR", Some(value), Some(error)),
+                        },
+                        None => (
+                            "ERROR",
+                            None,
+                            Some("DuckDB returned no metric value".to_owned()),
+                        ),
+                    },
+                    Ok(body) => (
+                        "ERROR",
+                        None,
+                        Some(
+                            body.error
+                                .unwrap_or_else(|| format!("DuckDB returned {http_status}")),
+                        ),
+                    ),
+                    Err(error) => (
+                        "ERROR",
+                        None,
+                        Some(format!("invalid DuckDB response: {error}")),
+                    ),
+                }
+            }
+            Err(error) => ("ERROR", None, Some(error.to_string())),
+        };
+
+        DataQualityResult {
+            rule_id: rule.id,
+            rule_scope: rule.scope,
+            rule_type: rule.rule_type,
+            metric: rule.metric,
+            severity: rule.severity,
+            status: status.to_owned(),
+            metric_value,
+            expectation: rule.expectation,
+            duration_ms,
+            message,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -243,6 +411,345 @@ impl TableName {
     fn full_name(&self) -> String {
         format!("{}.{}.{}", self.catalog, self.schema, self.table)
     }
+}
+
+#[derive(Debug)]
+struct ExecutableQualityRule {
+    id: String,
+    scope: String,
+    rule_type: String,
+    metric: String,
+    severity: String,
+    expectation: Value,
+    query: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct DuckQueryResponse {
+    rows: Option<Vec<Vec<Value>>>,
+    error: Option<String>,
+}
+
+impl DuckQueryResponse {
+    fn metric_value(self) -> Option<Value> {
+        self.rows?.into_iter().next()?.into_iter().next()
+    }
+}
+
+fn executable_quality_rules(
+    document: &Value,
+    table: &TableName,
+) -> Result<Vec<ExecutableQualityRule>, AppError> {
+    let schema = document["schema"][0]
+        .as_object()
+        .ok_or_else(|| AppError::InvalidParameter("schema[0] must be an object".to_owned()))?;
+    let table_sql = [
+        quote_identifier(&table.catalog),
+        quote_identifier(&table.schema),
+        quote_identifier(&table.table),
+    ]
+    .join(".");
+    let mut rules = Vec::new();
+    let mut ids = BTreeSet::new();
+
+    append_quality_rules(
+        schema.get("quality"),
+        "schema[0]",
+        None,
+        &table_sql,
+        &mut ids,
+        &mut rules,
+    )?;
+    if let Some(properties) = schema.get("properties").and_then(Value::as_array) {
+        for (index, property) in properties.iter().enumerate() {
+            let object = property.as_object().ok_or_else(|| {
+                AppError::InvalidParameter(format!(
+                    "schema[0].properties[{index}] must be an object"
+                ))
+            })?;
+            let name = require_json_string(object.get("name"), "property.name", None)?;
+            append_quality_rules(
+                object.get("quality"),
+                &format!("schema[0].properties[{index}]"),
+                Some(name),
+                &table_sql,
+                &mut ids,
+                &mut rules,
+            )?;
+        }
+    }
+    Ok(rules)
+}
+
+fn append_quality_rules(
+    quality: Option<&Value>,
+    scope: &str,
+    property: Option<&str>,
+    table_sql: &str,
+    ids: &mut BTreeSet<String>,
+    rules: &mut Vec<ExecutableQualityRule>,
+) -> Result<(), AppError> {
+    let Some(quality) = quality else {
+        return Ok(());
+    };
+    let quality = quality
+        .as_array()
+        .ok_or_else(|| AppError::InvalidParameter(format!("{scope}.quality must be an array")))?;
+    for (index, value) in quality.iter().enumerate() {
+        let rule = value.as_object().ok_or_else(|| {
+            AppError::InvalidParameter(format!("{scope}.quality[{index}] must be an object"))
+        })?;
+        let id = require_json_string(rule.get("id"), "quality.id", None)?.to_owned();
+        if !ids.insert(id.clone()) {
+            return Err(AppError::InvalidParameter(format!(
+                "duplicate quality rule id: {id}"
+            )));
+        }
+        let rule_type = rule
+            .get("type")
+            .and_then(Value::as_str)
+            .unwrap_or("library");
+        if matches!(rule_type, "text" | "custom") {
+            continue;
+        }
+        let expectation = quality_expectation(rule)?;
+        let (metric, query) = match rule_type {
+            "library" => {
+                let metric = require_json_string(rule.get("metric"), "quality.metric", None)?;
+                (
+                    metric.to_owned(),
+                    library_quality_sql(metric, rule, property, table_sql)?,
+                )
+            }
+            "sql" => {
+                let query = require_json_string(rule.get("query"), "quality.query", None)?;
+                let property_sql = property.map(quote_identifier).unwrap_or_default();
+                (
+                    "sql".to_owned(),
+                    query
+                        .replace("{object}", table_sql)
+                        .replace("{table}", table_sql)
+                        .replace("{property}", &property_sql)
+                        .replace("{column}", &property_sql),
+                )
+            }
+            other => {
+                return Err(AppError::InvalidParameter(format!(
+                    "unsupported quality rule type: {other}"
+                )));
+            }
+        };
+        rules.push(ExecutableQualityRule {
+            id,
+            scope: property
+                .map(|name| format!("{scope}.{name}"))
+                .unwrap_or_else(|| scope.to_owned()),
+            rule_type: rule_type.to_owned(),
+            metric,
+            severity: rule
+                .get("severity")
+                .and_then(Value::as_str)
+                .unwrap_or("error")
+                .to_owned(),
+            expectation,
+            query,
+        });
+    }
+    Ok(())
+}
+
+fn library_quality_sql(
+    metric: &str,
+    rule: &Map<String, Value>,
+    property: Option<&str>,
+    table_sql: &str,
+) -> Result<String, AppError> {
+    let column = property.map(quote_identifier);
+    let query = match (metric, column.as_deref()) {
+        ("rowCount", None) => format!("SELECT count(*) AS metric_value FROM {table_sql}"),
+        ("nullValues", Some(column)) => format!(
+            "SELECT count(*) FILTER (WHERE {column} IS NULL) AS metric_value FROM {table_sql}"
+        ),
+        ("duplicateValues", Some(column)) => {
+            format!("SELECT count(*) - count(DISTINCT {column}) AS metric_value FROM {table_sql}")
+        }
+        ("duplicateValues", None) => {
+            let properties = rule
+                .get("arguments")
+                .and_then(Value::as_object)
+                .and_then(|arguments| arguments.get("properties"))
+                .and_then(Value::as_array)
+                .ok_or_else(|| {
+                    AppError::InvalidParameter(
+                        "schema duplicateValues requires arguments.properties".to_owned(),
+                    )
+                })?;
+            let columns = properties
+                .iter()
+                .map(|value| {
+                    value
+                        .as_str()
+                        .filter(|value| !value.trim().is_empty())
+                        .map(quote_identifier)
+                        .ok_or_else(|| {
+                            AppError::InvalidParameter(
+                                "duplicateValues properties must be strings".to_owned(),
+                            )
+                        })
+                })
+                .collect::<Result<Vec<_>, _>>()?
+                .join(", ");
+            format!(
+                "SELECT (SELECT count(*) FROM {table_sql}) - count(*) AS metric_value FROM (SELECT DISTINCT {columns} FROM {table_sql}) distinct_rows"
+            )
+        }
+        ("missingValues", Some(column)) => {
+            let values = rule_argument_values(rule, "missingValues")?;
+            let predicates = values
+                .iter()
+                .map(|value| match value {
+                    Value::Null => format!("{column} IS NULL"),
+                    _ => format!("CAST({column} AS VARCHAR) = {}", sql_literal(value)),
+                })
+                .collect::<Vec<_>>()
+                .join(" OR ");
+            format!("SELECT count(*) FILTER (WHERE {predicates}) AS metric_value FROM {table_sql}")
+        }
+        ("invalidValues", Some(column)) => {
+            let arguments = rule
+                .get("arguments")
+                .and_then(Value::as_object)
+                .ok_or_else(|| {
+                    AppError::InvalidParameter(
+                        "invalidValues requires an arguments object".to_owned(),
+                    )
+                })?;
+            let predicate =
+                if let Some(values) = arguments.get("validValues").and_then(Value::as_array) {
+                    let values = values
+                        .iter()
+                        .map(sql_literal)
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    format!("CAST({column} AS VARCHAR) NOT IN ({values})")
+                } else if let Some(pattern) = arguments.get("pattern").and_then(Value::as_str) {
+                    format!(
+                        "NOT regexp_matches(CAST({column} AS VARCHAR), {})",
+                        sql_literal(&Value::String(pattern.to_owned()))
+                    )
+                } else {
+                    return Err(AppError::InvalidParameter(
+                        "invalidValues requires validValues or pattern".to_owned(),
+                    ));
+                };
+            format!(
+                "SELECT count(*) FILTER (WHERE {column} IS NOT NULL AND {predicate}) AS metric_value FROM {table_sql}"
+            )
+        }
+        _ => {
+            return Err(AppError::InvalidParameter(format!(
+                "unsupported {metric} quality metric at {} level",
+                if property.is_some() {
+                    "property"
+                } else {
+                    "schema"
+                }
+            )));
+        }
+    };
+    Ok(query)
+}
+
+fn rule_argument_values<'a>(
+    rule: &'a Map<String, Value>,
+    name: &str,
+) -> Result<&'a Vec<Value>, AppError> {
+    rule.get("arguments")
+        .and_then(Value::as_object)
+        .and_then(|arguments| arguments.get(name))
+        .and_then(Value::as_array)
+        .ok_or_else(|| {
+            AppError::InvalidParameter(format!("quality rule requires arguments.{name}"))
+        })
+}
+
+const EXPECTATION_KEYS: [&str; 8] = [
+    "mustBe",
+    "mustNotBe",
+    "mustBeGreaterThan",
+    "mustBeGreaterOrEqualTo",
+    "mustBeLessThan",
+    "mustBeLessOrEqualTo",
+    "mustBeBetween",
+    "mustNotBeBetween",
+];
+
+fn quality_expectation(rule: &Map<String, Value>) -> Result<Value, AppError> {
+    let values = EXPECTATION_KEYS
+        .iter()
+        .filter_map(|key| {
+            rule.get(*key)
+                .map(|value| ((*key).to_owned(), value.clone()))
+        })
+        .collect::<Map<_, _>>();
+    if values.len() != 1 {
+        return Err(AppError::InvalidParameter(
+            "quality rule must define exactly one expectation operator".to_owned(),
+        ));
+    }
+    Ok(Value::Object(values))
+}
+
+fn quality_rule_passes(expectation: &Value, actual: &Value) -> Result<bool, String> {
+    let actual = json_number(actual).ok_or_else(|| "metric value must be numeric".to_owned())?;
+    let (operator, expected) = expectation
+        .as_object()
+        .and_then(|values| values.iter().next())
+        .ok_or_else(|| "quality expectation is missing".to_owned())?;
+    let number = || json_number(expected).ok_or_else(|| "expectation must be numeric".to_owned());
+    match operator.as_str() {
+        "mustBe" => Ok(actual == number()?),
+        "mustNotBe" => Ok(actual != number()?),
+        "mustBeGreaterThan" => Ok(actual > number()?),
+        "mustBeGreaterOrEqualTo" => Ok(actual >= number()?),
+        "mustBeLessThan" => Ok(actual < number()?),
+        "mustBeLessOrEqualTo" => Ok(actual <= number()?),
+        "mustBeBetween" | "mustNotBeBetween" => {
+            let bounds = expected
+                .as_array()
+                .filter(|bounds| bounds.len() == 2)
+                .ok_or_else(|| "between expectation requires two values".to_owned())?;
+            let lower =
+                json_number(&bounds[0]).ok_or_else(|| "lower bound must be numeric".to_owned())?;
+            let upper =
+                json_number(&bounds[1]).ok_or_else(|| "upper bound must be numeric".to_owned())?;
+            let between = actual >= lower && actual <= upper;
+            Ok(if operator == "mustBeBetween" {
+                between
+            } else {
+                !between
+            })
+        }
+        _ => Err(format!("unsupported expectation operator: {operator}")),
+    }
+}
+
+fn json_number(value: &Value) -> Option<f64> {
+    value
+        .as_f64()
+        .or_else(|| value.as_str().and_then(|value| value.parse().ok()))
+}
+
+fn quote_identifier(value: &str) -> String {
+    format!("\"{}\"", value.replace('"', "\"\""))
+}
+
+fn sql_literal(value: &Value) -> String {
+    let value = match value {
+        Value::String(value) => value.clone(),
+        other => other.to_string(),
+    };
+    format!("'{}'", value.replace('\'', "''"))
 }
 
 struct ValidatedDocument {
@@ -309,11 +816,91 @@ fn validate_document(
         )));
     }
     let normalized_schema = normalized_contract_schema(document)?;
+    validate_contract_metadata(object)?;
+    executable_quality_rules(document, table)?;
 
     Ok(ValidatedDocument {
         id,
         normalized_schema,
     })
+}
+
+fn validate_contract_metadata(object: &Map<String, Value>) -> Result<(), AppError> {
+    if let Some(team) = object.get("team") {
+        let team = team.as_object().ok_or_else(|| {
+            AppError::InvalidParameter("team must use the ODCS v3.1 object format".to_owned())
+        })?;
+        if let Some(members) = team.get("members") {
+            for (index, member) in members
+                .as_array()
+                .ok_or_else(|| {
+                    AppError::InvalidParameter("team.members must be an array".to_owned())
+                })?
+                .iter()
+                .enumerate()
+            {
+                let member = member.as_object().ok_or_else(|| {
+                    AppError::InvalidParameter(format!("team.members[{index}] must be an object"))
+                })?;
+                require_json_string(
+                    member.get("username"),
+                    &format!("team.members[{index}].username"),
+                    None,
+                )?;
+            }
+        }
+    }
+    validate_named_array(object.get("slaProperties"), "slaProperties", "property")?;
+    validate_custom_properties(object.get("customProperties"), "customProperties")?;
+    if let Some(schema) = object.get("schema").and_then(Value::as_array) {
+        for (index, item) in schema.iter().enumerate() {
+            let item = item.as_object().expect("schema item was validated");
+            validate_custom_properties(
+                item.get("customProperties"),
+                &format!("schema[{index}].customProperties"),
+            )?;
+            if let Some(properties) = item.get("properties").and_then(Value::as_array) {
+                for (property_index, property) in properties.iter().enumerate() {
+                    let property = property.as_object().expect("property was validated");
+                    validate_custom_properties(
+                        property.get("customProperties"),
+                        &format!("schema[{index}].properties[{property_index}].customProperties"),
+                    )?;
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+fn validate_named_array(
+    value: Option<&Value>,
+    field: &str,
+    required_key: &str,
+) -> Result<(), AppError> {
+    let Some(value) = value else {
+        return Ok(());
+    };
+    for (index, item) in value
+        .as_array()
+        .ok_or_else(|| AppError::InvalidParameter(format!("{field} must be an array")))?
+        .iter()
+        .enumerate()
+    {
+        let item = item.as_object().ok_or_else(|| {
+            AppError::InvalidParameter(format!("{field}[{index}] must be an object"))
+        })?;
+        require_json_string(
+            item.get(required_key),
+            &format!("{field}[{index}].{required_key}"),
+            None,
+        )?;
+    }
+    Ok(())
+}
+
+fn validate_custom_properties(value: Option<&Value>, field: &str) -> Result<(), AppError> {
+    validate_named_array(value, field, "property")
 }
 
 fn normalized_contract_schema(document: &Value) -> Result<Value, AppError> {
@@ -513,6 +1100,55 @@ async fn load_active_contract(
     })
 }
 
+async fn load_quality_runs(
+    client: &deadpool_postgres::Object,
+    table: &TableName,
+    limit: i64,
+) -> Result<DataQualityRuns, AppError> {
+    let rows = queries::list_data_quality_runs()
+        .bind(client, &table.catalog, &table.schema, &table.table, &limit)
+        .all()
+        .await?;
+    let mut quality_runs = Vec::with_capacity(rows.len());
+    for row in rows {
+        let results = queries::list_data_quality_results()
+            .bind(client, &row.id)
+            .all()
+            .await?
+            .into_iter()
+            .map(|result| DataQualityResult {
+                rule_id: result.rule_id,
+                rule_scope: result.rule_scope,
+                rule_type: result.rule_type,
+                metric: result.metric,
+                severity: result.severity,
+                status: result.status,
+                metric_value: (!result.metric_value.is_null()).then_some(result.metric_value),
+                expectation: result.expectation,
+                duration_ms: result.duration_ms,
+                message: non_empty(result.message),
+            })
+            .collect();
+        quality_runs.push(DataQualityRun {
+            id: row.id,
+            contract_id: row.contract_id,
+            contract_version: row.contract_version,
+            engine: row.engine,
+            status: row.status,
+            trigger_type: row.trigger_type,
+            triggered_by: row.triggered_by,
+            started_at: row.started_at,
+            completed_at: non_empty(row.completed_at),
+            passed_count: row.passed_count,
+            failed_count: row.failed_count,
+            error_count: row.error_count,
+            error: non_empty(row.error),
+            results,
+        });
+    }
+    Ok(DataQualityRuns { quality_runs })
+}
+
 fn require_json_string<'a>(
     value: Option<&'a Value>,
     field: &str,
@@ -599,16 +1235,32 @@ mod tests {
             "name": "vietjet.silver.passengers",
             "version": "1.0.0",
             "status": "active",
+            "team": {
+                "name": "VietJet Data",
+                "members": [{"username": "steward@vietjet.test", "role": "Data Steward"}]
+            },
+            "slaProperties": [{"id": "frequency", "property": "frequency", "value": 10}],
+            "customProperties": [{"id": "jurisdiction", "property": "jurisdiction", "value": "VN"}],
             "schema": [{
                 "name": "passengers",
                 "logicalType": "object",
                 "physicalType": "table",
                 "physicalName": "vietjet.silver.passengers",
+                "quality": [{
+                    "id": "passengers_not_empty",
+                    "metric": "rowCount",
+                    "mustBeGreaterThan": 0
+                }],
                 "properties": [{
                     "name": "passenger_id",
                     "logicalType": "string",
                     "physicalType": "STRING",
-                    "required": false
+                    "required": false,
+                    "quality": [{
+                        "id": "passenger_id_not_null",
+                        "metric": "nullValues",
+                        "mustBe": 0
+                    }]
                 }]
             }]
         })
@@ -646,5 +1298,27 @@ mod tests {
         assert!(version_is_newer("1.1.0", "1.0.9"));
         assert!(!version_is_newer("1.0.0", "1.0.0"));
         assert!(!version_is_newer("0.9.0", "1.0.0"));
+    }
+
+    #[test]
+    fn compiles_odcs_library_quality_rules_to_quoted_sql() {
+        let table = TableName::parse("vietjet.silver.passengers").unwrap();
+        let rules = executable_quality_rules(&document(), &table).unwrap();
+        assert_eq!(rules.len(), 2);
+        assert_eq!(rules[0].id, "passengers_not_empty");
+        assert!(
+            rules[0]
+                .query
+                .contains("\"vietjet\".\"silver\".\"passengers\"")
+        );
+        assert_eq!(rules[1].metric, "nullValues");
+        assert!(rules[1].query.contains("\"passenger_id\" IS NULL"));
+    }
+
+    #[test]
+    fn evaluates_quality_expectations() {
+        assert!(quality_rule_passes(&json!({"mustBe": 0}), &json!(0)).unwrap());
+        assert!(quality_rule_passes(&json!({"mustBeBetween": [1, 10]}), &json!(5)).unwrap());
+        assert!(!quality_rule_passes(&json!({"mustBeLessThan": 3}), &json!(4)).unwrap());
     }
 }

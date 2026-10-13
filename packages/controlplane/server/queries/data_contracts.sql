@@ -122,3 +122,94 @@ SET contract_version = EXCLUDED.contract_version,
     observed_schema_hash = EXCLUDED.observed_schema_hash,
     differences = EXCLUDED.differences,
     checked_at = NOW();
+
+--! create_data_quality_run
+INSERT INTO data_quality_runs (
+    contract_id, contract_version, engine, status, trigger_type, triggered_by
+)
+VALUES (
+    :contract_id::text,
+    :contract_version::text,
+    'DUCKDB',
+    'RUNNING',
+    'MANUAL',
+    :triggered_by::text
+)
+RETURNING id, started_at::text AS started_at;
+
+--! create_data_quality_result
+INSERT INTO data_quality_results (
+    run_id,
+    rule_id,
+    rule_scope,
+    rule_type,
+    metric,
+    severity,
+    status,
+    metric_value,
+    expectation,
+    duration_ms,
+    message
+)
+VALUES (
+    :run_id::text,
+    :rule_id::text,
+    :rule_scope::text,
+    :rule_type::text,
+    :metric::text,
+    :severity::text,
+    :status::text,
+    :metric_value,
+    :expectation,
+    :duration_ms,
+    NULLIF(:message::text, '')
+);
+
+--! complete_data_quality_run
+UPDATE data_quality_runs
+SET status = :status::text,
+    completed_at = NOW(),
+    passed_count = :passed_count,
+    failed_count = :failed_count,
+    error_count = :error_count,
+    error = NULLIF(:error::text, '')
+WHERE id = :run_id::text;
+
+--! list_data_quality_runs
+SELECT
+    runs.id,
+    runs.contract_id,
+    runs.contract_version,
+    runs.engine,
+    runs.status,
+    runs.trigger_type,
+    runs.triggered_by,
+    runs.started_at::text AS started_at,
+    COALESCE(runs.completed_at::text, '') AS completed_at,
+    runs.passed_count,
+    runs.failed_count,
+    runs.error_count,
+    COALESCE(runs.error, '') AS error
+FROM data_quality_runs runs
+JOIN data_contracts contracts ON contracts.id = runs.contract_id
+WHERE contracts.catalog_name = :catalog_name::text
+  AND contracts.schema_name = :schema_name::text
+  AND contracts.table_name = :table_name::text
+ORDER BY runs.started_at DESC
+LIMIT :result_limit;
+
+--! list_data_quality_results
+SELECT
+    rule_id,
+    rule_scope,
+    rule_type,
+    metric,
+    severity,
+    status,
+    metric_value,
+    expectation,
+    duration_ms,
+    COALESCE(message, '') AS message
+FROM data_quality_results
+WHERE run_id = :run_id::text
+ORDER BY rule_scope, rule_id;

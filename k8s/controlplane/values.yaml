@@ -26,6 +26,9 @@ unityCatalog:
   clientIdKey: CONTROLPLANE_CLIENT_ID
   clientSecretKey: CONTROLPLANE_CLIENT_SECRET
 
+duckQuery:
+  url: http://duck-server.duck-server.svc.cluster.local:9495/api/query
+
 postgresql:
   enabled: true
   image:

@@ -67,6 +67,17 @@ class ContractTests(unittest.TestCase):
         again = contract_document(self.config, self.table, "crm.silver.contacts")
         self.assertEqual(self.document["id"], again["id"])
         self.assertEqual(self.document["apiVersion"], "v3.1.0")
+        self.assertEqual(self.document["version"], "1.1.0")
+        self.assertEqual(self.document["team"]["members"][1]["role"], "Data Steward")
+        self.assertEqual(self.document["customProperties"][0]["value"], "VN")
+        self.assertEqual(self.document["slaProperties"][0]["property"], "frequency")
+        self.assertEqual(
+            self.document["schema"][0]["quality"][0]["metric"], "rowCount"
+        )
+        self.assertEqual(
+            self.document["schema"][0]["properties"][0]["quality"][0]["metric"],
+            "nullValues",
+        )
         self.assertEqual(
             [item["name"] for item in self.document["schema"][0]["properties"]],
             ["contact_id", "kafka_ts", "ingest_ts"],

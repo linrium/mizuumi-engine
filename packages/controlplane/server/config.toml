@@ -16,3 +16,6 @@ token_url = "http://127.0.0.1:8080/realms/sovico/protocol/openid-connect/token"
 client_id = ""
 client_secret = ""
 
+[duck_query]
+url = "http://127.0.0.1:9495/api/query"
+

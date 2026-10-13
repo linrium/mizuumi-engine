@@ -61,7 +61,11 @@ async fn main() -> anyhow::Result<()> {
             pool.clone(),
             unity_catalog.clone(),
         )),
-        data_contracts: Arc::new(DefaultDataContractService::new(pool.clone(), unity_catalog)),
+        data_contracts: Arc::new(DefaultDataContractService::new(
+            pool.clone(),
+            unity_catalog,
+            settings.duck_query.url,
+        )),
         health: Arc::new(DefaultHealthService::new(pool.clone())),
         pipelines: Arc::new(DefaultPipelineService::new(kube_client)),
         policy_templates: Arc::new(DefaultPolicyTemplateService::new(pool)),

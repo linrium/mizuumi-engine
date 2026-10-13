@@ -23,6 +23,13 @@ schema change must also increment the table's `contract_version`. After writing,
 asks the Control Plane to reconcile the active contract with Unity Catalog and fails if the
 table is still drifted.
 
+The generated ODCS v3.1.0 document also declares the source-domain owner and steward,
+operational frequency and latency targets, Vietnam residency constraints, and executable
+schema- and property-level quality rules. The contract page in Studio can execute supported
+library rules through the identity-aware DuckDB query service. Results are aggregate evidence
+stored against the exact contract version; no failed customer rows or delegated tokens are
+persisted.
+
 Deploy every ETL job from the repository root:
 
 ```bash
