@@ -87,6 +87,13 @@ helm upgrade --install "$release" "$repo_root/k8s/dagster" \
   --wait --timeout 15m \
   "$@"
 
+# Local development deliberately reuses the configured image tag. Helm does
+# not replace the user-code pod when only the local image contents change, so
+# force a rollout to make imagePullPolicy=Always resolve the rebuilt image.
+user_code_selector="app.kubernetes.io/instance=$release,component=user-deployments,deployment=mizuumi-user-code"
+kubectl -n "$namespace" rollout restart deployment -l "$user_code_selector"
+kubectl -n "$namespace" rollout status deployment -l "$user_code_selector" --timeout=15m
+
 echo
 kubectl -n "$namespace" get pods
 echo
@@ -94,6 +101,6 @@ echo "Dagster is installed."
 echo "Console: https://console.dagster.mizuumi.test"
 echo "GraphQL: https://api.dagster.mizuumi.test/graphql"
 echo "Code location: $code_location_module"
-echo "Assets: Redpanda topics -> source bronze tables -> source silver assets"
+echo "Assets: Redpanda topics -> source bronze tables -> physical silver tables"
 echo "Sensor: external_spark_streaming_observation (enabled, 60 second interval)"
 echo "Watch:   kubectl -n $spark_namespace get pods -l 'spark-role in (driver,executor)' -w"

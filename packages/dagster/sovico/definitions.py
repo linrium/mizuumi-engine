@@ -18,14 +18,19 @@ from dagster import (
     AssetIn,
     AssetKey,
     AssetObservation,
+    AssetOut,
     AssetSpec,
     AssetsDefinition,
     DefaultSensorStatus,
     Definitions,
+    In,
     Nothing,
+    Out,
+    Output,
     SensorEvaluationContext,
     SensorResult,
-    graph_asset,
+    graph_multi_asset,
+    op,
     sensor,
 )
 from dagster_k8s import k8s_job_op
@@ -101,6 +106,27 @@ STREAMING_SOURCES = (
     StreamingSource("vietjet", "vn.vietjet.events"),
 )
 SOURCES = tuple(source.name for source in STREAMING_SOURCES)
+
+SILVER_TABLES = {
+    "crm": {
+        "contacts": "Typed CRM contact snapshots.",
+        "campaign_interactions": "Typed CRM campaign interaction records.",
+    },
+    "hdbank": {
+        "customers": "Typed HDBank customer snapshots.",
+        "loans": "Typed HDBank loan snapshots.",
+        "loan_repayments": "Typed HDBank loan repayment records.",
+    },
+    "vikki": {
+        "customers": "Typed Vikki customer snapshots.",
+        "accounts": "Typed Vikki account snapshots.",
+        "wallet_transactions": "Typed Vikki wallet transaction records.",
+    },
+    "vietjet": {
+        "passengers": "Typed VietJet passenger snapshots.",
+        "bookings": "Typed VietJet booking records.",
+    },
+}
 
 
 def _credentials_secret(source: str) -> str:
@@ -220,33 +246,56 @@ def _submit_op_config(source: str) -> Mapping[str, object]:
 
 
 def _build_asset(source: str) -> AssetsDefinition:
+    silver_tables = SILVER_TABLES[source]
     submit_op = k8s_job_op.configured(
         _submit_op_config(source),
         name=f"submit_{source}_bronze_to_silver_spark_job",
     )
 
-    def source_asset(bronze_events):
-        # k8s_job_op's start_after input is Nothing-typed. It records the
-        # ordering dependency without asking an IO manager to load the
-        # externally managed Delta table into this process.
-        return submit_op(start_after=bronze_events)
+    @op(
+        name=f"mark_{source}_silver_tables_materialized",
+        ins={"start_after": In(Nothing)},
+        out={table: Out(Nothing) for table in silver_tables},
+    )
+    def mark_silver_tables_materialized():
+        # This op only runs after spark-submit succeeds. Its Nothing outputs
+        # let Dagster record every physical table without loading table data.
+        for table in silver_tables:
+            yield Output(None, output_name=table)
 
-    source_asset.__name__ = f"{source}_bronze_to_silver"
-    return graph_asset(
-        key=[source, "silver"],
+    def source_assets(bronze_events):
+        submitted = submit_op(start_after=bronze_events)
+        materialized = mark_silver_tables_materialized(start_after=submitted)
+        return {table: getattr(materialized, table) for table in silver_tables}
+
+    source_assets.__name__ = f"{source}_bronze_to_silver"
+    return graph_multi_asset(
+        name=f"{source}_bronze_to_silver",
         ins={
             "bronze_events": AssetIn(
                 key=AssetKey([source, "bronze", "events"]),
                 dagster_type=Nothing,
             )
         },
-        kinds={"spark"},
+        outs={
+            table: AssetOut.from_spec(
+                AssetSpec(
+                    key=[source, "silver", table],
+                    kinds={"delta", "spark", "unity-catalog"},
+                    description=description,
+                    metadata={
+                        "table": f"{source}.silver.{table}",
+                        "catalog_type": "Unity Catalog",
+                        "spark_application": f"{source}-bronze-to-silver",
+                    },
+                ),
+                dagster_type=Nothing,
+            )
+            for table, description in silver_tables.items()
+        },
         group_name="sovico",
-        description=(
-            f"Rebuild the {source} silver tables from {source}.bronze.events "
-            "with the source-domain Spark batch job."
-        ),
-    )(source_asset)
+        can_subset=False,
+    )(source_assets)
 
 
 def _build_external_streaming_assets() -> list[AssetSpec]:

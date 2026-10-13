@@ -1,12 +1,15 @@
 import unittest
 from types import SimpleNamespace
 
+from dagster import AssetKey
 from kubernetes.client.exceptions import ApiException
 
 from sovico.definitions import (
+    SILVER_TABLES,
     STREAMING_SOURCES,
     _application_observation,
     _build_external_streaming_assets,
+    defs,
 )
 
 
@@ -43,6 +46,19 @@ def _metadata_value(observation, key):
 
 
 class StreamingObservationTest(unittest.TestCase):
+    def test_each_physical_silver_table_depends_on_bronze(self):
+        graph = defs.get_asset_graph()
+
+        for source, tables in SILVER_TABLES.items():
+            bronze_key = next(
+                stream.bronze_asset_key
+                for stream in STREAMING_SOURCES
+                if stream.name == source
+            )
+            for table in tables:
+                table_key = AssetKey([source, "silver", table])
+                self.assertEqual(graph.get(table_key).parent_keys, {bronze_key})
+
     def test_external_assets_connect_topic_to_bronze(self):
         source = STREAMING_SOURCES[0]
         assets = _build_external_streaming_assets()

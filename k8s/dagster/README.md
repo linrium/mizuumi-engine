@@ -65,8 +65,12 @@ When the `sovico` code location is selected (the default in
 managed source-domain streaming pipelines:
 
 ```text
-Redpanda topic -> <source>/bronze/events -> <source>/silver
+Redpanda topic -> <source>/bronze/events -> <source>/silver/<table>
 ```
+
+Each source's physical silver tables are modeled as one non-subsettable
+multi-asset because a single Spark submission updates all of them. Dagster
+records every table as materialized only after that submission succeeds.
 
 The `external_spark_streaming_observation` sensor starts enabled and polls the
 CRM, HDBank, Vikki, and VietJet `SparkApplication` resources once per minute.
