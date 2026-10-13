@@ -384,7 +384,7 @@ export function LineageGraph({ current }: { current: TableLineageNode }) {
         nodesDraggable={false}
         onInit={setFlow}
         defaultEdgeOptions={{
-          type: "smoothstep",
+          type: "default",
           zIndex: 2,
           markerEnd: { type: MarkerType.ArrowClosed },
           style: { stroke: "var(--muted-foreground)", strokeWidth: 1.5 },
