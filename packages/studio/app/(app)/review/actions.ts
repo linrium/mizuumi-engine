@@ -49,6 +49,10 @@ type ChronicleEntriesResponse = {
 
 type ChronicleProofResponse = {
   index: number
+  tree_size: number
+  leaf_hash: string
+  root_hash: string
+  proof: string[]
   verified: boolean
   checkpoint_verified: boolean
   verification_error?: string
@@ -499,6 +503,10 @@ export async function getAccessRequestChronicleEvidence(
       return [
         {
           index: proof.index,
+          tree_size: proof.tree_size,
+          leaf_hash: proof.leaf_hash,
+          root_hash: proof.root_hash,
+          proof_node_count: proof.proof.length,
           action: event.action,
           principal:
             typeof event.principal === "string" ? event.principal : null,

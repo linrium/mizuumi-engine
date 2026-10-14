@@ -3,6 +3,7 @@
 import {
   IconAlertTriangle,
   IconCheck,
+  IconChevronDown,
   IconClock,
   IconDatabase,
   IconLoader2,
@@ -175,6 +176,9 @@ export function RequestQueue({
     "idle" | "loading" | "loaded" | "error"
   >("idle")
   const [chronicleError, setChronicleError] = useState<string | null>(null)
+  const [expandedProofIndex, setExpandedProofIndex] = useState<number | null>(
+    null,
+  )
   const [isReviewing, startReview] = useTransition()
 
   const requestTeams = useMemo(() => {
@@ -192,6 +196,7 @@ export function RequestQueue({
       setChronicleEvidence([])
       setChronicleStatus("idle")
       setChronicleError(null)
+      setExpandedProofIndex(null)
       return
     }
 
@@ -199,6 +204,7 @@ export function RequestQueue({
     setChronicleEvidence([])
     setChronicleStatus("loading")
     setChronicleError(null)
+    setExpandedProofIndex(null)
     getAccessRequestChronicleEvidence(selected.id).then((result) => {
       if (!active) return
       if (result.ok) {
@@ -555,10 +561,33 @@ export function RequestQueue({
                             </div>
                             <div className="flex shrink-0 justify-end">
                               {validProof ? (
-                                <Badge className="bg-emerald-600 text-white">
-                                  <IconShieldCheck />
-                                  Valid inclusion proof
-                                </Badge>
+                                <button
+                                  type="button"
+                                  aria-controls={`chronicle-proof-${evidence?.index}`}
+                                  aria-expanded={
+                                    expandedProofIndex === evidence?.index
+                                  }
+                                  className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                  onClick={() =>
+                                    setExpandedProofIndex((current) =>
+                                      current === evidence?.index
+                                        ? null
+                                        : (evidence?.index ?? null),
+                                    )
+                                  }
+                                >
+                                  <Badge className="cursor-pointer bg-emerald-600 text-white hover:bg-emerald-700">
+                                    <IconShieldCheck />
+                                    Valid inclusion proof
+                                    <IconChevronDown
+                                      className={
+                                        expandedProofIndex === evidence?.index
+                                          ? "rotate-180 transition-transform"
+                                          : "transition-transform"
+                                      }
+                                    />
+                                  </Badge>
+                                </button>
                               ) : null}
                               {evidence && !validProof ? (
                                 <Badge variant="destructive">
@@ -572,6 +601,80 @@ export function RequestQueue({
                               ) : null}
                             </div>
                           </div>
+                          {validProof &&
+                          evidence &&
+                          expandedProofIndex === evidence.index ? (
+                            <div
+                              id={`chronicle-proof-${evidence.index}`}
+                              className="mt-3 space-y-3 rounded-md border border-emerald-200 bg-emerald-50/50 p-3 dark:border-emerald-900 dark:bg-emerald-950/20"
+                            >
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div>
+                                  <div className="font-medium">
+                                    Cryptographic verification
+                                  </div>
+                                  <div className="text-xs text-muted-foreground">
+                                    {`Chronicle entry #${evidence.index} · verified ${formatDate(evidence.finished_at)}`}
+                                  </div>
+                                </div>
+                                <Badge variant="outline">
+                                  {evidence.proof_node_count} proof nodes
+                                </Badge>
+                              </div>
+                              <div className="grid gap-2 text-xs sm:grid-cols-2">
+                                <div className="rounded bg-background/70 p-2">
+                                  <div className="text-muted-foreground">
+                                    Inclusion path
+                                  </div>
+                                  <div className="mt-1 flex items-center gap-1 font-medium text-emerald-700 dark:text-emerald-400">
+                                    <IconCheck className="size-3.5" /> Verified
+                                  </div>
+                                </div>
+                                <div className="rounded bg-background/70 p-2">
+                                  <div className="text-muted-foreground">
+                                    Checkpoint signature
+                                  </div>
+                                  <div className="mt-1 flex items-center gap-1 font-medium text-emerald-700 dark:text-emerald-400">
+                                    <IconCheck className="size-3.5" /> Verified
+                                  </div>
+                                </div>
+                              </div>
+                              <dl className="grid gap-2 text-xs">
+                                <div className="grid gap-1 sm:grid-cols-[7rem_1fr]">
+                                  <dt className="text-muted-foreground">
+                                    Action
+                                  </dt>
+                                  <dd className="font-mono">
+                                    {evidence.action}
+                                  </dd>
+                                </div>
+                                <div className="grid gap-1 sm:grid-cols-[7rem_1fr]">
+                                  <dt className="text-muted-foreground">
+                                    Tree size
+                                  </dt>
+                                  <dd className="font-mono">
+                                    {evidence.tree_size.toLocaleString()}
+                                  </dd>
+                                </div>
+                                <div className="grid gap-1 sm:grid-cols-[7rem_1fr]">
+                                  <dt className="text-muted-foreground">
+                                    Leaf hash
+                                  </dt>
+                                  <dd className="break-all font-mono">
+                                    {evidence.leaf_hash}
+                                  </dd>
+                                </div>
+                                <div className="grid gap-1 sm:grid-cols-[7rem_1fr]">
+                                  <dt className="text-muted-foreground">
+                                    Checkpoint root
+                                  </dt>
+                                  <dd className="break-all font-mono">
+                                    {evidence.root_hash}
+                                  </dd>
+                                </div>
+                              </dl>
+                            </div>
+                          ) : null}
                           {event.comment ? (
                             <p className="mt-2 text-muted-foreground">
                               {event.comment}

@@ -63,6 +63,10 @@ export type RequestReview = {
 
 export type ChronicleAccessRequestEvidence = {
   index: number
+  tree_size: number
+  leaf_hash: string
+  root_hash: string
+  proof_node_count: number
   action: string
   principal?: string | null
   status: string
