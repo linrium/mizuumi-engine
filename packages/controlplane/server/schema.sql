@@ -715,7 +715,9 @@ CREATE TABLE IF NOT EXISTS access_request_events (
             'FULFILLMENT_SUCCEEDED',
             'FULFILLMENT_FAILED',
             'EXPIRED',
-            'ACCESS_REVOKED'
+            'ACCESS_REVOKED',
+            'CONTRACT_BOUND',
+            'CONTRACT_TERMS_ACKNOWLEDGED'
         )
     ),
     actor TEXT NOT NULL CHECK (BTRIM(actor) <> ''),
@@ -724,6 +726,28 @@ CREATE TABLE IF NOT EXISTS access_request_events (
         CHECK (jsonb_typeof(metadata) = 'object'),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE access_request_events
+    DROP CONSTRAINT IF EXISTS access_request_events_event_type_check;
+
+ALTER TABLE access_request_events
+    ADD CONSTRAINT access_request_events_event_type_check CHECK (
+        event_type IN (
+            'SUBMITTED',
+            'UPDATED',
+            'APPROVAL_RECORDED',
+            'APPROVED',
+            'REJECTED',
+            'CANCELLED',
+            'FULFILLMENT_STARTED',
+            'FULFILLMENT_SUCCEEDED',
+            'FULFILLMENT_FAILED',
+            'EXPIRED',
+            'ACCESS_REVOKED',
+            'CONTRACT_BOUND',
+            'CONTRACT_TERMS_ACKNOWLEDGED'
+        )
+    );
 
 CREATE INDEX IF NOT EXISTS idx_access_request_events_request
     ON access_request_events (request_id, created_at, id);
