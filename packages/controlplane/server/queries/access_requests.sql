@@ -326,10 +326,15 @@ WITH expired AS (
     WHERE status = 'APPROVED'
       AND access_expires_at <= NOW()
     RETURNING id
+), events AS (
+    INSERT INTO access_request_events (request_id, event_type, actor, comment)
+    SELECT id, 'EXPIRED', 'system:expiry', 'Requested access duration elapsed before fulfillment'
+    FROM expired
+    RETURNING request_id
 )
-INSERT INTO access_request_events (request_id, event_type, actor, comment)
-SELECT id, 'EXPIRED', 'system:expiry', 'Requested access duration elapsed before fulfillment'
-FROM expired;
+SELECT request_id
+FROM events
+ORDER BY request_id;
 
 --! get_access_request
 SELECT

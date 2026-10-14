@@ -61,6 +61,17 @@ export type RequestReview = {
   created_at: string
 }
 
+export type ChronicleAccessRequestEvidence = {
+  index: number
+  action: string
+  principal?: string | null
+  status: string
+  finished_at: string
+  verified: boolean
+  checkpoint_verified: boolean
+  verification_error?: string | null
+}
+
 export type AccessRequest = {
   id: string
   template_id: string

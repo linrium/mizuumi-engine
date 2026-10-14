@@ -70,6 +70,9 @@ Access-request handlers append audit records to Chronicle when `[chronicle].enab
 Configure `endpoint`, `service_name`, and `timeout_ms` in `config.toml`, or use the equivalent
 `CONTROLPLANE__CHRONICLE__*` environment variables. Audit records include the authenticated
 principal, action-specific request fields, timestamps, and the success or error outcome.
+Committed access-request lifecycle events are also appended with event-specific actions such as
+`access_requests.submitted`, `access_requests.fulfillment_succeeded`, and
+`access_requests.expired`, plus the request ID and event actor.
 
 The initial API contract accepts `created_by`, `requested_by`, and `reviewer` explicitly. These
 fields must be replaced by authenticated principal and team claims when Keycloak middleware is

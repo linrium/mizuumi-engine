@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::SystemTime};
 
 use async_trait::async_trait;
 use controlplane_queries::queries::access_requests as queries;
@@ -49,6 +49,23 @@ const PURPOSE_CODES: &[&str] = &[
     "COMPLIANCE",
     "AI_MODEL",
 ];
+
+fn record_access_request_event(request_id: &str, event_type: &str, actor: &str) {
+    let recorded_at = SystemTime::now();
+    chronicle_audit::record(chronicle_audit::AuditEvent {
+        action: format!("access_requests.{}", event_type.to_ascii_lowercase()),
+        principal: Some(actor.to_owned()),
+        fields: vec![
+            ("request_id".to_owned(), request_id.to_owned()),
+            ("event_type".to_owned(), event_type.to_owned()),
+            ("actor".to_owned(), actor.to_owned()),
+        ],
+        started_at: recorded_at,
+        finished_at: recorded_at,
+        status: "ok".to_owned(),
+        error: None,
+    });
+}
 
 #[derive(Debug, Serialize)]
 struct ContractEvaluation {
@@ -169,6 +186,11 @@ impl DefaultAccessRequestService {
                         &message,
                     )
                     .await?;
+                record_access_request_event(
+                    request_id,
+                    "CONTRACT_VALIDATION_FAILED",
+                    "system:contract-evaluation",
+                );
                 return Ok(());
             }
         }
@@ -189,6 +211,7 @@ impl DefaultAccessRequestService {
                 &"Applying approved grants to Unity Catalog",
             )
             .await?;
+        record_access_request_event(request_id, "FULFILLMENT_STARTED", "system:unity-catalog");
 
         let grants = queries::list_access_request_grants()
             .bind(&client, &request_id)
@@ -280,6 +303,11 @@ impl DefaultAccessRequestService {
                             &failure_message,
                         )
                         .await?;
+                    record_access_request_event(
+                        request_id,
+                        "FULFILLMENT_FAILED",
+                        "system:unity-catalog",
+                    );
                     tracing::error!(
                         %request_id,
                         error = %error,
@@ -315,14 +343,19 @@ impl DefaultAccessRequestService {
                 &"Approved grants applied to Unity Catalog",
             )
             .await?;
+        record_access_request_event(request_id, "FULFILLMENT_SUCCEEDED", "system:unity-catalog");
         Ok(())
     }
 
     async fn reconcile_access_requests(&self) -> Result<(), AppError> {
         let client = self.pool.get().await?;
-        queries::expire_unfulfilled_access_requests()
+        let expired_unfulfilled = queries::expire_unfulfilled_access_requests()
             .bind(&client)
+            .all()
             .await?;
+        for request_id in expired_unfulfilled {
+            record_access_request_event(&request_id, "EXPIRED", "system:expiry");
+        }
         let approved_ids = queries::list_approved_access_request_ids()
             .bind(&client)
             .all()
@@ -434,6 +467,7 @@ impl DefaultAccessRequestService {
                 &"Control-plane-managed Unity Catalog grants revoked",
             )
             .await?;
+        record_access_request_event(request_id, "ACCESS_REVOKED", "system:unity-catalog");
         Ok(())
     }
 
@@ -457,6 +491,7 @@ impl DefaultAccessRequestService {
                 &"Requested access duration elapsed; Unity Catalog grants revoked",
             )
             .await?;
+        record_access_request_event(request_id, "EXPIRED", "system:expiry");
         Ok(())
     }
 
@@ -565,6 +600,7 @@ impl DefaultAccessRequestService {
             )
             .await?;
         transaction.commit().await?;
+        record_access_request_event(&request_id, event_type, &review.reviewer);
         drop(client);
         if event_type == "APPROVED" {
             self.fulfill_access_request(&request_id).await?;
@@ -853,6 +889,18 @@ impl AccessRequestService for DefaultAccessRequestService {
                 .await?;
         }
         transaction.commit().await?;
+        record_access_request_event(&request_id, "SUBMITTED", &request.requested_by);
+        if evaluated_contract.is_some() {
+            record_access_request_event(&request_id, "CONTRACT_BOUND", &request.requested_by);
+            record_access_request_event(
+                &request_id,
+                "CONTRACT_TERMS_ACKNOWLEDGED",
+                &request.requested_by,
+            );
+        }
+        if auto_approve {
+            record_access_request_event(&request_id, "APPROVED", "system:auto-approve");
+        }
         drop(client);
         if auto_approve {
             self.fulfill_access_request(&request_id).await?;
@@ -982,6 +1030,7 @@ impl AccessRequestService for DefaultAccessRequestService {
             )
             .await?;
         transaction.commit().await?;
+        record_access_request_event(&request_id, "UPDATED", &request.requested_by);
         load_access_request(&client, &request_id).await
     }
 
@@ -1020,6 +1069,7 @@ impl AccessRequestService for DefaultAccessRequestService {
             )
             .await?;
         transaction.commit().await?;
+        record_access_request_event(&request_id, "CANCELLED", &request.requested_by);
         load_access_request(&client, &request_id).await
     }
 }

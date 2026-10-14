@@ -7,6 +7,7 @@ import { auth } from "@/lib/auth"
 import type {
   AccessRequest,
   ActionResult,
+  ChronicleAccessRequestEvidence,
   CreateAccessRequestInput,
   CreatePolicyTemplateInput,
   PolicyTemplate,
@@ -26,6 +27,34 @@ type AccessRequestSummary = Pick<
 
 type OrganizationClaim = Record<string, { groups?: unknown } | null | undefined>
 
+type ChronicleAuditEvent = {
+  action?: unknown
+  principal?: unknown
+  fields?: unknown
+  finished_at?: unknown
+  status?: unknown
+}
+
+type ChronicleEntry = {
+  index: number
+  json?: {
+    source?: unknown
+    event?: ChronicleAuditEvent
+  }
+}
+
+type ChronicleEntriesResponse = {
+  entries: ChronicleEntry[]
+}
+
+type ChronicleProofResponse = {
+  index: number
+  verified: boolean
+  checkpoint_verified: boolean
+  verification_error?: string
+  entry: ChronicleEntry
+}
+
 function controlPlaneUrl(
   endpoint: string,
   params?: Record<string, string>,
@@ -37,6 +66,68 @@ function controlPlaneUrl(
     url.searchParams.set(key, value)
   }
   return url
+}
+
+function chronicleUrl(endpoint: string, params?: Record<string, string>): URL {
+  const baseUrl =
+    process.env.CHRONICLE_URL ?? "https://api.chronicle.mizuumi.test"
+  const url = new URL(endpoint, baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`)
+  for (const [key, value] of Object.entries(params ?? {})) {
+    url.searchParams.set(key, value)
+  }
+  return url
+}
+
+async function chronicleRequest<T>(
+  endpoint: string,
+  params?: Record<string, string>,
+): Promise<T> {
+  const response = await fetch(chronicleUrl(endpoint, params), {
+    cache: "no-store",
+    headers: { Accept: "application/json" },
+  })
+  const body: unknown = await response.json().catch(() => null)
+
+  if (!response.ok) {
+    throw new Error(`Chronicle ${endpoint}: HTTP ${response.status}`)
+  }
+
+  return body as T
+}
+
+function auditField(event: ChronicleAuditEvent, key: string): string | null {
+  if (!Array.isArray(event.fields)) return null
+
+  for (const field of event.fields) {
+    if (
+      Array.isArray(field) &&
+      field.length === 2 &&
+      field[0] === key &&
+      typeof field[1] === "string"
+    ) {
+      return field[1]
+    }
+  }
+  return null
+}
+
+function accessRequestAuditEvent(
+  entry: ChronicleEntry,
+  requestId: string,
+): ChronicleAuditEvent | null {
+  const event = entry.json?.event
+  const expectedSource =
+    process.env.CHRONICLE_CONTROLPLANE_SOURCE ?? "controlplane-server"
+  if (
+    !event ||
+    entry.json?.source !== expectedSource ||
+    typeof event.action !== "string" ||
+    !event.action.startsWith("access_requests.") ||
+    auditField(event, "request_id") !== requestId
+  ) {
+    return null
+  }
+  return event
 }
 
 async function controlPlaneRequest<T>(
@@ -365,6 +456,64 @@ export async function listRequestQueue(): Promise<
     )
 
     return { ok: true, data: { requests, approvalTeams } }
+  } catch (error) {
+    return errorResult(error)
+  }
+}
+
+export async function getAccessRequestChronicleEvidence(
+  requestId: string,
+): Promise<ActionResult<ChronicleAccessRequestEvidence[]>> {
+  await currentUser()
+  try {
+    if (!requestId.trim()) {
+      return { ok: false, error: "Request ID is required." }
+    }
+
+    const result = await chronicleRequest<ChronicleEntriesResponse>(
+      "/api/entries",
+      { q: requestId, limit: "100" },
+    )
+    const candidates = result.entries.filter((entry) =>
+      Boolean(accessRequestAuditEvent(entry, requestId)),
+    )
+    const proofs = await Promise.all(
+      candidates.map((entry) =>
+        chronicleRequest<ChronicleProofResponse>(
+          `/api/entries/${entry.index}/proof`,
+        ),
+      ),
+    )
+
+    const evidence = proofs.flatMap((proof) => {
+      const event = accessRequestAuditEvent(proof.entry, requestId)
+      if (
+        !event ||
+        typeof event.action !== "string" ||
+        typeof event.status !== "string" ||
+        typeof event.finished_at !== "string"
+      ) {
+        return []
+      }
+
+      return [
+        {
+          index: proof.index,
+          action: event.action,
+          principal:
+            typeof event.principal === "string" ? event.principal : null,
+          status: event.status,
+          finished_at: event.finished_at,
+          verified: proof.verified,
+          checkpoint_verified: proof.checkpoint_verified,
+          verification_error: proof.verification_error ?? null,
+        },
+      ]
+    })
+    evidence.sort((left, right) =>
+      left.finished_at.localeCompare(right.finished_at),
+    )
+    return { ok: true, data: evidence }
   } catch (error) {
     return errorResult(error)
   }

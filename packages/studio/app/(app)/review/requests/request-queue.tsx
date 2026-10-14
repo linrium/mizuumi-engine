@@ -3,13 +3,16 @@
 import {
   IconAlertTriangle,
   IconCheck,
+  IconClock,
   IconDatabase,
+  IconLoader2,
+  IconShieldCheck,
   IconUser,
   IconUsersGroup,
   IconX,
 } from "@tabler/icons-react"
 import { useRouter } from "next/navigation"
-import { useMemo, useState, useTransition } from "react"
+import { useEffect, useMemo, useState, useTransition } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -37,8 +40,11 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
-import { reviewAccessRequest } from "../actions"
-import type { AccessRequest } from "../types"
+import {
+  getAccessRequestChronicleEvidence,
+  reviewAccessRequest,
+} from "../actions"
+import type { AccessRequest, ChronicleAccessRequestEvidence } from "../types"
 
 type RequestQueueProps = {
   initialRequests: AccessRequest[]
@@ -100,6 +106,55 @@ function statusVariant(
   }
 }
 
+function chronicleActionForEvent(eventType: string) {
+  return `access_requests.${eventType.toLowerCase()}`
+}
+
+function isValidEvidence(evidence: ChronicleAccessRequestEvidence) {
+  return (
+    evidence.status === "ok" &&
+    evidence.verified &&
+    evidence.checkpoint_verified
+  )
+}
+
+function matchChronicleEvidence(
+  request: AccessRequest | null,
+  evidence: ChronicleAccessRequestEvidence[],
+) {
+  if (!request) return []
+
+  const used = new Set<number>()
+  return request.events.map((event) => {
+    const action = chronicleActionForEvent(event.event_type)
+    if (!action) return null
+
+    let bestIndex = -1
+    let bestDistance = Number.POSITIVE_INFINITY
+    evidence.forEach((candidate, index) => {
+      if (
+        used.has(index) ||
+        candidate.action !== action ||
+        candidate.principal !== event.actor
+      ) {
+        return
+      }
+      const distance = Math.abs(
+        new Date(candidate.finished_at).getTime() -
+          new Date(event.created_at).getTime(),
+      )
+      if (distance < bestDistance) {
+        bestIndex = index
+        bestDistance = distance
+      }
+    })
+
+    if (bestIndex === -1) return null
+    used.add(bestIndex)
+    return evidence[bestIndex]
+  })
+}
+
 export function RequestQueue({
   initialRequests,
   approvalTeams,
@@ -113,12 +168,52 @@ export function RequestQueue({
     kind: "success" | "error"
     text: string
   } | null>(null)
+  const [chronicleEvidence, setChronicleEvidence] = useState<
+    ChronicleAccessRequestEvidence[]
+  >([])
+  const [chronicleStatus, setChronicleStatus] = useState<
+    "idle" | "loading" | "loaded" | "error"
+  >("idle")
+  const [chronicleError, setChronicleError] = useState<string | null>(null)
   const [isReviewing, startReview] = useTransition()
 
   const requestTeams = useMemo(() => {
     if (!selected) return []
     return availableReviewTeams(selected, approvalTeams)
   }, [approvalTeams, selected])
+
+  const evidenceByEvent = useMemo(
+    () => matchChronicleEvidence(selected, chronicleEvidence),
+    [chronicleEvidence, selected],
+  )
+
+  useEffect(() => {
+    if (!selected) {
+      setChronicleEvidence([])
+      setChronicleStatus("idle")
+      setChronicleError(null)
+      return
+    }
+
+    let active = true
+    setChronicleEvidence([])
+    setChronicleStatus("loading")
+    setChronicleError(null)
+    getAccessRequestChronicleEvidence(selected.id).then((result) => {
+      if (!active) return
+      if (result.ok) {
+        setChronicleEvidence(result.data)
+        setChronicleStatus("loaded")
+      } else {
+        setChronicleStatus("error")
+        setChronicleError(result.error)
+      }
+    })
+
+    return () => {
+      active = false
+    }
+  }, [selected])
 
   function openRequest(request: AccessRequest) {
     const availableTeams = availableReviewTeams(request, approvalTeams)
@@ -424,6 +519,88 @@ export function RequestQueue({
                       </Badge>
                     ))}
                   </div>
+                </div>
+
+                <div>
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Events
+                    </h3>
+                    {chronicleStatus === "loading" ? (
+                      <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <IconLoader2 className="size-3.5 animate-spin" />
+                        Checking Chronicle
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="space-y-2">
+                    {selected.events.map((event, index) => {
+                      const evidence = evidenceByEvent[index]
+                      const validProof = evidence
+                        ? isValidEvidence(evidence)
+                        : false
+                      return (
+                        <div
+                          key={`${event.event_type}:${event.actor}:${event.created_at}`}
+                          className="rounded-md border bg-card p-3 text-sm"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex min-w-0 flex-col items-start gap-1.5">
+                              <Badge variant={statusVariant(event.event_type)}>
+                                {event.event_type}
+                              </Badge>
+                              <span className="break-all font-medium">
+                                {event.actor}
+                              </span>
+                            </div>
+                            <div className="flex shrink-0 justify-end">
+                              {validProof ? (
+                                <Badge className="bg-emerald-600 text-white">
+                                  <IconShieldCheck />
+                                  Valid inclusion proof
+                                </Badge>
+                              ) : null}
+                              {evidence && !validProof ? (
+                                <Badge variant="destructive">
+                                  Chronicle verification failed
+                                </Badge>
+                              ) : null}
+                              {chronicleStatus === "loaded" && !evidence ? (
+                                <Badge variant="outline">
+                                  No Chronicle proof
+                                </Badge>
+                              ) : null}
+                            </div>
+                          </div>
+                          {event.comment ? (
+                            <p className="mt-2 text-muted-foreground">
+                              {event.comment}
+                            </p>
+                          ) : null}
+                          <div className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
+                            <IconClock className="size-3.5" />
+                            {formatDate(event.created_at)}
+                            {evidence ? (
+                              <span className="font-mono">
+                                · Chronicle #{evidence.index}
+                              </span>
+                            ) : null}
+                          </div>
+                        </div>
+                      )
+                    })}
+                    {selected.events.length === 0 ? (
+                      <p className="rounded-md border p-3 text-sm text-muted-foreground">
+                        No events recorded.
+                      </p>
+                    ) : null}
+                  </div>
+                  {chronicleStatus === "error" ? (
+                    <p className="mt-2 flex items-center gap-1 text-xs text-destructive">
+                      <IconAlertTriangle className="size-3.5" />
+                      Chronicle verification unavailable: {chronicleError}
+                    </p>
+                  ) : null}
                 </div>
 
                 {canAct ? (

@@ -3338,7 +3338,7 @@ impl ExpireAccessRequestStmt {
 pub struct ExpireUnfulfilledAccessRequestsStmt(&'static str, Option<tokio_postgres::Statement>);
 pub fn expire_unfulfilled_access_requests() -> ExpireUnfulfilledAccessRequestsStmt {
     ExpireUnfulfilledAccessRequestsStmt(
-        "WITH expired AS ( UPDATE access_requests SET status = 'EXPIRED' WHERE status = 'APPROVED' AND access_expires_at <= NOW() RETURNING id ) INSERT INTO access_request_events (request_id, event_type, actor, comment) SELECT id, 'EXPIRED', 'system:expiry', 'Requested access duration elapsed before fulfillment' FROM expired",
+        "WITH expired AS ( UPDATE access_requests SET status = 'EXPIRED' WHERE status = 'APPROVED' AND access_expires_at <= NOW() RETURNING id ), events AS ( INSERT INTO access_request_events (request_id, event_type, actor, comment) SELECT id, 'EXPIRED', 'system:expiry', 'Requested access duration elapsed before fulfillment' FROM expired RETURNING request_id ) SELECT request_id FROM events ORDER BY request_id",
         None,
     )
 }
@@ -3350,11 +3350,18 @@ impl ExpireUnfulfilledAccessRequestsStmt {
         self.1 = Some(client.prepare(self.0).await?);
         Ok(self)
     }
-    pub async fn bind<'c, 'a, 's, C: GenericClient>(
+    pub fn bind<'c, 'a, 's, C: GenericClient>(
         &'s self,
         client: &'c C,
-    ) -> Result<u64, tokio_postgres::Error> {
-        client.execute(self.0, &[]).await
+    ) -> StringQuery<'c, 'a, 's, C, String, 0> {
+        StringQuery {
+            client,
+            params: [],
+            query: self.0,
+            cached: self.1.as_ref(),
+            extractor: |row| Ok(row.try_get(0)?),
+            mapper: |it| it.into(),
+        }
     }
 }
 pub struct GetAccessRequestStmt(&'static str, Option<tokio_postgres::Statement>);
