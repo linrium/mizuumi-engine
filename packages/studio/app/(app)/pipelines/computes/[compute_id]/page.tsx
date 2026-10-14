@@ -1,6 +1,7 @@
 import { IconArrowLeft } from "@tabler/icons-react"
 import Link from "next/link"
 import { getCompute, getComputeMetrics } from "@/app/(app)/pipelines/actions"
+import { MetricsView } from "@/app/(app)/pipelines/computes/[compute_id]/metrics-view"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 
@@ -8,7 +9,7 @@ export const dynamic = "force-dynamic"
 
 export default async function ComputeDetailPage({
   params,
-}: PageProps<"/compute/[compute_id]">) {
+}: PageProps<"/pipelines/computes/[compute_id]">) {
   const { compute_id: computeId } = await params
 
   try {
@@ -31,11 +32,23 @@ export default async function ComputeDetailPage({
           </Badge>
         </header>
 
-        <section className="flex flex-col gap-2">
-          <h2 className="text-sm font-semibold">Metrics</h2>
-          <pre className="max-h-[calc(100vh-13rem)] overflow-auto rounded-md border bg-muted/40 p-4 font-mono text-xs leading-relaxed">
-            {JSON.stringify(metrics, null, 2)}
-          </pre>
+        <section className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-end justify-between gap-2">
+            <div>
+              <h2 className="text-sm font-semibold">Metrics</h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {new Date(metrics.start).toLocaleString()} –{" "}
+                {new Date(metrics.end).toLocaleString()}
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Badge variant="outline">
+                {metrics.aggregation.toUpperCase()}
+              </Badge>
+              <Badge variant="outline">{metrics.step}s interval</Badge>
+            </div>
+          </div>
+          <MetricsView metrics={metrics} />
         </section>
       </main>
     )

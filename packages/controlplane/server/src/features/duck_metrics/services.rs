@@ -115,10 +115,10 @@ impl DefaultDuckMetricsService {
         filter: Option<&DuckMetricFilter>,
     ) -> Value {
         let filter_expression = filter.map_or_else(
-            || "service.name = 'duck-server'".to_owned(),
+            || "resource.service.name = 'duck-server'".to_owned(),
             |filter| {
                 format!(
-                    "service.name = 'duck-server' AND k8s.pod.uid = '{}'",
+                    "resource.service.name = 'duck-server' AND resource.k8s.pod.uid = '{}'",
                     filter.compute_id
                 )
             },
@@ -213,7 +213,7 @@ mod tests {
         );
         assert_eq!(
             queries[0]["spec"]["filter"]["expression"],
-            "service.name = 'duck-server'"
+            "resource.service.name = 'duck-server'"
         );
         assert_eq!(
             queries[0]["spec"]["aggregations"][0]["spaceAggregation"],
@@ -235,7 +235,7 @@ mod tests {
         );
         assert_eq!(
             body["compositeQuery"]["queries"][0]["spec"]["filter"]["expression"],
-            "service.name = 'duck-server' AND k8s.pod.uid = '28a6502a-90f4-4a82-bddb-cbb79eb9828b'"
+            "resource.service.name = 'duck-server' AND resource.k8s.pod.uid = '28a6502a-90f4-4a82-bddb-cbb79eb9828b'"
         );
     }
 

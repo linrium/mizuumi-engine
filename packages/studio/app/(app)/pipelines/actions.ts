@@ -71,7 +71,34 @@ export type DuckMetricsResponse = {
     name: string
     unit: string
   }[]
-  data: unknown
+  data: {
+    data: {
+      data: {
+        results: {
+          aggregations: {
+            alias: string
+            index: number
+            meta: Record<string, unknown>
+            series: {
+              values: {
+                timestamp: number
+                value: number
+              }[]
+            }[]
+          }[]
+          queryName: string
+        }[]
+      }
+      meta: {
+        bytesScanned: number
+        durationMs: number
+        rowsScanned: number
+        stepIntervals: Record<string, number>
+      }
+      type: "time_series"
+    }
+    status: "success" | string
+  }
 }
 
 function controlPlaneUrl(path: string, params?: Record<string, string>): URL {
