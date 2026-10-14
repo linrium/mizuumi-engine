@@ -2,17 +2,12 @@
 
 import {
   IconBrandZapier,
-  IconBuildingBank,
   IconChartPpf,
   IconCodeAsterisk,
-  IconCpu,
   IconGitPullRequest,
   IconIcons,
   IconPipeline,
-  IconPlugConnected,
   IconSmartHome,
-  IconSparkle2,
-  IconTestPipe,
   IconUsers,
 } from "@tabler/icons-react"
 import Link from "next/link"
@@ -44,7 +39,6 @@ const navSections: { label: string; items: NavItem[] }[] = [
     label: "Home",
     items: [
       { href: "/", label: "Home", icon: IconSmartHome },
-      { href: "/agents", label: "Agents", icon: IconSparkle2 },
       { href: "/unitycatalog", label: "Catalog", icon: IconIcons },
       { href: "/review", label: "Review", icon: IconGitPullRequest },
       // { href: "/computes", label: "Computes", icon: IconCpu },
@@ -55,7 +49,7 @@ const navSections: { label: string; items: NavItem[] }[] = [
       // { href: "/experiments", label: "Experiments", icon: IconTestPipe },
       { href: "/groups", label: "Groups", icon: IconUsers },
     ],
-  }
+  },
 ]
 
 type AppSidebarProps = ComponentProps<typeof Sidebar> & {
