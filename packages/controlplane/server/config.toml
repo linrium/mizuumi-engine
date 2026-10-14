@@ -19,6 +19,10 @@ client_secret = ""
 [duck_query]
 url = "http://127.0.0.1:9495/api/query"
 
+[compute]
+namespace = "duck-server"
+label_selector = "app.kubernetes.io/name=duck-server"
+
 [auth]
 enabled = true
 issuer = "https://auth.mizuumi.test/realms/sovico"
@@ -35,4 +39,9 @@ enabled = false
 endpoint = "http://chronicle.chronicle.svc.cluster.local"
 service_name = "controlplane-server"
 timeout_ms = 2000
+
+[signoz]
+endpoint = "http://signoz.signoz.svc.cluster.local:8080"
+api_key = ""
+timeout_ms = 10000
 

@@ -63,6 +63,12 @@ spec:
               value: {{ .Values.chronicle.serviceName | quote }}
             - name: CONTROLPLANE__CHRONICLE__TIMEOUT_MS
               value: {{ .Values.chronicle.timeoutMs | quote }}
+            - name: CONTROLPLANE__SIGNOZ__API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.signoz.apiKeySecretName | quote }}
+                  key: {{ .Values.signoz.apiKeySecretKey | quote }}
+                  optional: true
           volumeMounts:
             - name: config
               mountPath: {{ dir .Values.server.configPath }}

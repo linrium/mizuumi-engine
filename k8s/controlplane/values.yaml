@@ -29,6 +29,10 @@ unityCatalog:
 duckQuery:
   url: http://duck-server.duck-server.svc.cluster.local:9495/api/query
 
+compute:
+  namespace: duck-server
+  labelSelector: app.kubernetes.io/name=duck-server
+
 auth:
   enabled: true
   issuer: https://auth.mizuumi.test/realms/sovico
@@ -45,6 +49,12 @@ chronicle:
   endpoint: http://chronicle.chronicle.svc.cluster.local
   serviceName: controlplane-server
   timeoutMs: 2000
+
+signoz:
+  endpoint: http://signoz.signoz.svc.cluster.local:8080
+  apiKeySecretName: controlplane-signoz
+  apiKeySecretKey: api-key
+  timeoutMs: 10000
 
 postgresql:
   enabled: true

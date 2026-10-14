@@ -19,6 +19,10 @@ workflow APIs.
 | `POST` | `/api/access-requests/{request_id}/approve` | Record an approval and apply the template quorum. |
 | `POST` | `/api/access-requests/{request_id}/reject` | Reject a pending request. |
 | `POST` | `/api/access-requests/{request_id}/cancel` | Cancel an awaiting request owned by the requester. |
+| `GET` | `/api/duck-server/metrics` | Fetch DuckDB query-profiler time series from SigNoz. |
+| `GET` | `/api/computes` | List Duck Server compute pods from Kubernetes. |
+| `GET` | `/api/computes/{compute_id}` | Fetch one compute pod by Kubernetes UID. |
+| `GET` | `/api/computes/{compute_id}/metrics` | Fetch DuckDB profiler metrics scoped to one compute. |
 
 Data contracts are stored as complete JSONB documents with indexed table bindings,
 immutable semantic versions, full-document and physical-schema SHA-256 hashes, and the
@@ -77,4 +81,32 @@ Committed access-request lifecycle events are also appended with event-specific 
 The initial API contract accepts `created_by`, `requested_by`, and `reviewer` explicitly. These
 fields must be replaced by authenticated principal and team claims when Keycloak middleware is
 added; they are not an authorization boundary by themselves.
+
+`GET /api/duck-server/metrics` queries the fixed set of `duckdb.query.*`
+histograms through SigNoz's `/api/v5/query_range` API. It accepts optional
+`start` and `end` Unix timestamps in milliseconds, `step` in seconds, and
+`aggregation` (`p50`, `p90`, `p95`, or `p99`; default `p95`). The maximum range
+is seven days. Create a read-only SigNoz service-account API key, save its
+one-time value to the ignored, mode-600 file
+`packages/controlplane/signoz-api-key`, and bootstrap the Kubernetes Secret
+without exposing the key to clients:
+
+```sh
+./scripts/controlplane/bootstrap.sh
+```
+
+`SIGNOZ_API_KEY_FILE` can override the default path, and `SIGNOZ_API_KEY` is
+also accepted for local automation. `scripts/controlplane/bootstrap.sh` creates
+the Secret before deploying the control plane and reuses a populated Secret on
+later runs, so the one-time key is only required on the first bootstrap or when
+intentionally rotating it.
+
+The chart reads that optional Secret into `CONTROLPLANE__SIGNOZ__API_KEY`. When
+the key is absent, the endpoint returns `503` while the rest of the control
+plane remains available.
+
+Compute discovery reads pods in the configured `[compute]` namespace using the
+configured Kubernetes label selector. The Helm chart grants the control-plane
+service account read-only pod access in that namespace. Per-compute metrics use
+the pod UID exported as the `k8s.pod.uid` OpenTelemetry resource attribute.
 

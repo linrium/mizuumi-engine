@@ -17,6 +17,28 @@ pub struct Settings {
     pub auth: AuthSettings,
     #[serde(default)]
     pub chronicle: ChronicleSettings,
+    #[serde(default)]
+    pub signoz: SignozSettings,
+    #[serde(default)]
+    pub compute: ComputeSettings,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ComputeSettings {
+    #[serde(default = "default_compute_namespace")]
+    pub namespace: String,
+    #[serde(default = "default_compute_label_selector")]
+    pub label_selector: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct SignozSettings {
+    #[serde(default = "default_signoz_endpoint")]
+    pub endpoint: String,
+    #[serde(default)]
+    pub api_key: String,
+    #[serde(default = "default_signoz_timeout_ms")]
+    pub timeout_ms: u64,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -186,6 +208,25 @@ impl Default for ChronicleSettings {
     }
 }
 
+impl Default for SignozSettings {
+    fn default() -> Self {
+        Self {
+            endpoint: default_signoz_endpoint(),
+            api_key: String::new(),
+            timeout_ms: default_signoz_timeout_ms(),
+        }
+    }
+}
+
+impl Default for ComputeSettings {
+    fn default() -> Self {
+        Self {
+            namespace: default_compute_namespace(),
+            label_selector: default_compute_label_selector(),
+        }
+    }
+}
+
 fn default_host() -> IpAddr {
     [0, 0, 0, 0].into()
 }
@@ -276,6 +317,22 @@ fn default_chronicle_endpoint() -> String {
 
 fn default_chronicle_service_name() -> String {
     "controlplane-server".to_owned()
+}
+
+fn default_signoz_endpoint() -> String {
+    "http://signoz.signoz.svc.cluster.local:8080".to_owned()
+}
+
+fn default_signoz_timeout_ms() -> u64 {
+    10_000
+}
+
+fn default_compute_namespace() -> String {
+    "duck-server".to_owned()
+}
+
+fn default_compute_label_selector() -> String {
+    "app.kubernetes.io/name=duck-server".to_owned()
 }
 
 fn default_chronicle_timeout_ms() -> u64 {

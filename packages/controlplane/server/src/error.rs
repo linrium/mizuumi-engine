@@ -32,6 +32,10 @@ pub enum AppError {
     UnityCatalog(String),
     #[error("data quality execution failed: {0}")]
     DataQuality(String),
+    #[error("SigNoz metrics API is not configured")]
+    SignozNotConfigured,
+    #[error("SigNoz metrics query failed: {0}")]
+    Signoz(String),
 }
 
 #[derive(Serialize)]
@@ -49,11 +53,13 @@ impl IntoResponse for AppError {
             AppError::Conflict(_) => StatusCode::CONFLICT,
             AppError::Forbidden(_) => StatusCode::FORBIDDEN,
             AppError::Postgres(_) | AppError::Pool(_) => StatusCode::SERVICE_UNAVAILABLE,
+            AppError::SignozNotConfigured => StatusCode::SERVICE_UNAVAILABLE,
             AppError::Json(_) => StatusCode::INTERNAL_SERVER_ERROR,
             AppError::Kube(kube::Error::Api(resp)) if resp.code == 404 => StatusCode::NOT_FOUND,
-            AppError::Kube(_) | AppError::UnityCatalog(_) | AppError::DataQuality(_) => {
-                StatusCode::BAD_GATEWAY
-            }
+            AppError::Kube(_)
+            | AppError::UnityCatalog(_)
+            | AppError::DataQuality(_)
+            | AppError::Signoz(_) => StatusCode::BAD_GATEWAY,
         };
         if status.is_server_error() {
             tracing::error!(error = %self, "request failed");

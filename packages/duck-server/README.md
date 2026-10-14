@@ -50,3 +50,21 @@ single-catalog fallback when `UNITY_CATALOGS` is unset.
 
 The explicit port is required because Quack URIs otherwise default to port
 9494, even when a non-local hostname makes the client select HTTPS.
+
+## SigNoz telemetry
+
+The identity-aware `/api/query` path enables DuckDB's connection-local query
+profiler with `no_output` and exports its root metrics to the in-cluster SigNoz
+OpenTelemetry collector over OTLP/HTTP. The exported histograms cover query
+latency, CPU and blocked-thread time, returned and scanned rows, result size,
+operator cardinality, peak buffer and temporary-directory usage, allocated
+memory, and bytes read and written. SQL text and operator names are
+intentionally not exported.
+
+The Helm chart configures the collector endpoint and a 30-second export
+interval under `telemetry`. Set both `OTEL_EXPORTER_OTLP_ENDPOINT` and
+`OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` to empty strings (or leave them unset) to
+disable metrics for a direct run. Quack executes queries in extension-owned
+connections whose completed profiles are not exposed to the Python host, so
+these profiler metrics cover `/api/query`, not direct Quack clients. Kubernetes
+container and pod metrics continue to come from `signoz-k8s-infra`.

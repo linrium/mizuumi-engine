@@ -59,6 +59,28 @@ spec:
               value: /etc/duck-server/trust/gateway-ca.crt
             - name: QUERY_HTTP_LISTEN
               value: {{ printf "0.0.0.0:%v" .Values.service.queryPort | quote }}
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: {{ .Values.telemetry.endpoint | quote }}
+            - name: OTEL_EXPORTER_OTLP_PROTOCOL
+              value: http/protobuf
+            - name: OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE
+              value: delta
+            - name: OTEL_METRIC_EXPORT_INTERVAL
+              value: {{ .Values.telemetry.exportInterval | quote }}
+            - name: OTEL_SERVICE_NAME
+              value: duck-server
+            - name: OTEL_SERVICE_NAMESPACE
+              value: duck-server
+            - name: K8S_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: K8S_POD_UID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.uid
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: {{ printf "deployment.environment=%s,k8s.namespace.name=%s,k8s.pod.name=$(K8S_POD_NAME),k8s.pod.uid=$(K8S_POD_UID)" .Values.telemetry.deploymentEnvironment .Release.Namespace | quote }}
           envFrom:
             - secretRef:
                 name: {{ .Values.credentialsSecretName }}

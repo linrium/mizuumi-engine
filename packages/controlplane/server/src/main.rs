@@ -19,7 +19,9 @@ use crate::{
     features::{
         access_requests::{DefaultAccessRequestService, access_request_router},
         auth::{AuthService, auth_router, authorize},
+        computes::{DefaultComputeService, compute_router},
         data_contracts::{DefaultDataContractService, data_contract_router},
+        duck_metrics::{DefaultDuckMetricsService, duck_metrics_router},
         health::{DefaultHealthService, health_router},
         pipelines::{DefaultPipelineService, pipeline_router},
         policy_templates::{DefaultPolicyTemplateService, policy_template_router},
@@ -76,6 +78,14 @@ async fn main() -> anyhow::Result<()> {
             unity_catalog,
             settings.duck_query.url,
         )),
+        computes: Arc::new(DefaultComputeService::new(
+            kube_client.clone(),
+            &settings.compute,
+        )),
+        duck_metrics: Arc::new(
+            DefaultDuckMetricsService::new(&settings.signoz)
+                .context("failed to configure SigNoz metrics client")?,
+        ),
         health: Arc::new(DefaultHealthService::new(pool.clone())),
         pipelines: Arc::new(DefaultPipelineService::new(kube_client)),
         policy_templates: Arc::new(DefaultPolicyTemplateService::new(pool)),
@@ -83,6 +93,8 @@ async fn main() -> anyhow::Result<()> {
     let api = Router::new()
         .merge(auth_router())
         .merge(data_contract_router())
+        .merge(compute_router())
+        .merge(duck_metrics_router())
         .merge(policy_template_router())
         .merge(access_request_router())
         .merge(pipeline_router())

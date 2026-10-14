@@ -29,6 +29,10 @@ data:
     [duck_query]
     url = {{ .Values.duckQuery.url | quote }}
 
+    [compute]
+    namespace = {{ .Values.compute.namespace | quote }}
+    label_selector = {{ .Values.compute.labelSelector | quote }}
+
     [auth]
     enabled = {{ .Values.auth.enabled }}
     issuer = {{ .Values.auth.issuer | quote }}
@@ -45,4 +49,9 @@ data:
     endpoint = {{ .Values.chronicle.endpoint | quote }}
     service_name = {{ .Values.chronicle.serviceName | quote }}
     timeout_ms = {{ .Values.chronicle.timeoutMs }}
+
+    [signoz]
+    endpoint = {{ .Values.signoz.endpoint | quote }}
+    api_key = ""
+    timeout_ms = {{ .Values.signoz.timeoutMs }}
 

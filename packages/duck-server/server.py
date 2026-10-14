@@ -19,8 +19,11 @@ from uuid import UUID
 
 import duckdb
 
+from telemetry import create_duckdb_telemetry
+
 MAX_RESULT_ROWS = 10_000
 QUERY_TIMEOUT_SECONDS = 60
+TELEMETRY = create_duckdb_telemetry()
 
 
 def required_env(name: str) -> str:
@@ -234,6 +237,7 @@ def execute_identity_query(query: str, access_token: str) -> dict[str, object]:
     try:
         ensure_read_only(connection, query)
         configure_unity_catalogs(connection, access_token)
+        connection.execute("SET enable_profiling = 'no_output'")
         timeout.start()
         result = connection.execute(query)
         description = result.description or []
@@ -241,6 +245,7 @@ def execute_identity_query(query: str, access_token: str) -> dict[str, object]:
         if len(raw_rows) > MAX_RESULT_ROWS:
             raise ValueError(f"Query results are limited to {MAX_RESULT_ROWS:,} rows")
         rows = [[json_value(value) for value in row] for row in raw_rows]
+        TELEMETRY.record_connection_profile(connection)
         return {
             "columns": [column[0] for column in description],
             "columnTypes": [str(column[1]) for column in description],
@@ -456,6 +461,7 @@ def main() -> int:
     query_thread.join(timeout=15)
     connection.execute(f"CALL quack_stop({sql_string(listen_uri)})")
     connection.close()
+    TELEMETRY.shutdown()
     return 0
 
 

@@ -51,7 +51,11 @@ RUN groupadd --system --gid 65532 duckdb \
   && useradd --system --uid 65532 --gid duckdb --home-dir /home/duckdb --create-home duckdb \
   && mkdir -p /var/lib/duckdb \
   && chown duckdb:duckdb /var/lib/duckdb \
-  && pip install --no-cache-dir "duckdb==${DUCKDB_VERSION}" "pytz==2026.5"
+  && pip install --no-cache-dir \
+    "duckdb==${DUCKDB_VERSION}" \
+    "opentelemetry-exporter-otlp-proto-http==1.45.1" \
+    "opentelemetry-sdk==1.45.1" \
+    "pytz==2026.5"
 
 ENV HOME=/home/duckdb \
   PYTHONUNBUFFERED=1
@@ -64,6 +68,7 @@ COPY --from=unity-catalog-builder \
   /src/duck-uc-extension/build/release/extension/delta/delta.duckdb_extension \
   /opt/duckdb/extensions/delta.duckdb_extension
 COPY --chown=duckdb:duckdb duck-server/server.py /app/server.py
+COPY --chown=duckdb:duckdb duck-server/telemetry.py /app/telemetry.py
 
 USER duckdb
 

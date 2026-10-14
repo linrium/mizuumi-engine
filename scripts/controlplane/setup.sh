@@ -10,6 +10,7 @@ image_tag="${CONTROLPLANE_IMAGE_TAG:-$default_image_tag}"
 skip_image_build="${CONTROLPLANE_SKIP_IMAGE_BUILD:-0}"
 unitycatalog_credentials_secret="${UNITYCATALOG_CREDENTIALS_SECRET:-unitycatalog-credentials}"
 trust_secret="${CONTROLPLANE_TRUST_SECRET:-controlplane-trust}"
+signoz_api_key_secret="${CONTROLPLANE_SIGNOZ_SECRET:-controlplane-signoz}"
 chart="$repo_root/k8s/controlplane"
 server_dir="$repo_root/packages/controlplane/server"
 
@@ -29,6 +30,8 @@ Environment overrides:
   UNITYCATALOG_CREDENTIALS_SECRET Secret containing CONTROLPLANE_CLIENT_ID and
                                   CONTROLPLANE_CLIENT_SECRET (default: unitycatalog-credentials)
   CONTROLPLANE_TRUST_SECRET       Secret containing the Keycloak CA (default: controlplane-trust)
+  CONTROLPLANE_SIGNOZ_SECRET      Secret containing a read-only SigNoz API key
+                                  under api-key (default: controlplane-signoz)
 EOF
 }
 
@@ -99,12 +102,17 @@ kubectl -n "$namespace" create secret generic "$trust_secret" \
   --from-file=keycloak-ca.crt="$keycloak_ca" \
   --dry-run=client -o yaml | kubectl apply -f - >/dev/null
 
+if ! kubectl -n "$namespace" get secret "$signoz_api_key_secret" >/dev/null 2>&1; then
+  echo "Warning: $namespace/$signoz_api_key_secret was not found; /api/duck-server/metrics will return 503." >&2
+fi
+
 helm upgrade --install "$release" "$chart" \
   --namespace "$namespace" \
   --set-string "server.image.repository=$image_repository" \
   --set-string "server.image.tag=$image_tag" \
   --set-string "unityCatalog.credentialsSecretName=$unitycatalog_credentials_secret" \
   --set-string "unityCatalog.trustSecretName=$trust_secret" \
+  --set-string "signoz.apiKeySecretName=$signoz_api_key_secret" \
   --wait --timeout 10m "$@"
 
 server_deployment="$(kubectl -n "$namespace" get deployment \

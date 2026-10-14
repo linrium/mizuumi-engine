@@ -7,6 +7,7 @@ const items = [
   { href: "/pipelines/jobs", label: "Jobs" },
   { href: "/pipelines/assets", label: "Assets" },
   { href: "/pipelines/runs", label: "Runs" },
+  { href: "/pipelines/computes", label: "Compute" },
 ]
 
 export function PipelinesNav() {

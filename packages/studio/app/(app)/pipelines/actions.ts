@@ -39,6 +39,41 @@ export type ListPipelinesResponse = {
 
 export type PipelineDetail = Pipeline & { raw: unknown }
 
+export type Compute = {
+  id: string
+  name: string
+  namespace: string
+  phase: string
+  ready: boolean
+  node_name?: string | null
+  pod_ip?: string | null
+  image?: string | null
+  image_id?: string | null
+  restart_count: number
+  started_at?: string | null
+  creation_timestamp?: string | null
+}
+
+export type ComputeDetail = Compute & { raw: unknown }
+
+export type ListComputesResponse = {
+  items: Compute[]
+}
+
+export type DuckMetricsResponse = {
+  compute_id?: string
+  start: number
+  end: number
+  step: number
+  aggregation: "p50" | "p90" | "p95" | "p99"
+  definitions: {
+    query_name: string
+    name: string
+    unit: string
+  }[]
+  data: unknown
+}
+
 function controlPlaneUrl(path: string, params?: Record<string, string>): URL {
   const baseUrl =
     process.env.CONTROLPLANE_URL ?? "https://api.controlplane.mizuumi.test"
@@ -93,5 +128,21 @@ export async function getPipeline(
 ): Promise<PipelineDetail> {
   return request<PipelineDetail>(
     `api/pipelines/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}`,
+  )
+}
+
+export async function listComputes(): Promise<ListComputesResponse> {
+  return request<ListComputesResponse>("api/computes")
+}
+
+export async function getCompute(computeId: string): Promise<ComputeDetail> {
+  return request<ComputeDetail>(`api/computes/${encodeURIComponent(computeId)}`)
+}
+
+export async function getComputeMetrics(
+  computeId: string,
+): Promise<DuckMetricsResponse> {
+  return request<DuckMetricsResponse>(
+    `api/computes/${encodeURIComponent(computeId)}/metrics`,
   )
 }

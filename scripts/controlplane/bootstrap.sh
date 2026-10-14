@@ -16,6 +16,10 @@ trap 'exit 143' TERM
 
 command -v curl >/dev/null 2>&1 || { echo "Missing required command: curl" >&2; exit 1; }
 
+if [[ -z "${SIGNOZ_API_KEY:-}" ]]; then
+  export SIGNOZ_API_KEY_FILE="${SIGNOZ_API_KEY_FILE:-$repo_root/packages/controlplane/signoz-api-key}"
+fi
+"$repo_root/scripts/controlplane/bootstrap-signoz.sh"
 "$repo_root/scripts/controlplane/setup.sh" "$@"
 
 service_name="$(kubectl -n "$namespace" get service \

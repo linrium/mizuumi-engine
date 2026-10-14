@@ -19,6 +19,12 @@ All `/api/...` routes require an RS256 bearer token issued by the `sovico` realm
 `controlplane` audience. Read-only requests require `controlplane-reader` or
 `controlplane-writer`, mutations require `controlplane-writer`, and `controlplane-admin` grants
 full access. `/api/auth/me` returns the authenticated principal.
+
+`GET /api/duck-server/metrics` reads the fixed DuckDB profiler metrics from the
+internal SigNoz API. Before using it, run
+`scripts/controlplane/bootstrap.sh` as described in
+`packages/controlplane/server/README.md`; the resulting `controlplane-signoz`
+Secret contains a read-only SigNoz service-account API key under `api-key`.
 Use `CONTROLPLANE_SKIP_IMAGE_BUILD=1` when the configured image is already available to the cluster.
 The deployment consumes the `CONTROLPLANE_CLIENT_ID` and `CONTROLPLANE_CLIENT_SECRET` keys from the
 `unitycatalog-credentials` Secret created by `scripts/unitycatalog/bootstrap.sh` and

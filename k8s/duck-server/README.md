@@ -28,3 +28,9 @@ the shared HTTPS gateway instead of Quack's default port 9494. See
 `packages/duck-server/README.md` for the local client example. Quack provides
 full read/write SQL access to the local DuckDB database, so protect its token
 and do not expose this local deployment to an untrusted network.
+
+Successful queries through `/api/query` export DuckDB profiler metrics over
+OTLP/HTTP to the SigNoz collector configured by `telemetry.endpoint`. Install
+SigNoz before Duck server for ingestion to be available. Direct Quack queries
+are not included because their connection-local profiles stay inside the Quack
+extension.
