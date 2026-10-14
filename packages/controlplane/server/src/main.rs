@@ -25,6 +25,7 @@ use crate::{
         health::{DefaultHealthService, health_router},
         pipelines::{DefaultPipelineService, pipeline_router},
         policy_templates::{DefaultPolicyTemplateService, policy_template_router},
+        spark_metrics::DefaultSparkMetricsService,
     },
     infrastructure::{
         chronicle,
@@ -85,6 +86,10 @@ async fn main() -> anyhow::Result<()> {
         duck_metrics: Arc::new(
             DefaultDuckMetricsService::new(&settings.signoz)
                 .context("failed to configure SigNoz metrics client")?,
+        ),
+        spark_metrics: Arc::new(
+            DefaultSparkMetricsService::new(&settings.signoz)
+                .context("failed to configure SigNoz Spark metrics client")?,
         ),
         health: Arc::new(DefaultHealthService::new(pool.clone())),
         pipelines: Arc::new(DefaultPipelineService::new(kube_client)),

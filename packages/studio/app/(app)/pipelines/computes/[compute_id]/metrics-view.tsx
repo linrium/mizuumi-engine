@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo } from "react"
-import type { DuckMetricsResponse } from "@/app/(app)/pipelines/actions"
+import type { ComputeMetricsResponse } from "@/app/(app)/pipelines/actions"
 import {
   type ChartConfig,
   EChartsLineChart,
@@ -14,7 +14,7 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 
-type MetricDefinition = DuckMetricsResponse["definitions"][number]
+type MetricDefinition = ComputeMetricsResponse["definitions"][number]
 type ChartRow = Record<string, string | number | null>
 
 type MetricGroup = {
@@ -45,6 +45,15 @@ const metricLabels: Record<string, string> = {
   "duckdb.query.memory.allocated": "Allocated memory",
   "duckdb.query.io.read": "Bytes read",
   "duckdb.query.io.written": "Bytes written",
+  "flare.task.duration": "Task duration",
+  "flare.task.records_throughput": "Record throughput",
+  "flare.task.shuffle.read_bytes": "Task shuffle read",
+  "flare.task.shuffle.write_bytes": "Task shuffle write",
+  "flare.stage.executor.run_time": "Stage executor time",
+  "flare.stage.input.bytes": "Stage input",
+  "flare.stage.output.bytes": "Stage output",
+  "flare.stage.shuffle.read_bytes": "Stage shuffle read",
+  "flare.stage.shuffle.write_bytes": "Stage shuffle write",
 }
 
 function metricLabel(name: string) {
@@ -52,6 +61,7 @@ function metricLabel(name: string) {
     metricLabels[name] ??
     name
       .replace(/^duckdb\.query\./, "")
+      .replace(/^flare\./, "")
       .replaceAll(".", " ")
       .replaceAll("_", " ")
   )
@@ -70,6 +80,10 @@ function formatNumber(value: number, unit: string) {
 
   if (unit === "ms") {
     return `${new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(value)} ms`
+  }
+
+  if (unit === "{records}/s") {
+    return `${new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(value)}/s`
   }
 
   return new Intl.NumberFormat(undefined, {
@@ -91,10 +105,10 @@ function groupDefinitions(definitions: MetricDefinition[]): MetricGroup[] {
       unit: "ms",
     },
     {
-      id: "rows",
-      title: "Row throughput",
-      description: "Rows returned, scanned, and processed",
-      unit: "{row}",
+      id: "throughput",
+      title: "Throughput",
+      description: "Rows processed or records processed per second",
+      unit: "count",
     },
     {
       id: "memory",
@@ -111,21 +125,44 @@ function groupDefinitions(definitions: MetricDefinition[]): MetricGroup[] {
   ]
 
   return groups
-    .map((group) => ({
-      ...group,
-      definitions: definitions.filter((definition) => {
-        if (group.id === "time") return definition.unit === "s"
-        if (group.id === "io") return definition.name.includes(".io.")
-        if (group.id === "memory") {
-          return definition.unit === "By" && !definition.name.includes(".io.")
+    .map((group) => {
+      const matchingDefinitions = definitions.filter((definition) => {
+        if (group.id === "time") {
+          return definition.unit === "s" || definition.unit === "ms"
         }
-        return definition.unit === group.unit
-      }),
-    }))
+        if (group.id === "throughput") {
+          return (
+            definition.unit === "{row}" || definition.unit === "{records}/s"
+          )
+        }
+        if (group.id === "io") {
+          return (
+            definition.name.includes(".io.") ||
+            (definition.name.startsWith("flare.") && definition.unit === "By")
+          )
+        }
+        if (group.id === "memory") {
+          return (
+            definition.unit === "By" &&
+            !definition.name.includes(".io.") &&
+            !definition.name.startsWith("flare.")
+          )
+        }
+        return false
+      })
+      return {
+        ...group,
+        unit:
+          group.id === "throughput"
+            ? (matchingDefinitions[0]?.unit ?? group.unit)
+            : group.unit,
+        definitions: matchingDefinitions,
+      }
+    })
     .filter((group) => group.definitions.length > 0)
 }
 
-function buildChartRows(metrics: DuckMetricsResponse) {
+function buildChartRows(metrics: ComputeMetricsResponse) {
   const rows = new Map<number, ChartRow>()
   const results = metrics.data?.data?.data?.results ?? []
   const definitions = new Map(
@@ -187,7 +224,7 @@ function chartConfig(definitions: MetricDefinition[]): ChartConfig {
   )
 }
 
-export function MetricsView({ metrics }: { metrics: DuckMetricsResponse }) {
+export function MetricsView({ metrics }: { metrics: ComputeMetricsResponse }) {
   const rows = useMemo(() => buildChartRows(metrics), [metrics])
   const groups = useMemo(
     () => groupDefinitions(metrics.definitions),

@@ -25,6 +25,9 @@ internal SigNoz API. Before using it, run
 `scripts/controlplane/bootstrap.sh` as described in
 `packages/controlplane/server/README.md`; the resulting `controlplane-signoz`
 Secret contains a read-only SigNoz service-account API key under `api-key`.
+The same key backs `/api/computes/{compute_id}/metrics`, which selects DuckDB
+profiler metrics for Duck Server pods and Flare task/stage metrics for
+SparkApplication computes.
 Use `CONTROLPLANE_SKIP_IMAGE_BUILD=1` when the configured image is already available to the cluster.
 The deployment consumes the `CONTROLPLANE_CLIENT_ID` and `CONTROLPLANE_CLIENT_SECRET` keys from the
 `unitycatalog-credentials` Secret created by `scripts/unitycatalog/bootstrap.sh` and

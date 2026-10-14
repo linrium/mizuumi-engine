@@ -38,6 +38,8 @@ spark:
 
 application:
   enabled: true
+  controlplaneAuth:
+    enabled: false
   name: unity-catalog-rustfs
   env: {}
   mainApplicationFile: local:///opt/spark/work-dir/application/main.py

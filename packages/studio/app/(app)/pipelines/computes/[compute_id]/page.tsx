@@ -24,7 +24,10 @@ export default async function ComputeDetailPage({
           <div>
             <h1 className="font-mono text-lg font-semibold">{compute.name}</h1>
             <p className="mt-1 text-xs text-muted-foreground">
-              {compute.namespace} · {compute.id}
+              {compute.kind === "spark_application"
+                ? "SparkApplication"
+                : "Duck Server"}{" "}
+              · {compute.namespace} · {compute.id}
             </p>
           </div>
           <Badge variant={compute.ready ? "default" : "secondary"}>
@@ -43,7 +46,7 @@ export default async function ComputeDetailPage({
             </div>
             <div className="flex gap-2">
               <Badge variant="outline">
-                {metrics.aggregation.toUpperCase()}
+                {metrics.aggregation.toUpperCase()} histograms
               </Badge>
               <Badge variant="outline">{metrics.step}s interval</Badge>
             </div>
@@ -61,7 +64,7 @@ export default async function ComputeDetailPage({
           className="w-fit"
           variant="ghost"
           size="sm"
-          render={<Link href="/pipelines/compute" />}
+          render={<Link href="/pipelines/computes" />}
         >
           <IconArrowLeft />
           Compute

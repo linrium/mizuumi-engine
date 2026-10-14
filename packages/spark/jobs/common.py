@@ -6,6 +6,7 @@ from dataclasses import dataclass
 import json
 import os
 import re
+import ssl
 from typing import Any
 import urllib.error
 import urllib.parse
@@ -276,7 +277,10 @@ def controlplane_request(
     request = urllib.request.Request(
         f"{base_url}{path}",
         data=data,
-        headers={"Content-Type": "application/json"},
+        headers={
+            "Authorization": f"Bearer {controlplane_access_token()}",
+            "Content-Type": "application/json",
+        },
         method=method,
     )
     try:
@@ -289,6 +293,52 @@ def controlplane_request(
         ) from error
     except urllib.error.URLError as error:
         raise RuntimeError(f"Control Plane {method} {path} failed: {error.reason}") from error
+
+
+def controlplane_access_token() -> str:
+    """Exchange the Spark Control Plane client secret for a short-lived token."""
+    token_url = required_env("KEYCLOAK_TOKEN_URL")
+    if not token_url.startswith("https://"):
+        raise RuntimeError("KEYCLOAK_TOKEN_URL must use https://")
+
+    ca_certificate = required_env("KEYCLOAK_CA_CERT")
+    if not os.path.isfile(ca_certificate):
+        raise RuntimeError(f"KEYCLOAK_CA_CERT does not exist: {ca_certificate}")
+
+    payload = urllib.parse.urlencode(
+        {
+            "grant_type": "client_credentials",
+            "client_id": required_env("CONTROLPLANE_CLIENT_ID"),
+            "client_secret": required_env("CONTROLPLANE_CLIENT_SECRET"),
+        }
+    ).encode("ascii")
+    token_request = urllib.request.Request(
+        token_url,
+        data=payload,
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(
+            token_request,
+            context=ssl.create_default_context(cafile=ca_certificate),
+            timeout=15,
+        ) as response:
+            token_response = json.load(response)
+    except urllib.error.HTTPError as error:
+        detail = error.read().decode("utf-8", errors="replace")
+        raise RuntimeError(
+            f"Keycloak token request returned HTTP {error.code}: {detail}"
+        ) from error
+    except (urllib.error.URLError, OSError, ValueError) as error:
+        raise RuntimeError(f"Keycloak token request failed: {error}") from error
+
+    if not isinstance(token_response, dict):
+        raise RuntimeError("Keycloak token response was not a JSON object")
+    token = token_response.get("access_token")
+    if not isinstance(token, str) or not token:
+        raise RuntimeError("Keycloak token response did not contain an access_token")
+    return token
 
 
 def publish_contract(config: JobConfig, table: Table, full_name: str) -> dict[str, Any]:

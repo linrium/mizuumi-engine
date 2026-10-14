@@ -12,7 +12,10 @@ and Gold schemas through the Unity Catalog CLI and grant access to the RustFS
 external location. The driver authenticates as the dedicated
 `unitycatalog-spark` Keycloak service principal and receives short-lived
 Keycloak and RustFS credentials instead of a human token or long-lived S3
-identity.
+identity. Bronze-to-silver drivers additionally use the dedicated
+`spark-controlplane` service principal to obtain short-lived bearer tokens for
+publishing and reconciling data contracts. Executors never receive that
+Control Plane client secret.
 
 Unity Catalog-to-RustFS automatic credential vending is not enabled here:
 RustFS `1.0.0` currently rejects the request emitted by the Unity Catalog

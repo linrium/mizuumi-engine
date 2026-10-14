@@ -20,9 +20,9 @@ workflow APIs.
 | `POST` | `/api/access-requests/{request_id}/reject` | Reject a pending request. |
 | `POST` | `/api/access-requests/{request_id}/cancel` | Cancel an awaiting request owned by the requester. |
 | `GET` | `/api/duck-server/metrics` | Fetch DuckDB query-profiler time series from SigNoz. |
-| `GET` | `/api/computes` | List Duck Server compute pods from Kubernetes. |
-| `GET` | `/api/computes/{compute_id}` | Fetch one compute pod by Kubernetes UID. |
-| `GET` | `/api/computes/{compute_id}/metrics` | Fetch DuckDB profiler metrics scoped to one compute. |
+| `GET` | `/api/computes` | List Duck Server pods and SparkApplication jobs from Kubernetes. |
+| `GET` | `/api/computes/{compute_id}` | Fetch one compute by Kubernetes UID. |
+| `GET` | `/api/computes/{compute_id}/metrics` | Fetch DuckDB or Spark Flare metrics scoped to one compute. |
 
 Data contracts are stored as complete JSONB documents with indexed table bindings,
 immutable semantic versions, full-document and physical-schema SHA-256 hashes, and the
@@ -105,8 +105,16 @@ The chart reads that optional Secret into `CONTROLPLANE__SIGNOZ__API_KEY`. When
 the key is absent, the endpoint returns `503` while the rest of the control
 plane remains available.
 
-Compute discovery reads pods in the configured `[compute]` namespace using the
-configured Kubernetes label selector. The Helm chart grants the control-plane
-service account read-only pod access in that namespace. Per-compute metrics use
-the pod UID exported as the `k8s.pod.uid` OpenTelemetry resource attribute.
+Compute discovery reads Duck Server pods in the configured `[compute]` namespace
+and SparkApplication custom resources in the namespaces allowed by the chart's
+`rbac.sparkApplications` settings. The Helm chart grants the control-plane service
+account read-only access to both resource types. Duck metrics use the pod UID
+exported as the `k8s.pod.uid` OpenTelemetry resource attribute.
+
+Spark compute metrics query the nine `flare.task.*` and `flare.stage.*`
+instruments emitted by the application's driver and executor services. Histogram
+series use the requested percentile; byte counters use per-interval increases.
+The SparkApplication name must match the Flare service-name convention
+`<application>-driver` and `<application>-executor`, which the repository's Spark
+deployment scripts configure automatically.
 

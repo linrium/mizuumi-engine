@@ -23,6 +23,13 @@ schema change must also increment the table's `contract_version`. After writing,
 asks the Control Plane to reconcile the active contract with Unity Catalog and fails if the
 table is still drifted.
 
+Control Plane calls use a dedicated `spark-controlplane` Keycloak service account with the
+`controlplane-writer` client role and `controlplane` audience. The driver exchanges its client
+secret for a short-lived token and sends that token as a bearer credential; executors do not
+receive the Control Plane client secret. Run `scripts/unitycatalog/bootstrap.sh` and
+`scripts/unitycatalog/setup.sh` after auth changes so the runtime credential Secret contains
+the service account, then redeploy the jobs.
+
 The generated ODCS v3.1.0 document also declares the source-domain owner and steward,
 operational frequency and latency targets, Vietnam residency constraints, and executable
 schema- and property-level quality rules. The contract page in Studio can execute supported
@@ -52,4 +59,6 @@ The deployment accepts additional Helm options:
 ```
 
 Supported runtime environment overrides are `BRONZE_SCHEMA_NAME`, `BRONZE_TABLE_NAME`,
-`SILVER_SCHEMA_NAME`, and `CONTROLPLANE_URL`.
+`SILVER_SCHEMA_NAME`, and `CONTROLPLANE_URL`. The chart supplies `CONTROLPLANE_CLIENT_ID`,
+`CONTROLPLANE_CLIENT_SECRET`, `KEYCLOAK_TOKEN_URL`, and `KEYCLOAK_CA_CERT` from the managed
+runtime credentials and trust bundle.

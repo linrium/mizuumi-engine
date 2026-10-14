@@ -150,6 +150,46 @@ controlplane_service_user_id="$(kc GET "/admin/realms/sovico/clients/$controlpla
 admin_role="$(kc GET "/admin/realms/sovico/clients/$server_uuid/roles/unitycatalog-admin")"
 kc POST "/admin/realms/sovico/users/$controlplane_service_user_id/role-mappings/clients/$server_uuid" "[$admin_role]" >/dev/null
 
+# Spark drivers publish and reconcile data contracts through the authenticated
+# Control Plane API. Keep this identity separate from the Unity Catalog Spark
+# client so each secret has only the permissions needed for its target API.
+controlplane_audience="${CONTROLPLANE_OIDC_AUDIENCE:-controlplane}"
+controlplane_resource_payload="$(jq -cn --arg id "$controlplane_audience" \
+  '{clientId:$id,name:"Mizuumi Control Plane",enabled:true,protocol:"openid-connect",bearerOnly:true,publicClient:false,standardFlowEnabled:false,directAccessGrantsEnabled:false,serviceAccountsEnabled:false}')"
+controlplane_resource_uuid="$(upsert_client "$controlplane_audience" "$controlplane_resource_payload")"
+for role in controlplane-reader controlplane-writer controlplane-admin; do
+  role_status="$(curl -sS --cacert "$keycloak_ca" -o /dev/null -w '%{http_code}' \
+    -H "Authorization: Bearer $admin_token" \
+    "$keycloak_url/admin/realms/sovico/clients/$controlplane_resource_uuid/roles/$role")"
+  case "$role_status" in
+    200) ;;
+    404)
+      role_payload="$(jq -cn --arg name "$role" '{name:$name}')"
+      kc POST "/admin/realms/sovico/clients/$controlplane_resource_uuid/roles" "$role_payload" >/dev/null
+      ;;
+    *) echo "Could not inspect Control Plane client role $role (HTTP $role_status)." >&2; exit 1 ;;
+  esac
+done
+
+spark_controlplane_client_id="${SPARK_CONTROLPLANE_KEYCLOAK_CLIENT_ID:-spark-controlplane}"
+spark_controlplane_payload="$(jq -cn --arg id "$spark_controlplane_client_id" \
+  '{clientId:$id,name:"Mizuumi Spark Control Plane publisher",enabled:true,protocol:"openid-connect",publicClient:false,clientAuthenticatorType:"client-secret",standardFlowEnabled:false,directAccessGrantsEnabled:false,serviceAccountsEnabled:true}')"
+spark_controlplane_uuid="$(upsert_client "$spark_controlplane_client_id" "$spark_controlplane_payload")"
+spark_controlplane_secret="$(kc GET "/admin/realms/sovico/clients/$spark_controlplane_uuid/client-secret" | jq -er '.value')"
+spark_controlplane_audience_payload="$(jq -cn --arg audience "$controlplane_audience" \
+  '{name:"controlplane-audience",protocol:"openid-connect",protocolMapper:"oidc-audience-mapper",consentRequired:false,config:{"included.client.audience":$audience,"access.token.claim":"true","id.token.claim":"false"}}')"
+spark_controlplane_mappers="$(kc GET "/admin/realms/sovico/clients/$spark_controlplane_uuid/protocol-mappers/models")"
+spark_controlplane_mapper_id="$(printf '%s' "$spark_controlplane_mappers" | jq -r '[.[] | select(.name == "controlplane-audience")][0].id // empty')"
+if [[ -z "$spark_controlplane_mapper_id" ]]; then
+  kc POST "/admin/realms/sovico/clients/$spark_controlplane_uuid/protocol-mappers/models" "$spark_controlplane_audience_payload" >/dev/null
+else
+  spark_controlplane_audience_payload="$(printf '%s' "$spark_controlplane_audience_payload" | jq -c --arg id "$spark_controlplane_mapper_id" '.id=$id')"
+  kc PUT "/admin/realms/sovico/clients/$spark_controlplane_uuid/protocol-mappers/models/$spark_controlplane_mapper_id" "$spark_controlplane_audience_payload" >/dev/null
+fi
+spark_controlplane_service_user_id="$(kc GET "/admin/realms/sovico/clients/$spark_controlplane_uuid/service-account-user" | jq -er '.id')"
+controlplane_writer_role="$(kc GET "/admin/realms/sovico/clients/$controlplane_resource_uuid/roles/controlplane-writer")"
+kc POST "/admin/realms/sovico/users/$spark_controlplane_service_user_id/role-mappings/clients/$controlplane_resource_uuid" "[$controlplane_writer_role]" >/dev/null
+
 # Remove the obsolete browser client from earlier UI-enabled installations.
 old_ui_clients="$(kc GET '/admin/realms/sovico/clients?clientId=unitycatalog-ui')"
 while IFS= read -r old_ui_uuid; do
@@ -225,11 +265,12 @@ vault_payload="$(jq -cn \
   --arg client_id unitycatalog --arg client_secret "$oauth_client_secret" \
   --arg spark_client_id "$spark_client_id" --arg spark_client_secret "$spark_client_secret" \
   --arg controlplane_client_id "$controlplane_client_id" --arg controlplane_client_secret "$controlplane_client_secret" \
+  --arg spark_controlplane_client_id "$spark_controlplane_client_id" --arg spark_controlplane_client_secret "$spark_controlplane_secret" \
   --arg access "$s3_access_key" --arg secret "$s3_secret_key" \
-  '{data:{OAUTH_CLIENT_ID:$client_id,OAUTH_CLIENT_SECRET:$client_secret,KEYCLOAK_CLIENT_ID:$spark_client_id,KEYCLOAK_CLIENT_SECRET:$spark_client_secret,CONTROLPLANE_CLIENT_ID:$controlplane_client_id,CONTROLPLANE_CLIENT_SECRET:$controlplane_client_secret,S3_ACCESS_KEY:$access,S3_SECRET_KEY:$secret}}')"
+  '{data:{OAUTH_CLIENT_ID:$client_id,OAUTH_CLIENT_SECRET:$client_secret,KEYCLOAK_CLIENT_ID:$spark_client_id,KEYCLOAK_CLIENT_SECRET:$spark_client_secret,CONTROLPLANE_CLIENT_ID:$controlplane_client_id,CONTROLPLANE_CLIENT_SECRET:$controlplane_client_secret,SPARK_CONTROLPLANE_CLIENT_ID:$spark_controlplane_client_id,SPARK_CONTROLPLANE_CLIENT_SECRET:$spark_controlplane_client_secret,S3_ACCESS_KEY:$access,S3_SECRET_KEY:$secret}}')"
 vault POST /v1/secret/data/unitycatalog "$vault_payload" >/dev/null
 
-unset admin_token vault_token oauth_client_secret spark_client_secret controlplane_client_secret rustfs_root_access rustfs_root_secret s3_secret_key
+unset admin_token vault_token oauth_client_secret spark_client_secret controlplane_client_secret spark_controlplane_secret rustfs_root_access rustfs_root_secret s3_secret_key
 echo "Unity Catalog bootstrap complete: Keycloak API and Spark service clients, RustFS IAM/STS bucket, and Vault KV secret are ready."
 echo "Keycloak user khaopad will map to Unity Catalog user $uc_email."
 echo "Run ./scripts/unitycatalog/setup.sh."

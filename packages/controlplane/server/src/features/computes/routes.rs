@@ -7,12 +7,22 @@ use axum::{
 use crate::{
     app_state::AppState,
     error::AppError,
+    features::computes::ComputeKind,
     features::duck_metrics::{DuckMetricFilter, DuckMetricsResponse, GetDuckMetricsQuery},
+    features::spark_metrics::{SparkMetricFilter, SparkMetricsResponse},
 };
+use serde::Serialize;
 
 use super::dtos::{ComputeDetail, ListComputesResponse};
 
 const COMPUTES_PATH: &str = "/api/computes";
+
+#[derive(Serialize)]
+#[serde(untagged)]
+enum ComputeMetricsResponse {
+    Duck(DuckMetricsResponse),
+    Spark(SparkMetricsResponse),
+}
 
 pub fn compute_router() -> Router<AppState> {
     Router::new()
@@ -41,10 +51,25 @@ async fn get_compute_metrics(
     State(state): State<AppState>,
     Path(compute_id): Path<String>,
     Query(query): Query<GetDuckMetricsQuery>,
-) -> Result<Json<DuckMetricsResponse>, AppError> {
+) -> Result<Json<ComputeMetricsResponse>, AppError> {
     let compute = state.computes.get_compute(&compute_id).await?;
-    let filter = DuckMetricFilter {
-        compute_id: compute.compute.id,
-    };
-    Ok(Json(state.duck_metrics.query(query, Some(&filter)).await?))
+    match compute.compute.kind {
+        ComputeKind::DuckServer => {
+            let filter = DuckMetricFilter {
+                compute_id: compute.compute.id,
+            };
+            Ok(Json(ComputeMetricsResponse::Duck(
+                state.duck_metrics.query(query, Some(&filter)).await?,
+            )))
+        }
+        ComputeKind::SparkApplication => {
+            let filter = SparkMetricFilter {
+                compute_id: compute.compute.id,
+                application_name: compute.compute.name,
+            };
+            Ok(Json(ComputeMetricsResponse::Spark(
+                state.spark_metrics.query(query, &filter).await?,
+            )))
+        }
+    }
 }

@@ -108,8 +108,13 @@ keycloak_client_id="$(kubectl -n "$uc_namespace" get secret "$uc_credentials_sec
   -o jsonpath='{.data.KEYCLOAK_CLIENT_ID}' | base64 --decode)"
 keycloak_client_secret="$(kubectl -n "$uc_namespace" get secret "$uc_credentials_secret" \
   -o jsonpath='{.data.KEYCLOAK_CLIENT_SECRET}' | base64 --decode)"
-[[ -n "$keycloak_client_id" && -n "$keycloak_client_secret" ]] || {
-  echo "Keycloak Spark service-principal credentials are missing; rerun ./scripts/unitycatalog/bootstrap.sh and ./scripts/unitycatalog/setup.sh." >&2
+controlplane_client_id="$(kubectl -n "$uc_namespace" get secret "$uc_credentials_secret" \
+  -o jsonpath='{.data.SPARK_CONTROLPLANE_CLIENT_ID}' | base64 --decode)"
+controlplane_client_secret="$(kubectl -n "$uc_namespace" get secret "$uc_credentials_secret" \
+  -o jsonpath='{.data.SPARK_CONTROLPLANE_CLIENT_SECRET}' | base64 --decode)"
+[[ -n "$keycloak_client_id" && -n "$keycloak_client_secret" && \
+   -n "$controlplane_client_id" && -n "$controlplane_client_secret" ]] || {
+  echo "Spark service-principal credentials are missing; rerun ./scripts/unitycatalog/bootstrap.sh and ./scripts/unitycatalog/setup.sh." >&2
   exit 1
 }
 UNITYCATALOG_PRINCIPAL="$keycloak_client_id" "$repo_root/scripts/spark/init-catalog.sh"
@@ -255,10 +260,12 @@ credentials_file="$work_dir/credentials.env"
 umask 077
 printf 'KEYCLOAK_CLIENT_ID=%s\n' "$keycloak_client_id" > "$credentials_file"
 printf 'KEYCLOAK_CLIENT_SECRET=%s\n' "$keycloak_client_secret" >> "$credentials_file"
+printf 'CONTROLPLANE_CLIENT_ID=%s\n' "$controlplane_client_id" >> "$credentials_file"
+printf 'CONTROLPLANE_CLIENT_SECRET=%s\n' "$controlplane_client_secret" >> "$credentials_file"
 printf 'UNITY_CATALOG_NAME=%s\n' "$catalog" >> "$credentials_file"
 printf 'S3_ACCESS_KEY=%s\n' "$runtime_s3_access_key" >> "$credentials_file"
 printf 'S3_SECRET_KEY=%s\n' "$runtime_s3_secret_key" >> "$credentials_file"
-unset keycloak_client_secret runtime_s3_access_key runtime_s3_secret_key
+unset keycloak_client_secret controlplane_client_secret runtime_s3_access_key runtime_s3_secret_key
 kubectl -n "$job_namespace" create secret generic "$credentials_secret" \
   --from-env-file="$credentials_file" \
   --dry-run=client -o yaml | kubectl apply -f - >/dev/null

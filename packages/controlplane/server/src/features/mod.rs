@@ -6,3 +6,4 @@ pub mod duck_metrics;
 pub mod health;
 pub mod pipelines;
 pub mod policy_templates;
+pub mod spark_metrics;

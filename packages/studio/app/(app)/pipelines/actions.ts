@@ -41,6 +41,7 @@ export type PipelineDetail = Pipeline & { raw: unknown }
 
 export type Compute = {
   id: string
+  kind: "duck_server" | "spark_application"
   name: string
   namespace: string
   phase: string
@@ -52,6 +53,9 @@ export type Compute = {
   restart_count: number
   started_at?: string | null
   creation_timestamp?: string | null
+  spark_version?: string | null
+  driver_pod_name?: string | null
+  executor_instances?: number | null
 }
 
 export type ComputeDetail = Compute & { raw: unknown }
@@ -60,7 +64,7 @@ export type ListComputesResponse = {
   items: Compute[]
 }
 
-export type DuckMetricsResponse = {
+export type ComputeMetricsResponse = {
   compute_id?: string
   start: number
   end: number
@@ -70,6 +74,7 @@ export type DuckMetricsResponse = {
     query_name: string
     name: string
     unit: string
+    kind?: "histogram" | "counter"
   }[]
   data: {
     data: {
@@ -168,8 +173,8 @@ export async function getCompute(computeId: string): Promise<ComputeDetail> {
 
 export async function getComputeMetrics(
   computeId: string,
-): Promise<DuckMetricsResponse> {
-  return request<DuckMetricsResponse>(
+): Promise<ComputeMetricsResponse> {
+  return request<ComputeMetricsResponse>(
     `api/computes/${encodeURIComponent(computeId)}/metrics`,
   )
 }

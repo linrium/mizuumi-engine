@@ -176,6 +176,12 @@ def _spark_conf(source: str) -> dict[str, str]:
         "spark.kubernetes.driver.secretKeyRef.KEYCLOAK_CLIENT_SECRET": (
             f"{credentials_secret}:KEYCLOAK_CLIENT_SECRET"
         ),
+        "spark.kubernetes.driver.secretKeyRef.CONTROLPLANE_CLIENT_ID": (
+            f"{credentials_secret}:CONTROLPLANE_CLIENT_ID"
+        ),
+        "spark.kubernetes.driver.secretKeyRef.CONTROLPLANE_CLIENT_SECRET": (
+            f"{credentials_secret}:CONTROLPLANE_CLIENT_SECRET"
+        ),
         "spark.kubernetes.driver.secretKeyRef.UNITY_CATALOG_NAME": (
             f"{credentials_secret}:UNITY_CATALOG_NAME"
         ),

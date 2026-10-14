@@ -1,6 +1,9 @@
+import os
 import sys
 import types
 import unittest
+import urllib.parse
+from unittest.mock import MagicMock, patch
 
 
 pyspark = types.ModuleType("pyspark")
@@ -19,6 +22,8 @@ from common import (
     STRING,
     TIMESTAMP,
     Table,
+    controlplane_access_token,
+    controlplane_request,
     contract_document,
     create_table,
     validate_dataframe,
@@ -117,6 +122,49 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(len(spark.statements), 1)
         self.assertIn("TBLPROPERTIES", spark.statements[0])
         self.assertIn("mizuumi.odcs.documentHash", spark.statements[0])
+
+    def test_exchanges_the_dedicated_controlplane_client_credentials(self):
+        response = MagicMock()
+        response.__enter__.return_value.read.return_value = (
+            b'{"access_token":"temporary-token"}'
+        )
+        env = {
+            "KEYCLOAK_TOKEN_URL": "https://auth.example/token",
+            "KEYCLOAK_CA_CERT": "/tmp/keycloak-ca.crt",
+            "CONTROLPLANE_CLIENT_ID": "spark-controlplane",
+            "CONTROLPLANE_CLIENT_SECRET": "secret",
+        }
+
+        with (
+            patch.dict(os.environ, env, clear=True),
+            patch("common.os.path.isfile", return_value=True),
+            patch("common.ssl.create_default_context"),
+            patch("common.urllib.request.urlopen", return_value=response) as urlopen,
+        ):
+            self.assertEqual(controlplane_access_token(), "temporary-token")
+
+        token_request = urlopen.call_args.args[0]
+        token_fields = urllib.parse.parse_qs(token_request.data.decode("ascii"))
+        self.assertEqual(token_fields["grant_type"], ["client_credentials"])
+        self.assertEqual(token_fields["client_id"], ["spark-controlplane"])
+
+    def test_controlplane_requests_include_the_temporary_bearer_token(self):
+        response = MagicMock()
+        response.__enter__.return_value.read.return_value = b'{"ok":true}'
+        with (
+            patch.dict(
+                os.environ,
+                {"CONTROLPLANE_URL": "http://controlplane:8080"},
+                clear=True,
+            ),
+            patch("common.controlplane_access_token", return_value="temporary-token"),
+            patch("common.urllib.request.urlopen", return_value=response) as urlopen,
+        ):
+            result = controlplane_request("POST", "/api/test", {"value": 1})
+
+        self.assertEqual(result, {"ok": True})
+        api_request = urlopen.call_args.args[0]
+        self.assertEqual(api_request.get_header("Authorization"), "Bearer temporary-token")
 
 
 if __name__ == "__main__":
