@@ -325,7 +325,7 @@ export function RequestsView({
                 <TableRow
                   key={request.id}
                   className={cn(
-                    "cursor-pointer border-t border-b-0 hover:bg-muted/30",
+                    "cursor-pointer hover:bg-muted/30",
                     index % 2 === 1 && "bg-muted/20",
                   )}
                   onClick={() => openRequest(request)}
