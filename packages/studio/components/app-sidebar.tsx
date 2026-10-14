@@ -55,11 +55,7 @@ const navSections: { label: string; items: NavItem[] }[] = [
       // { href: "/experiments", label: "Experiments", icon: IconTestPipe },
       { href: "/groups", label: "Groups", icon: IconUsers },
     ],
-  },
-  {
-    label: "Data",
-    items: [{ href: "/banking", label: "Banking", icon: IconBuildingBank }],
-  },
+  }
 ]
 
 type AppSidebarProps = ComponentProps<typeof Sidebar> & {

@@ -7,7 +7,7 @@ mod infrastructure;
 use std::{net::SocketAddr, sync::Arc};
 
 use anyhow::Context;
-use axum::{Router, body::Body, http::Request};
+use axum::{Router, body::Body, http::Request, middleware};
 use tokio::net::TcpListener;
 use tower_http::trace::{DefaultOnFailure, DefaultOnRequest, DefaultOnResponse, TraceLayer};
 use tracing::Level;
@@ -18,6 +18,7 @@ use crate::{
     config::Settings,
     features::{
         access_requests::{DefaultAccessRequestService, access_request_router},
+        auth::{AuthService, auth_router, authorize},
         data_contracts::{DefaultDataContractService, data_contract_router},
         health::{DefaultHealthService, health_router},
         pipelines::{DefaultPipelineService, pipeline_router},
@@ -40,8 +41,13 @@ async fn main() -> anyhow::Result<()> {
         postgres.host = %settings.postgres.host,
         postgres.port = settings.postgres.port,
         postgres.database = %settings.postgres.database,
+        auth.enabled = settings.auth.enabled,
+        auth.issuer = %settings.auth.issuer,
+        auth.audience = %settings.auth.audience,
         "configuration loaded"
     );
+
+    let auth = AuthService::new(&settings.auth).context("failed to initialize authentication")?;
 
     let pool = create_pool(&settings.postgres).context("failed to create postgres pool")?;
     run_migrations(&pool)
@@ -70,12 +76,16 @@ async fn main() -> anyhow::Result<()> {
         pipelines: Arc::new(DefaultPipelineService::new(kube_client)),
         policy_templates: Arc::new(DefaultPolicyTemplateService::new(pool)),
     };
-    let app = Router::new()
-        .merge(health_router())
+    let api = Router::new()
+        .merge(auth_router())
         .merge(data_contract_router())
         .merge(policy_template_router())
         .merge(access_request_router())
         .merge(pipeline_router())
+        .layer(middleware::from_fn_with_state(auth, authorize));
+    let app = Router::new()
+        .merge(health_router())
+        .merge(api)
         .with_state(state)
         .layer(
             TraceLayer::new_for_http()
@@ -84,6 +94,7 @@ async fn main() -> anyhow::Result<()> {
                         "http_request",
                         method = %request.method(),
                         path = request.uri().path(),
+                        principal = tracing::field::Empty,
                     )
                 })
                 .on_request(DefaultOnRequest::new().level(Level::INFO))

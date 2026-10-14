@@ -15,6 +15,7 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { auth } from "@/lib/auth"
+import { redirect } from "next/navigation"
 
 const workspaces = [
   {

@@ -13,6 +13,33 @@ pub struct Settings {
     pub unity_catalog: UnityCatalogSettings,
     #[serde(default)]
     pub duck_query: DuckQuerySettings,
+    #[serde(default)]
+    pub auth: AuthSettings,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct AuthSettings {
+    #[serde(default = "default_auth_enabled")]
+    pub enabled: bool,
+    #[serde(default = "default_auth_issuer")]
+    pub issuer: String,
+    #[serde(default = "default_auth_audience")]
+    pub audience: String,
+    pub jwks_url: Option<String>,
+    pub ca_certificate: Option<PathBuf>,
+    #[serde(default = "default_clock_skew_seconds")]
+    pub clock_skew_seconds: u64,
+    pub bootstrap_token: Option<String>,
+    #[serde(default = "default_bootstrap_enabled")]
+    pub bootstrap_enabled: bool,
+    #[serde(default = "default_bootstrap_token_file")]
+    pub bootstrap_token_file: Option<PathBuf>,
+    #[serde(default = "default_reader_role")]
+    pub reader_role: String,
+    #[serde(default = "default_writer_role")]
+    pub writer_role: String,
+    #[serde(default = "default_admin_role")]
+    pub admin_role: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -115,6 +142,25 @@ impl Default for DuckQuerySettings {
     }
 }
 
+impl Default for AuthSettings {
+    fn default() -> Self {
+        Self {
+            enabled: default_auth_enabled(),
+            issuer: default_auth_issuer(),
+            audience: default_auth_audience(),
+            jwks_url: None,
+            ca_certificate: None,
+            clock_skew_seconds: default_clock_skew_seconds(),
+            bootstrap_token: None,
+            bootstrap_enabled: default_bootstrap_enabled(),
+            bootstrap_token_file: default_bootstrap_token_file(),
+            reader_role: default_reader_role(),
+            writer_role: default_writer_role(),
+            admin_role: default_admin_role(),
+        }
+    }
+}
+
 fn default_host() -> IpAddr {
     [0, 0, 0, 0].into()
 }
@@ -157,4 +203,40 @@ fn default_unity_catalog_token_url() -> String {
 
 fn default_duck_query_url() -> String {
     "http://127.0.0.1:9495/api/query".to_owned()
+}
+
+fn default_auth_enabled() -> bool {
+    true
+}
+
+fn default_auth_issuer() -> String {
+    "https://auth.mizuumi.test/realms/sovico".to_owned()
+}
+
+fn default_auth_audience() -> String {
+    "controlplane".to_owned()
+}
+
+fn default_clock_skew_seconds() -> u64 {
+    30
+}
+
+fn default_bootstrap_enabled() -> bool {
+    true
+}
+
+fn default_bootstrap_token_file() -> Option<PathBuf> {
+    Some(PathBuf::from("bootstrap-token"))
+}
+
+fn default_reader_role() -> String {
+    "controlplane-reader".to_owned()
+}
+
+fn default_writer_role() -> String {
+    "controlplane-writer".to_owned()
+}
+
+fn default_admin_role() -> String {
+    "controlplane-admin".to_owned()
 }

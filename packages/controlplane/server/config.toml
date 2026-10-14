@@ -19,3 +19,14 @@ client_secret = ""
 [duck_query]
 url = "http://127.0.0.1:9495/api/query"
 
+[auth]
+enabled = true
+issuer = "https://auth.mizuumi.test/realms/sovico"
+audience = "controlplane"
+clock_skew_seconds = 30
+bootstrap_enabled = true
+bootstrap_token_file = "bootstrap-token"
+reader_role = "controlplane-reader"
+writer_role = "controlplane-writer"
+admin_role = "controlplane-admin"
+

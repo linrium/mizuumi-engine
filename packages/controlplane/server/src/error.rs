@@ -1,9 +1,17 @@
-use axum::{Json, http::StatusCode, response::IntoResponse};
+use axum::{
+    Json,
+    http::{HeaderValue, StatusCode, header},
+    response::IntoResponse,
+};
 use serde::Serialize;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum AppError {
+    #[error("unauthorized: {0}")]
+    Unauthorized(String),
+    #[error("authentication provider is unavailable")]
+    AuthProviderUnavailable,
     #[error("invalid parameter: {0}")]
     InvalidParameter(String),
     #[error("not found: {0}")]
@@ -34,6 +42,8 @@ struct ErrorBody {
 impl IntoResponse for AppError {
     fn into_response(self) -> axum::response::Response {
         let status = match &self {
+            AppError::Unauthorized(_) => StatusCode::UNAUTHORIZED,
+            AppError::AuthProviderUnavailable => StatusCode::SERVICE_UNAVAILABLE,
             AppError::InvalidParameter(_) => StatusCode::BAD_REQUEST,
             AppError::NotFound(_) => StatusCode::NOT_FOUND,
             AppError::Conflict(_) => StatusCode::CONFLICT,
@@ -50,12 +60,19 @@ impl IntoResponse for AppError {
         } else {
             tracing::warn!(error = %self, "request rejected");
         }
-        (
+        let mut response = (
             status,
             Json(ErrorBody {
                 error: self.to_string(),
             }),
         )
-            .into_response()
+            .into_response();
+        if status == StatusCode::UNAUTHORIZED {
+            response.headers_mut().insert(
+                header::WWW_AUTHENTICATE,
+                HeaderValue::from_static("Bearer realm=\"controlplane\""),
+            );
+        }
+        response
     }
 }

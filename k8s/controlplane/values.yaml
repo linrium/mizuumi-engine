@@ -29,6 +29,17 @@ unityCatalog:
 duckQuery:
   url: http://duck-server.duck-server.svc.cluster.local:9495/api/query
 
+auth:
+  enabled: true
+  issuer: https://auth.mizuumi.test/realms/sovico
+  audience: controlplane
+  caCertificatePath: /etc/controlplane/trust/keycloak-ca.crt
+  bootstrapEnabled: true
+  bootstrapTokenFile: /var/run/controlplane/bootstrap-token
+  readerRole: controlplane-reader
+  writerRole: controlplane-writer
+  adminRole: controlplane-admin
+
 postgresql:
   enabled: true
   image:
