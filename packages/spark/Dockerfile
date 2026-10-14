@@ -54,6 +54,9 @@ RUN ivy_dir=/tmp/spark-ivy && \
     done && \
     rm -rf /tmp/dependency_warmup.py "$ivy_dir"
 RUN mkdir -p /opt/flare
+RUN pip install --no-cache-dir \
+    "opentelemetry-exporter-otlp-proto-http==1.45.1" \
+    "opentelemetry-sdk==1.45.1"
 ADD --chmod=0444 --checksum=sha256:7e4dfe8e7dd4d5ac720434c700b665c5242e244e4de3f4feb1e727777f87638e \
     https://github.com/Neutrinic/flare/releases/download/v1.4.0/flare-spark-4-0_2.13-1.4.0.jar \
     /opt/flare/flare-spark.jar

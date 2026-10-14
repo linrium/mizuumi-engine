@@ -21,6 +21,12 @@ class Histogram(Protocol):
     ) -> None: ...
 
 
+class Counter(Protocol):
+    def add(
+        self, amount: int | float, attributes: Mapping[str, str] | None = None
+    ) -> None: ...
+
+
 DURATION_BUCKETS_SECONDS = (
     0.001,
     0.0025,
@@ -178,6 +184,61 @@ PROFILE_METRICS = {
     ),
 }
 
+# These engine-neutral instruments are the contract used by the Control Plane
+# when DuckDB and Spark are shown side by side. Keep the native DuckDB metrics
+# above as diagnostics; the canonical names describe only values with matching
+# units and sufficiently similar semantics across engines.
+CANONICAL_PROFILE_METRICS = {
+    "latency": (
+        "mizuumi.compute.operation.duration",
+        "s",
+        "Wall-clock duration of a completed compute operation",
+        DURATION_BUCKETS_SECONDS,
+    ),
+    "cpu_time": (
+        "mizuumi.compute.operation.cpu.time",
+        "s",
+        "CPU time consumed by a completed compute operation",
+        DURATION_BUCKETS_SECONDS,
+    ),
+    "cumulative_rows_scanned": (
+        "mizuumi.compute.operation.input.rows",
+        "{row}",
+        "Rows read by a completed compute operation",
+        ROW_COUNT_BUCKETS,
+    ),
+    "rows_returned": (
+        "mizuumi.compute.operation.output.rows",
+        "{row}",
+        "Rows produced by a completed compute operation",
+        ROW_COUNT_BUCKETS,
+    ),
+    "total_bytes_read": (
+        "mizuumi.compute.operation.input.bytes",
+        "By",
+        "Bytes read by a completed compute operation",
+        BYTE_BUCKETS,
+    ),
+    "total_bytes_written": (
+        "mizuumi.compute.operation.output.bytes",
+        "By",
+        "Bytes written by a completed compute operation",
+        BYTE_BUCKETS,
+    ),
+    "system_peak_buffer_memory": (
+        "mizuumi.compute.operation.memory.peak",
+        "By",
+        "Peak managed memory used by a completed compute operation",
+        BYTE_BUCKETS,
+    ),
+    "system_peak_temp_dir_size": (
+        "mizuumi.compute.operation.spill",
+        "By",
+        "Peak temporary spill storage used by a completed compute operation",
+        BYTE_BUCKETS,
+    ),
+}
+
 
 class DuckDBTelemetry:
     def __init__(self, provider: MeterProvider) -> None:
@@ -197,6 +258,25 @@ class DuckDBTelemetry:
                 bucket_boundaries,
             ) in PROFILE_METRICS.items()
         }
+        self.canonical_histograms: dict[str, Histogram] = {
+            profile_name: meter.create_histogram(
+                name=otel_name,
+                unit=unit,
+                description=description,
+                explicit_bucket_boundaries_advisory=bucket_boundaries,
+            )
+            for profile_name, (
+                otel_name,
+                unit,
+                description,
+                bucket_boundaries,
+            ) in CANONICAL_PROFILE_METRICS.items()
+        }
+        self.operation_count: Counter = meter.create_counter(
+            name="mizuumi.compute.operation.count",
+            unit="{operation}",
+            description="Completed compute operations by status",
+        )
 
     def record_connection_profile(
         self, connection: duckdb.DuckDBPyConnection
@@ -208,16 +288,33 @@ class DuckDBTelemetry:
             profile = json.loads(raw_profile)
             if not isinstance(profile, dict):
                 raise ValueError("DuckDB profiling information is not an object")
-            self.record_profile(profile)
+            self.record_profile(
+                profile,
+                {
+                    "mizuumi.compute.engine": "duckdb",
+                    "mizuumi.workload.kind": "query",
+                    "mizuumi.workload.name": "ad_hoc_query",
+                    "status": "success",
+                },
+            )
         except Exception as exc:
             # Telemetry must never turn a successful query into a failed request.
             print(f"DuckDB metrics collection error: {exc}", file=sys.stderr)
 
-    def record_profile(self, profile: Mapping[str, object]) -> None:
+    def record_profile(
+        self,
+        profile: Mapping[str, object],
+        attributes: Mapping[str, str] | None = None,
+    ) -> None:
         for profile_name, histogram in self.histograms.items():
             value = profile.get(profile_name)
             if isinstance(value, (int, float)) and not isinstance(value, bool):
-                histogram.record(value)
+                histogram.record(value, attributes)
+        for profile_name, histogram in self.canonical_histograms.items():
+            value = profile.get(profile_name)
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                histogram.record(value, attributes)
+        self.operation_count.add(1, attributes)
 
     def shutdown(self) -> None:
         self.provider.shutdown()

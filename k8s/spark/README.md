@@ -55,6 +55,11 @@ application changes are uploaded separately and do not require another image.
 Additional arguments are passed to this chart's `helm upgrade --install`
 command.
 
+When Flare is enabled, the chart also passes its OTLP endpoint and driver
+service identity to the Python batch runtime. This exports the engine-neutral
+`mizuumi.compute.operation.*` comparison metrics through the same collector;
+executors continue to use Flare for native Spark telemetry.
+
 Inspect a run with:
 
 ```sh

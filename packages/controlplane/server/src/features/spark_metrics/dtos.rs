@@ -11,6 +11,7 @@ pub struct SparkMetricFilter {
 #[serde(rename_all = "snake_case")]
 pub enum SparkMetricKind {
     Histogram,
+    Gauge,
     Counter,
 }
 
@@ -20,6 +21,7 @@ pub struct SparkMetricDefinition {
     pub name: &'static str,
     pub unit: &'static str,
     pub kind: SparkMetricKind,
+    pub comparable: bool,
 }
 
 #[derive(Debug, Serialize)]

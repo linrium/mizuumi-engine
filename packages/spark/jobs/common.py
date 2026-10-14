@@ -7,14 +7,18 @@ import json
 import os
 import re
 import ssl
+import sys
+import time
 from typing import Any
 import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
 
-from pyspark.sql import DataFrame, SparkSession
-from pyspark.sql.functions import col
+from pyspark.sql import DataFrame, Observation, SparkSession
+from pyspark.sql.functions import col, count, lit
+
+from compute_telemetry import create_compute_telemetry
 
 
 IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -452,6 +456,7 @@ def run(config: JobConfig) -> None:
     bronze_name = f"{catalog}.{bronze_schema}.{bronze_table}"
     job_name = f"{config.source}-bronze-to-silver"
 
+    telemetry = create_compute_telemetry()
     spark = SparkSession.builder.appName(job_name).getOrCreate()
     try:
         spark.sparkContext.setLogLevel("WARN")
@@ -467,7 +472,32 @@ def run(config: JobConfig) -> None:
             create_table(spark, table_name, table, contract)
             rows = silver_rows(bronze, table)
             validate_dataframe(rows, contract)
-            rows.write.insertInto(table_name, overwrite=True)
+            observation = Observation(f"{table.name}-output")
+            observed_rows = rows.observe(
+                observation, count(lit(1)).alias("output_rows")
+            )
+            started_at = time.monotonic()
+            try:
+                observed_rows.write.insertInto(table_name, overwrite=True)
+            except Exception:
+                telemetry.record_operation(
+                    duration_seconds=time.monotonic() - started_at,
+                    workload_name=table_name,
+                    status="error",
+                )
+                raise
+            try:
+                output_rows = int(observation.get["output_rows"])
+            except Exception as error:
+                print(f"Compute output-row observation error: {error}", file=sys.stderr)
+                output_rows = None
+            telemetry.record_operation(
+                duration_seconds=time.monotonic() - started_at,
+                workload_name=table_name,
+                status="success",
+                output_rows=output_rows,
+            )
             reconcile_contract(table_name)
     finally:
         spark.stop()
+        telemetry.shutdown()

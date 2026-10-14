@@ -1,7 +1,8 @@
-import { IconCpu } from "@tabler/icons-react"
+import { IconArrowsDiff, IconCpu } from "@tabler/icons-react"
 import Link from "next/link"
 import type { Compute } from "@/app/(app)/pipelines/actions"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import {
   Card,
   CardContent,
@@ -28,12 +29,30 @@ export function ComputeView({ computes, error }: Props) {
   const sparkComputes = computes.filter(
     (compute) => compute.kind === "spark_application",
   )
+  const comparisonHref =
+    duckComputes[0] && sparkComputes[0]
+      ? `/pipelines/computes/compare?left=${encodeURIComponent(duckComputes[0].id)}&right=${encodeURIComponent(sparkComputes[0].id)}`
+      : null
 
   return (
     <div className="flex flex-col gap-4">
       {error ? (
         <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
           {error}
+        </div>
+      ) : null}
+
+      {comparisonHref ? (
+        <div className="flex justify-end">
+          <Button
+            nativeButton={false}
+            size="sm"
+            variant="outline"
+            render={<Link href={comparisonHref} />}
+          >
+            <IconArrowsDiff />
+            Compare performance
+          </Button>
         </div>
       ) : null}
 

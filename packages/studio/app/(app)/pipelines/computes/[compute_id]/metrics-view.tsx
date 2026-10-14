@@ -33,6 +33,15 @@ const palette = [
 ]
 
 const metricLabels: Record<string, string> = {
+  "mizuumi.compute.operation.duration": "Operation duration",
+  "mizuumi.compute.operation.cpu.time": "CPU time",
+  "mizuumi.compute.operation.input.rows": "Input rows",
+  "mizuumi.compute.operation.output.rows": "Output rows",
+  "mizuumi.compute.operation.input.bytes": "Input bytes",
+  "mizuumi.compute.operation.output.bytes": "Output bytes",
+  "mizuumi.compute.operation.memory.peak": "Peak memory",
+  "mizuumi.compute.operation.spill": "Spill",
+  "mizuumi.compute.operation.count": "Operations",
   "duckdb.query.duration": "Query duration",
   "duckdb.query.cpu.time": "CPU time",
   "duckdb.query.blocked_thread.time": "Blocked thread time",
@@ -62,6 +71,7 @@ function metricLabel(name: string) {
     name
       .replace(/^duckdb\.query\./, "")
       .replace(/^flare\./, "")
+      .replace(/^mizuumi\.compute\.operation\./, "")
       .replaceAll(".", " ")
       .replaceAll("_", " ")
   )
@@ -97,51 +107,99 @@ function axisFormatter(unit: string) {
 }
 
 function groupDefinitions(definitions: MetricDefinition[]): MetricGroup[] {
-  const groups: Omit<MetricGroup, "definitions">[] = [
+  const comparable = definitions.filter((definition) => definition.comparable)
+  const diagnostics = definitions.filter((definition) => !definition.comparable)
+  const groups: (Omit<MetricGroup, "definitions"> & {
+    source: MetricDefinition[]
+  })[] = [
     {
-      id: "time",
-      title: "Execution time",
-      description: "Query latency and CPU pressure",
+      id: "comparison-time",
+      title: "Comparable · execution time",
+      description: "Canonical wall-clock and CPU measurements",
       unit: "ms",
+      source: comparable,
     },
     {
-      id: "throughput",
-      title: "Throughput",
-      description: "Rows processed or records processed per second",
+      id: "comparison-rows",
+      title: "Comparable · rows",
+      description: "Canonical input and output row counts",
+      unit: "{row}",
+      source: comparable,
+    },
+    {
+      id: "comparison-bytes",
+      title: "Comparable · bytes & memory",
+      description: "Canonical I/O, peak memory, and spill volume",
+      unit: "By",
+      source: comparable,
+    },
+    {
+      id: "comparison-reliability",
+      title: "Comparable · reliability",
+      description: "Completed operations in each interval",
+      unit: "{operation}",
+      source: comparable,
+    },
+    {
+      id: "diagnostic-time",
+      title: "Engine diagnostics · execution time",
+      description: "Engine-specific query, stage, and task timing",
+      unit: "ms",
+      source: diagnostics,
+    },
+    {
+      id: "diagnostic-throughput",
+      title: "Engine diagnostics · throughput",
+      description: "Engine-specific rows and records per second",
       unit: "count",
+      source: diagnostics,
     },
     {
-      id: "memory",
-      title: "Memory & storage",
-      description: "Result, buffer, allocation, and temporary storage",
+      id: "diagnostic-memory",
+      title: "Engine diagnostics · memory & storage",
+      description: "Engine-specific result, allocation, and temporary storage",
       unit: "By",
+      source: diagnostics,
     },
     {
-      id: "io",
-      title: "I/O volume",
-      description: "Bytes read from and written to storage",
+      id: "diagnostic-io",
+      title: "Engine diagnostics · I/O",
+      description: "Engine-specific storage and shuffle volume",
       unit: "By",
+      source: diagnostics,
     },
   ]
 
   return groups
     .map((group) => {
-      const matchingDefinitions = definitions.filter((definition) => {
-        if (group.id === "time") {
+      const matchingDefinitions = group.source.filter((definition) => {
+        if (group.id === "comparison-time") {
           return definition.unit === "s" || definition.unit === "ms"
         }
-        if (group.id === "throughput") {
+        if (group.id === "comparison-rows") {
+          return definition.unit === "{row}"
+        }
+        if (group.id === "comparison-bytes") {
+          return definition.unit === "By"
+        }
+        if (group.id === "comparison-reliability") {
+          return definition.unit === "{operation}"
+        }
+        if (group.id === "diagnostic-time") {
+          return definition.unit === "s" || definition.unit === "ms"
+        }
+        if (group.id === "diagnostic-throughput") {
           return (
             definition.unit === "{row}" || definition.unit === "{records}/s"
           )
         }
-        if (group.id === "io") {
+        if (group.id === "diagnostic-io") {
           return (
             definition.name.includes(".io.") ||
             (definition.name.startsWith("flare.") && definition.unit === "By")
           )
         }
-        if (group.id === "memory") {
+        if (group.id === "diagnostic-memory") {
           return (
             definition.unit === "By" &&
             !definition.name.includes(".io.") &&
@@ -153,7 +211,7 @@ function groupDefinitions(definitions: MetricDefinition[]): MetricGroup[] {
       return {
         ...group,
         unit:
-          group.id === "throughput"
+          group.id === "diagnostic-throughput"
             ? (matchingDefinitions[0]?.unit ?? group.unit)
             : group.unit,
         definitions: matchingDefinitions,

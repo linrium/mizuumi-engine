@@ -36,11 +36,21 @@ pub struct DuckMetricFilter {
     pub compute_id: String,
 }
 
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DuckMetricKind {
+    Histogram,
+    Gauge,
+    Counter,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct DuckMetricDefinition {
     pub query_name: &'static str,
     pub name: &'static str,
     pub unit: &'static str,
+    pub kind: DuckMetricKind,
+    pub comparable: bool,
 }
 
 #[derive(Debug, Serialize)]

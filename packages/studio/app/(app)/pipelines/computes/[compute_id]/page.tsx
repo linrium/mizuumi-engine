@@ -45,8 +45,9 @@ export default async function ComputeDetailPage({
               </p>
             </div>
             <div className="flex gap-2">
+              <Badge variant="outline">Comparable latest max</Badge>
               <Badge variant="outline">
-                {metrics.aggregation.toUpperCase()} histograms
+                Diagnostics {metrics.aggregation.toUpperCase()}
               </Badge>
               <Badge variant="outline">{metrics.step}s interval</Badge>
             </div>

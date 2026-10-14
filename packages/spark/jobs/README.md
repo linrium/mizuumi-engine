@@ -62,3 +62,11 @@ Supported runtime environment overrides are `BRONZE_SCHEMA_NAME`, `BRONZE_TABLE_
 `SILVER_SCHEMA_NAME`, and `CONTROLPLANE_URL`. The chart supplies `CONTROLPLANE_CLIENT_ID`,
 `CONTROLPLANE_CLIENT_SECRET`, `KEYCLOAK_TOKEN_URL`, and `KEYCLOAK_CA_CERT` from the managed
 runtime credentials and trust bundle.
+
+When OTLP metrics are enabled, each table write emits the shared
+`mizuumi.compute.operation.*` comparison contract. The batch jobs currently
+report wall-clock duration, output rows, and operation outcome. Output rows are
+captured with a Spark `Observation` attached to the existing write, so metrics
+collection does not launch a second Spark action or alter benchmark timing.
+Flare continues to provide the Spark-specific task, stage, shuffle, and I/O
+diagnostics.

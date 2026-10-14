@@ -74,7 +74,8 @@ export type ComputeMetricsResponse = {
     query_name: string
     name: string
     unit: string
-    kind?: "histogram" | "counter"
+    kind: "histogram" | "gauge" | "counter"
+    comparable: boolean
   }[]
   data: {
     data: {
@@ -173,8 +174,16 @@ export async function getCompute(computeId: string): Promise<ComputeDetail> {
 
 export async function getComputeMetrics(
   computeId: string,
+  range?: { start: number; end: number; step?: number },
 ): Promise<ComputeMetricsResponse> {
   return request<ComputeMetricsResponse>(
     `api/computes/${encodeURIComponent(computeId)}/metrics`,
+    range
+      ? {
+          start: String(range.start),
+          end: String(range.end),
+          ...(range.step ? { step: String(range.step) } : {}),
+        }
+      : undefined,
   )
 }

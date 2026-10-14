@@ -126,6 +126,20 @@ spec:
     env:
       - name: SPARK_DIST_CLASSPATH
         value: {{ .Values.spark.dependenciesPath | quote }}
+      {{- if .Values.flare.enabled }}
+      - name: OTEL_EXPORTER_OTLP_ENDPOINT
+        value: {{ .Values.flare.endpoint | quote }}
+      - name: OTEL_EXPORTER_OTLP_PROTOCOL
+        value: {{ .Values.flare.protocol | quote }}
+      - name: OTEL_EXPORTER_OTLP_COMPRESSION
+        value: {{ .Values.flare.compression | quote }}
+      - name: OTEL_SERVICE_NAME
+        value: {{ .Values.flare.driverServiceName | quote }}
+      - name: OTEL_SERVICE_NAMESPACE
+        value: spark
+      - name: OTEL_RESOURCE_ATTRIBUTES
+        value: {{ printf "%s,k8s.namespace.name=%s" .Values.flare.resourceAttributes .Release.Namespace | quote }}
+      {{- end }}
       - name: KEYCLOAK_CLIENT_ID
         valueFrom:
           secretKeyRef:

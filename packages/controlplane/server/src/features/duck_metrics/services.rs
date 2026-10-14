@@ -7,8 +7,8 @@ use serde_json::{Value, json};
 use crate::{config::SignozSettings, error::AppError};
 
 use super::dtos::{
-    DuckMetricDefinition, DuckMetricFilter, DuckMetricsAggregation, DuckMetricsResponse,
-    GetDuckMetricsQuery,
+    DuckMetricDefinition, DuckMetricFilter, DuckMetricKind, DuckMetricsAggregation,
+    DuckMetricsResponse, GetDuckMetricsQuery,
 };
 
 const DEFAULT_WINDOW_MS: i64 = 60 * 60 * 1_000;
@@ -17,30 +17,72 @@ const DEFAULT_STEP_SECONDS: u32 = 60;
 const MIN_STEP_SECONDS: u32 = 10;
 const MAX_STEP_SECONDS: u32 = 3_600;
 
-const DUCK_METRICS: [DuckMetricDefinition; 12] = [
-    metric("A", "duckdb.query.duration", "s"),
-    metric("B", "duckdb.query.cpu.time", "s"),
-    metric("C", "duckdb.query.blocked_thread.time", "s"),
-    metric("D", "duckdb.query.rows.returned", "{row}"),
-    metric("E", "duckdb.query.rows.scanned", "{row}"),
-    metric("F", "duckdb.query.cardinality.cumulative", "{row}"),
-    metric("G", "duckdb.query.result.size", "By"),
-    metric("H", "duckdb.query.memory.peak_buffer", "By"),
-    metric("I", "duckdb.query.temp_directory.peak_size", "By"),
-    metric("J", "duckdb.query.memory.allocated", "By"),
-    metric("K", "duckdb.query.io.read", "By"),
-    metric("L", "duckdb.query.io.written", "By"),
+const DUCK_METRICS: [DuckMetricDefinition; 21] = [
+    gauge("A", "mizuumi.compute.operation.duration", "s", true),
+    gauge("B", "mizuumi.compute.operation.cpu.time", "s", true),
+    gauge("C", "mizuumi.compute.operation.input.rows", "{row}", true),
+    gauge("D", "mizuumi.compute.operation.output.rows", "{row}", true),
+    gauge("E", "mizuumi.compute.operation.input.bytes", "By", true),
+    gauge("F", "mizuumi.compute.operation.output.bytes", "By", true),
+    gauge("G", "mizuumi.compute.operation.memory.peak", "By", true),
+    gauge("H", "mizuumi.compute.operation.spill", "By", true),
+    counter("I", "mizuumi.compute.operation.count", "{operation}", true),
+    histogram("J", "duckdb.query.duration", "s", false),
+    histogram("K", "duckdb.query.cpu.time", "s", false),
+    histogram("L", "duckdb.query.blocked_thread.time", "s", false),
+    histogram("M", "duckdb.query.rows.returned", "{row}", false),
+    histogram("N", "duckdb.query.rows.scanned", "{row}", false),
+    histogram("O", "duckdb.query.cardinality.cumulative", "{row}", false),
+    histogram("P", "duckdb.query.result.size", "By", false),
+    histogram("Q", "duckdb.query.memory.peak_buffer", "By", false),
+    histogram("R", "duckdb.query.temp_directory.peak_size", "By", false),
+    histogram("S", "duckdb.query.memory.allocated", "By", false),
+    histogram("T", "duckdb.query.io.read", "By", false),
+    histogram("U", "duckdb.query.io.written", "By", false),
 ];
 
-const fn metric(
+const fn histogram(
     query_name: &'static str,
     name: &'static str,
     unit: &'static str,
+    comparable: bool,
 ) -> DuckMetricDefinition {
     DuckMetricDefinition {
         query_name,
         name,
         unit,
+        kind: DuckMetricKind::Histogram,
+        comparable,
+    }
+}
+
+const fn counter(
+    query_name: &'static str,
+    name: &'static str,
+    unit: &'static str,
+    comparable: bool,
+) -> DuckMetricDefinition {
+    DuckMetricDefinition {
+        query_name,
+        name,
+        unit,
+        kind: DuckMetricKind::Counter,
+        comparable,
+    }
+}
+
+const fn gauge(
+    query_name: &'static str,
+    name: &'static str,
+    unit: &'static str,
+    comparable: bool,
+) -> DuckMetricDefinition {
+    DuckMetricDefinition {
+        query_name,
+        name,
+        unit,
+        kind: DuckMetricKind::Gauge,
+        comparable,
     }
 }
 
@@ -115,10 +157,10 @@ impl DefaultDuckMetricsService {
         filter: Option<&DuckMetricFilter>,
     ) -> Value {
         let filter_expression = filter.map_or_else(
-            || "resource.service.name = 'duck-server'".to_owned(),
+            || "service.name = 'duck-server'".to_owned(),
             |filter| {
                 format!(
-                    "resource.service.name = 'duck-server' AND resource.k8s.pod.uid = '{}'",
+                    "service.name = 'duck-server' AND k8s.pod.uid = '{}'",
                     filter.compute_id
                 )
             },
@@ -126,16 +168,30 @@ impl DefaultDuckMetricsService {
         let queries = DUCK_METRICS
             .iter()
             .map(|metric| {
+                let aggregation_spec = match metric.kind {
+                    DuckMetricKind::Histogram => json!({
+                        "metricName": format!("{}.bucket", metric.name),
+                        "spaceAggregation": aggregation.as_str()
+                    }),
+                    DuckMetricKind::Gauge => json!({
+                        "metricName": format!("{}.max", metric.name),
+                        "temporality": "Unspecified",
+                        "timeAggregation": "latest",
+                        "spaceAggregation": "max"
+                    }),
+                    DuckMetricKind::Counter => json!({
+                        "metricName": metric.name,
+                        "timeAggregation": "increase",
+                        "spaceAggregation": "sum"
+                    }),
+                };
                 json!({
                     "type": "builder_query",
                     "spec": {
                         "name": metric.query_name,
                         "signal": "metrics",
                         "stepInterval": step,
-                        "aggregations": [{
-                            "metricName": format!("{}.bucket", metric.name),
-                            "spaceAggregation": aggregation.as_str()
-                        }],
+                        "aggregations": [aggregation_spec],
                         "filter": {"expression": filter_expression},
                         "legend": metric.name,
                         "disabled": false
@@ -209,15 +265,19 @@ mod tests {
         assert_eq!(queries.len(), DUCK_METRICS.len());
         assert_eq!(
             queries[0]["spec"]["aggregations"][0]["metricName"],
-            "duckdb.query.duration.bucket"
+            "mizuumi.compute.operation.duration.max"
         );
         assert_eq!(
             queries[0]["spec"]["filter"]["expression"],
-            "resource.service.name = 'duck-server'"
+            "service.name = 'duck-server'"
         );
         assert_eq!(
-            queries[0]["spec"]["aggregations"][0]["spaceAggregation"],
-            "p95"
+            queries[0]["spec"]["aggregations"][0]["timeAggregation"],
+            "latest"
+        );
+        assert_eq!(
+            queries[8]["spec"]["aggregations"][0]["timeAggregation"],
+            "increase"
         );
     }
 
@@ -235,7 +295,7 @@ mod tests {
         );
         assert_eq!(
             body["compositeQuery"]["queries"][0]["spec"]["filter"]["expression"],
-            "resource.service.name = 'duck-server' AND resource.k8s.pod.uid = '28a6502a-90f4-4a82-bddb-cbb79eb9828b'"
+            "service.name = 'duck-server' AND k8s.pod.uid = '28a6502a-90f4-4a82-bddb-cbb79eb9828b'"
         );
     }
 

@@ -118,3 +118,13 @@ The SparkApplication name must match the Flare service-name convention
 `<application>-driver` and `<application>-executor`, which the repository's Spark
 deployment scripts configure automatically.
 
+Metric definitions in compute responses mark the engine-neutral
+`mizuumi.compute.operation.*` contract with `comparable: true`. Studio uses
+those definitions for DuckDB/Spark comparisons and keeps `duckdb.query.*` and
+`flare.*` as engine diagnostics. An unavailable canonical measurement is
+omitted rather than synthesized from a metric with different semantics.
+Canonical histograms are read through SigNoz's derived `.max` gauge using
+`latest`/`max`; sparse, one-shot job histograms do not produce reliable
+percentile series. Native long-running diagnostic histograms continue to use
+the requested percentile.
+

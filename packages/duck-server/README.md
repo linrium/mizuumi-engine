@@ -69,6 +69,11 @@ connections whose completed profiles are not exposed to the Python host, so
 these profiler metrics cover `/api/query`, not direct Quack clients. Kubernetes
 container and pod metrics continue to come from `signoz-k8s-infra`.
 
+The profiler also emits the engine-neutral `mizuumi.compute.operation.*`
+contract used for side-by-side compute comparisons: duration, CPU time, input
+and output rows/bytes, peak memory, spill, and operation count. Native
+`duckdb.query.*` instruments remain available for DuckDB-specific diagnosis.
+
 The histograms use unit-specific explicit buckets. Duration buckets are stored
 in seconds with millisecond-scale boundaries; row counts and byte measurements
 use separate ranges appropriate to their units. Keep these boundaries aligned

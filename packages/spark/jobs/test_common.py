@@ -10,8 +10,11 @@ pyspark = types.ModuleType("pyspark")
 pyspark_sql = types.ModuleType("pyspark.sql")
 pyspark_functions = types.ModuleType("pyspark.sql.functions")
 pyspark_sql.DataFrame = object
+pyspark_sql.Observation = object
 pyspark_sql.SparkSession = object
 pyspark_functions.col = lambda name: name
+pyspark_functions.count = lambda value: value
+pyspark_functions.lit = lambda value: value
 sys.modules.setdefault("pyspark", pyspark)
 sys.modules.setdefault("pyspark.sql", pyspark_sql)
 sys.modules.setdefault("pyspark.sql.functions", pyspark_functions)

@@ -24,6 +24,25 @@ class RecordingHistogram:
         self.values.append(amount)
 
 
+class RecordingCounter:
+    def __init__(self) -> None:
+        self.values: list[int | float] = []
+
+    def add(self, amount: int | float, attributes: object = None) -> None:
+        self.values.append(amount)
+
+
+def telemetry_with_histograms(
+    histograms: dict[str, RecordingHistogram],
+    canonical_histograms: dict[str, RecordingHistogram] | None = None,
+) -> DuckDBTelemetry:
+    telemetry = object.__new__(DuckDBTelemetry)
+    telemetry.histograms = histograms
+    telemetry.canonical_histograms = canonical_histograms or {}
+    telemetry.operation_count = RecordingCounter()
+    return telemetry
+
+
 class ProfileMetricsTest(unittest.TestCase):
     def test_configures_unit_specific_histogram_boundaries(self) -> None:
         provider = MagicMock()
@@ -53,12 +72,16 @@ class ProfileMetricsTest(unittest.TestCase):
             ],
             BYTE_BUCKETS,
         )
+        self.assertIn("mizuumi.compute.operation.duration", instruments)
 
     def test_records_numeric_profile_values_and_ignores_metadata(self) -> None:
-        telemetry = object.__new__(DuckDBTelemetry)
         latency = RecordingHistogram()
         rows = RecordingHistogram()
-        telemetry.histograms = {"latency": latency, "rows_returned": rows}
+        canonical_rows = RecordingHistogram()
+        telemetry = telemetry_with_histograms(
+            {"latency": latency, "rows_returned": rows},
+            {"rows_returned": canonical_rows},
+        )
 
         telemetry.record_profile(
             {
@@ -71,12 +94,15 @@ class ProfileMetricsTest(unittest.TestCase):
 
         self.assertEqual(latency.values, [0.25])
         self.assertEqual(rows.values, [42])
+        self.assertEqual(canonical_rows.values, [42])
+        self.assertEqual(telemetry.operation_count.values, [1])
 
     def test_skips_missing_boolean_and_non_numeric_values(self) -> None:
-        telemetry = object.__new__(DuckDBTelemetry)
         latency = RecordingHistogram()
         rows = RecordingHistogram()
-        telemetry.histograms = {"latency": latency, "rows_returned": rows}
+        telemetry = telemetry_with_histograms(
+            {"latency": latency, "rows_returned": rows}
+        )
 
         telemetry.record_profile({"latency": True, "rows_returned": "12"})
 
@@ -84,10 +110,11 @@ class ProfileMetricsTest(unittest.TestCase):
         self.assertEqual(rows.values, [])
 
     def test_reads_a_completed_duckdb_profile(self) -> None:
-        telemetry = object.__new__(DuckDBTelemetry)
         latency = RecordingHistogram()
         rows = RecordingHistogram()
-        telemetry.histograms = {"latency": latency, "rows_returned": rows}
+        telemetry = telemetry_with_histograms(
+            {"latency": latency, "rows_returned": rows}
+        )
         connection = duckdb.connect()
         try:
             connection.execute("SET enable_profiling = 'no_output'")

@@ -20,28 +20,33 @@ const DEFAULT_STEP_SECONDS: u32 = 60;
 const MIN_STEP_SECONDS: u32 = 10;
 const MAX_STEP_SECONDS: u32 = 3_600;
 
-const SPARK_METRICS: [SparkMetricDefinition; 9] = [
-    histogram("A", "flare.task.duration", "ms"),
-    histogram("B", "flare.task.records_throughput", "{records}/s"),
-    counter("C", "flare.task.shuffle.read_bytes", "By"),
-    counter("D", "flare.task.shuffle.write_bytes", "By"),
-    histogram("E", "flare.stage.executor.run_time", "ms"),
-    counter("F", "flare.stage.input.bytes", "By"),
-    counter("G", "flare.stage.output.bytes", "By"),
-    counter("H", "flare.stage.shuffle.read_bytes", "By"),
-    counter("I", "flare.stage.shuffle.write_bytes", "By"),
+const SPARK_METRICS: [SparkMetricDefinition; 12] = [
+    gauge("A", "mizuumi.compute.operation.duration", "s", true),
+    gauge("B", "mizuumi.compute.operation.output.rows", "{row}", true),
+    counter("C", "mizuumi.compute.operation.count", "{operation}", true),
+    histogram("D", "flare.task.duration", "ms", false),
+    histogram("E", "flare.task.records_throughput", "{records}/s", false),
+    counter("F", "flare.task.shuffle.read_bytes", "By", false),
+    counter("G", "flare.task.shuffle.write_bytes", "By", false),
+    histogram("H", "flare.stage.executor.run_time", "ms", false),
+    counter("I", "flare.stage.input.bytes", "By", false),
+    counter("J", "flare.stage.output.bytes", "By", false),
+    counter("K", "flare.stage.shuffle.read_bytes", "By", false),
+    counter("L", "flare.stage.shuffle.write_bytes", "By", false),
 ];
 
 const fn histogram(
     query_name: &'static str,
     name: &'static str,
     unit: &'static str,
+    comparable: bool,
 ) -> SparkMetricDefinition {
     SparkMetricDefinition {
         query_name,
         name,
         unit,
         kind: SparkMetricKind::Histogram,
+        comparable,
     }
 }
 
@@ -49,12 +54,29 @@ const fn counter(
     query_name: &'static str,
     name: &'static str,
     unit: &'static str,
+    comparable: bool,
 ) -> SparkMetricDefinition {
     SparkMetricDefinition {
         query_name,
         name,
         unit,
         kind: SparkMetricKind::Counter,
+        comparable,
+    }
+}
+
+const fn gauge(
+    query_name: &'static str,
+    name: &'static str,
+    unit: &'static str,
+    comparable: bool,
+) -> SparkMetricDefinition {
+    SparkMetricDefinition {
+        query_name,
+        name,
+        unit,
+        kind: SparkMetricKind::Gauge,
+        comparable,
     }
 }
 
@@ -129,7 +151,7 @@ impl DefaultSparkMetricsService {
     ) -> Value {
         let driver = format!("{application_name}-driver");
         let executor = format!("{application_name}-executor");
-        let filter_expression = format!("resource.service.name IN ['{driver}', '{executor}']");
+        let filter_expression = format!("service.name IN ['{driver}', '{executor}']");
         let queries = SPARK_METRICS
             .iter()
             .map(|metric| {
@@ -137,6 +159,12 @@ impl DefaultSparkMetricsService {
                     SparkMetricKind::Histogram => json!({
                         "metricName": format!("{}.bucket", metric.name),
                         "spaceAggregation": aggregation.as_str()
+                    }),
+                    SparkMetricKind::Gauge => json!({
+                        "metricName": format!("{}.max", metric.name),
+                        "temporality": "Unspecified",
+                        "timeAggregation": "latest",
+                        "spaceAggregation": "max"
                     }),
                     SparkMetricKind::Counter => json!({
                         "metricName": metric.name,
@@ -230,7 +258,7 @@ mod tests {
         assert_eq!(queries.len(), SPARK_METRICS.len());
         assert_eq!(
             queries[0]["spec"]["aggregations"][0]["metricName"],
-            "flare.task.duration.bucket"
+            "mizuumi.compute.operation.duration.max"
         );
         assert_eq!(
             queries[2]["spec"]["aggregations"][0]["timeAggregation"],
@@ -238,7 +266,7 @@ mod tests {
         );
         assert_eq!(
             queries[0]["spec"]["filter"]["expression"],
-            "resource.service.name IN ['crm-bronze-to-silver-driver', 'crm-bronze-to-silver-executor']"
+            "service.name IN ['crm-bronze-to-silver-driver', 'crm-bronze-to-silver-executor']"
         );
     }
 }
