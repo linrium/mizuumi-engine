@@ -21,58 +21,160 @@ class Histogram(Protocol):
     ) -> None: ...
 
 
+DURATION_BUCKETS_SECONDS = (
+    0.001,
+    0.0025,
+    0.005,
+    0.01,
+    0.025,
+    0.05,
+    0.1,
+    0.25,
+    0.5,
+    1,
+    2.5,
+    5,
+    10,
+    30,
+    60,
+    120,
+    300,
+)
+
+ROW_COUNT_BUCKETS = (
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    10,
+    25,
+    50,
+    100,
+    250,
+    500,
+    1_000,
+    2_500,
+    5_000,
+    10_000,
+    25_000,
+    50_000,
+    100_000,
+    250_000,
+    500_000,
+    1_000_000,
+    2_500_000,
+    5_000_000,
+    10_000_000,
+)
+
+BYTE_BUCKETS = (
+    0,
+    64,
+    128,
+    256,
+    512,
+    1_024,
+    2_048,
+    4_096,
+    8_192,
+    16_384,
+    32_768,
+    65_536,
+    131_072,
+    262_144,
+    524_288,
+    1_048_576,
+    2_097_152,
+    4_194_304,
+    8_388_608,
+    16_777_216,
+    33_554_432,
+    67_108_864,
+    134_217_728,
+    268_435_456,
+    536_870_912,
+    1_073_741_824,
+    2_147_483_648,
+    4_294_967_296,
+    8_589_934_592,
+    17_179_869_184,
+)
+
+
 PROFILE_METRICS = {
-    "latency": ("duckdb.query.duration", "s", "DuckDB query latency"),
-    "cpu_time": ("duckdb.query.cpu.time", "s", "DuckDB query CPU time"),
+    "latency": (
+        "duckdb.query.duration",
+        "s",
+        "DuckDB query latency",
+        DURATION_BUCKETS_SECONDS,
+    ),
+    "cpu_time": (
+        "duckdb.query.cpu.time",
+        "s",
+        "DuckDB query CPU time",
+        DURATION_BUCKETS_SECONDS,
+    ),
     "blocked_thread_time": (
         "duckdb.query.blocked_thread.time",
         "s",
         "Time a DuckDB query waited for an execution thread",
+        DURATION_BUCKETS_SECONDS,
     ),
     "rows_returned": (
         "duckdb.query.rows.returned",
         "{row}",
         "Rows returned by a DuckDB query",
+        ROW_COUNT_BUCKETS,
     ),
     "cumulative_rows_scanned": (
         "duckdb.query.rows.scanned",
         "{row}",
         "Rows scanned by a DuckDB query and its operators",
+        ROW_COUNT_BUCKETS,
     ),
     "cumulative_cardinality": (
         "duckdb.query.cardinality.cumulative",
         "{row}",
         "Cumulative cardinality across a DuckDB query's operators",
+        ROW_COUNT_BUCKETS,
     ),
     "result_set_size": (
         "duckdb.query.result.size",
         "By",
         "DuckDB query result size",
+        BYTE_BUCKETS,
     ),
     "system_peak_buffer_memory": (
         "duckdb.query.memory.peak_buffer",
         "By",
         "Peak DuckDB buffer-manager memory during a query",
+        BYTE_BUCKETS,
     ),
     "system_peak_temp_dir_size": (
         "duckdb.query.temp_directory.peak_size",
         "By",
         "Peak DuckDB temporary-directory size during a query",
+        BYTE_BUCKETS,
     ),
     "total_memory_allocated": (
         "duckdb.query.memory.allocated",
         "By",
         "Total DuckDB buffer-manager memory allocated during a query",
+        BYTE_BUCKETS,
     ),
     "total_bytes_read": (
         "duckdb.query.io.read",
         "By",
         "Bytes read by DuckDB during a query",
+        BYTE_BUCKETS,
     ),
     "total_bytes_written": (
         "duckdb.query.io.written",
         "By",
         "Bytes written by DuckDB during a query",
+        BYTE_BUCKETS,
     ),
 }
 
@@ -86,8 +188,14 @@ class DuckDBTelemetry:
                 name=otel_name,
                 unit=unit,
                 description=description,
+                explicit_bucket_boundaries_advisory=bucket_boundaries,
             )
-            for profile_name, (otel_name, unit, description) in PROFILE_METRICS.items()
+            for profile_name, (
+                otel_name,
+                unit,
+                description,
+                bucket_boundaries,
+            ) in PROFILE_METRICS.items()
         }
 
     def record_connection_profile(

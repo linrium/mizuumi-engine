@@ -2,11 +2,18 @@ from __future__ import annotations
 
 import os
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import duckdb
 
-from telemetry import DuckDBTelemetry, NoopDuckDBTelemetry, create_duckdb_telemetry
+from telemetry import (
+    BYTE_BUCKETS,
+    DURATION_BUCKETS_SECONDS,
+    ROW_COUNT_BUCKETS,
+    DuckDBTelemetry,
+    NoopDuckDBTelemetry,
+    create_duckdb_telemetry,
+)
 
 
 class RecordingHistogram:
@@ -18,6 +25,35 @@ class RecordingHistogram:
 
 
 class ProfileMetricsTest(unittest.TestCase):
+    def test_configures_unit_specific_histogram_boundaries(self) -> None:
+        provider = MagicMock()
+        meter = provider.get_meter.return_value
+
+        DuckDBTelemetry(provider)
+
+        instruments = {
+            call.kwargs["name"]: call.kwargs
+            for call in meter.create_histogram.call_args_list
+        }
+        self.assertEqual(
+            instruments["duckdb.query.duration"][
+                "explicit_bucket_boundaries_advisory"
+            ],
+            DURATION_BUCKETS_SECONDS,
+        )
+        self.assertEqual(
+            instruments["duckdb.query.rows.returned"][
+                "explicit_bucket_boundaries_advisory"
+            ],
+            ROW_COUNT_BUCKETS,
+        )
+        self.assertEqual(
+            instruments["duckdb.query.io.read"][
+                "explicit_bucket_boundaries_advisory"
+            ],
+            BYTE_BUCKETS,
+        )
+
     def test_records_numeric_profile_values_and_ignores_metadata(self) -> None:
         telemetry = object.__new__(DuckDBTelemetry)
         latency = RecordingHistogram()

@@ -68,3 +68,9 @@ disable metrics for a direct run. Quack executes queries in extension-owned
 connections whose completed profiles are not exposed to the Python host, so
 these profiler metrics cover `/api/query`, not direct Quack clients. Kubernetes
 container and pod metrics continue to come from `signoz-k8s-infra`.
+
+The histograms use unit-specific explicit buckets. Duration buckets are stored
+in seconds with millisecond-scale boundaries; row counts and byte measurements
+use separate ranges appropriate to their units. Keep these boundaries aligned
+with the units above so percentile queries do not fall back to OpenTelemetry's
+generic bucket layout.
