@@ -37,6 +37,7 @@ async function requireUser() {
 async function requestContract(
   target: ContractTarget,
   method: "GET" | "POST",
+  accessToken: string,
 ): Promise<DataContract | null> {
   const name = fullName(target)
   const suffix = method === "POST" ? "/reconcile" : ""
@@ -44,7 +45,10 @@ async function requestContract(
   const response = await fetch(controlPlaneUrl(endpoint), {
     method,
     cache: "no-store",
-    headers: { Accept: "application/json" },
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
   })
   const body: unknown = await response.json().catch(() => null)
 
@@ -71,9 +75,16 @@ function errorResult(error: unknown): ContractActionResult {
 export async function getDataContract(
   target: ContractTarget,
 ): Promise<ContractActionResult> {
-  await requireUser()
+  const { requestHeaders, user } = await requireUser()
   try {
-    return { ok: true, data: await requestContract(target, "GET") }
+    const { accessToken } = await auth.api.getAccessToken({
+      headers: requestHeaders,
+      body: { useAccountCookie: true, userId: user.id },
+    })
+    return {
+      ok: true,
+      data: await requestContract(target, "GET", accessToken),
+    }
   } catch (error) {
     return errorResult(error)
   }
@@ -82,12 +93,19 @@ export async function getDataContract(
 export async function getDataQualityRuns(
   target: ContractTarget,
 ): Promise<QualityRunsActionResult> {
-  await requireUser()
+  const { requestHeaders, user } = await requireUser()
   try {
+    const { accessToken } = await auth.api.getAccessToken({
+      headers: requestHeaders,
+      body: { useAccountCookie: true, userId: user.id },
+    })
     const endpoint = `/api/data-contracts/${encodeURIComponent(fullName(target))}/quality-runs`
     const response = await fetch(controlPlaneUrl(endpoint), {
       cache: "no-store",
-      headers: { Accept: "application/json" },
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
     })
     const body: unknown = await response.json().catch(() => null)
     if (!response.ok) throw controlPlaneError(endpoint, response.status, body)
@@ -137,9 +155,13 @@ export async function runDataQuality(
 export async function reconcileDataContract(
   target: ContractTarget,
 ): Promise<ContractActionResult> {
-  await requireUser()
+  const { requestHeaders, user } = await requireUser()
   try {
-    const data = await requestContract(target, "POST")
+    const { accessToken } = await auth.api.getAccessToken({
+      headers: requestHeaders,
+      body: { useAccountCookie: true, userId: user.id },
+    })
+    const data = await requestContract(target, "POST", accessToken)
     revalidatePath(
       `/unitycatalog/${encodeURIComponent(target.catalog)}/${encodeURIComponent(target.schema)}/${encodeURIComponent(target.table)}/contract`,
     )

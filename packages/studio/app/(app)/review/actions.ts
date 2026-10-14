@@ -44,11 +44,17 @@ async function controlPlaneRequest<T>(
   init?: RequestInit,
   params?: Record<string, string>,
 ): Promise<T> {
+  const { requestHeaders, user } = await currentUser()
+  const { accessToken } = await auth.api.getAccessToken({
+    headers: requestHeaders,
+    body: { useAccountCookie: true, userId: user.id },
+  })
   const response = await fetch(controlPlaneUrl(endpoint, params), {
     ...init,
     cache: "no-store",
     headers: {
       Accept: "application/json",
+      Authorization: `Bearer ${accessToken}`,
       ...(init?.body ? { "Content-Type": "application/json" } : {}),
       ...init?.headers,
     },

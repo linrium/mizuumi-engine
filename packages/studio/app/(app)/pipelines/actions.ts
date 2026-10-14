@@ -1,5 +1,9 @@
 "use server"
 
+import { headers } from "next/headers"
+import { redirect } from "next/navigation"
+import { auth } from "@/lib/auth"
+
 export type ExecutorStateSummary = {
   running: number
   completed: number
@@ -49,9 +53,19 @@ async function request<T>(
   path: string,
   params?: Record<string, string>,
 ): Promise<T> {
+  const requestHeaders = await headers()
+  const session = await auth.api.getSession({ headers: requestHeaders })
+  if (!session) redirect("/login")
+  const { accessToken } = await auth.api.getAccessToken({
+    headers: requestHeaders,
+    body: { useAccountCookie: true, userId: session.user.id },
+  })
   const response = await fetch(controlPlaneUrl(path, params), {
     cache: "no-store",
-    headers: { Accept: "application/json" },
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
   })
   const body: unknown = await response.json().catch(() => null)
   if (!response.ok) {

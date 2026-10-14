@@ -23,6 +23,12 @@ bootstrap adds the Organization Group Membership mapper to Keycloak's built-in
 `organization` client scope. After bootstrapping or changing memberships, sign
 out and sign in again so Keycloak issues a token with the current memberships.
 
+The bootstrap also adds the `controlplane` audience to Studio access tokens,
+creates the Control Plane reader/writer/admin client roles, and grants the local
+demo users their configured roles. Studio forwards this user token to all
+Control Plane requests. After changing these mappings, sign out and sign in
+again before using contracts, access reviews, or pipelines.
+
 If discovery fails, check the issuer in `.env.local` and verify it is reachable
 with the local CA:
 

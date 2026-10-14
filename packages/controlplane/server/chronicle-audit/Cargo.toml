@@ -1,0 +1,17 @@
+[package]
+name = "chronicle-audit"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+chronicle-audit-macros = { path = "../chronicle-audit-macros" }
+opentelemetry = "0.33"
+opentelemetry-http = "0.33"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+time = { version = "0.3", features = ["serde-well-known"] }
+tokio = { version = "1", features = ["rt", "sync"] }
+tracing = "0.1"
+tracing-opentelemetry = "0.34"

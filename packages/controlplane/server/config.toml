@@ -30,3 +30,9 @@ reader_role = "controlplane-reader"
 writer_role = "controlplane-writer"
 admin_role = "controlplane-admin"
 
+[chronicle]
+enabled = false
+endpoint = "http://chronicle.chronicle.svc.cluster.local"
+service_name = "controlplane-server"
+timeout_ms = 2000
+

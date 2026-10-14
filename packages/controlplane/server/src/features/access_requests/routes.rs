@@ -1,11 +1,11 @@
 use axum::{
-    Json, Router,
+    Extension, Json, Router,
     extract::{Path, Query, State},
     http::StatusCode,
     routing::{get, post},
 };
 
-use crate::{app_state::AppState, error::AppError};
+use crate::{app_state::AppState, error::AppError, features::auth::AuthenticatedPrincipal};
 
 use super::dtos::{
     AccessRequest, CancelAccessRequest, CreateAccessRequest, ListAccessRequestsRequest,
@@ -42,8 +42,19 @@ pub fn access_request_router() -> Router<AppState> {
         )
 }
 
+#[chronicle_audit::audit(
+    action = "access_requests.create",
+    principal = principal.id,
+    fields(
+        requested_by = request.requested_by,
+        target_securable_type = request.target_securable_type,
+        target_full_name = request.target_full_name,
+        requested_privilege = request.requested_privilege,
+    ),
+)]
 async fn create_access_request(
     State(state): State<AppState>,
+    Extension(principal): Extension<AuthenticatedPrincipal>,
     Json(request): Json<CreateAccessRequest>,
 ) -> Result<(StatusCode, Json<AccessRequest>), AppError> {
     let request = state.access_requests.create_access_request(request).await?;
@@ -79,8 +90,14 @@ async fn get_access_request(
     ))
 }
 
+#[chronicle_audit::audit(
+    action = "access_requests.update",
+    principal = principal.id,
+    fields(request_id = request_id, requested_by = request.requested_by),
+)]
 async fn update_access_request(
     State(state): State<AppState>,
+    Extension(principal): Extension<AuthenticatedPrincipal>,
     Path(request_id): Path<String>,
     Json(request): Json<UpdateAccessRequest>,
 ) -> Result<Json<AccessRequest>, AppError> {
@@ -92,8 +109,14 @@ async fn update_access_request(
     ))
 }
 
+#[chronicle_audit::audit(
+    action = "access_requests.cancel",
+    principal = principal.id,
+    fields(request_id = request_id, requested_by = request.requested_by),
+)]
 async fn cancel_access_request(
     State(state): State<AppState>,
+    Extension(principal): Extension<AuthenticatedPrincipal>,
     Path(request_id): Path<String>,
     Json(request): Json<CancelAccessRequest>,
 ) -> Result<Json<AccessRequest>, AppError> {
@@ -105,8 +128,18 @@ async fn cancel_access_request(
     ))
 }
 
+#[chronicle_audit::audit(
+    action = "access_requests.approve",
+    principal = principal.id,
+    fields(
+        request_id = request_id,
+        approval_team = review.approval_team,
+        reviewer = review.reviewer,
+    ),
+)]
 async fn approve_access_request(
     State(state): State<AppState>,
+    Extension(principal): Extension<AuthenticatedPrincipal>,
     Path(request_id): Path<String>,
     Json(review): Json<ReviewAccessRequest>,
 ) -> Result<Json<AccessRequest>, AppError> {
@@ -118,8 +151,18 @@ async fn approve_access_request(
     ))
 }
 
+#[chronicle_audit::audit(
+    action = "access_requests.reject",
+    principal = principal.id,
+    fields(
+        request_id = request_id,
+        approval_team = review.approval_team,
+        reviewer = review.reviewer,
+    ),
+)]
 async fn reject_access_request(
     State(state): State<AppState>,
+    Extension(principal): Extension<AuthenticatedPrincipal>,
     Path(request_id): Path<String>,
     Json(review): Json<ReviewAccessRequest>,
 ) -> Result<Json<AccessRequest>, AppError> {

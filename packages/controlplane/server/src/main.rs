@@ -25,6 +25,7 @@ use crate::{
         policy_templates::{DefaultPolicyTemplateService, policy_template_router},
     },
     infrastructure::{
+        chronicle,
         postgres::{create_pool, run_migrations},
         unity_catalog::HttpUnityCatalog,
     },
@@ -35,6 +36,7 @@ async fn main() -> anyhow::Result<()> {
     init_tracing();
 
     let settings = Settings::load().context("failed to load configuration")?;
+    chronicle::init(&settings.chronicle).context("failed to initialize chronicle audit client")?;
     tracing::debug!(
         server.host = %settings.server.host,
         server.port = settings.server.port,
@@ -44,6 +46,8 @@ async fn main() -> anyhow::Result<()> {
         auth.enabled = settings.auth.enabled,
         auth.issuer = %settings.auth.issuer,
         auth.audience = %settings.auth.audience,
+        chronicle.enabled = settings.chronicle.enabled,
+        chronicle.endpoint = %settings.chronicle.endpoint,
         "configuration loaded"
     );
 

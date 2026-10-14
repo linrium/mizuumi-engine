@@ -10,6 +10,9 @@ client_id="${STUDIO_KEYCLOAK_CLIENT_ID:-studio}"
 studio_url="${STUDIO_URL:-http://localhost:3000}"
 public_keycloak_url="${KEYCLOAK_PUBLIC_URL:-https://auth.mizuumi.test}"
 openshell_audience="${OPENSHELL_OIDC_AUDIENCE:-openshell-cli}"
+controlplane_audience="${CONTROLPLANE_OIDC_AUDIENCE:-controlplane}"
+controlplane_admin_user="${CONTROLPLANE_ADMIN_USER:-khaopad}"
+controlplane_writer_user="${CONTROLPLANE_WRITER_USER:-khaosoi}"
 vault_addr="${VAULT_ADDR:-https://vault.mizuumi.test}"
 vault_kv_mount="${VAULT_KV_MOUNT:-pi-custom-openai}"
 vault_kv_secret_path="${VAULT_KV_SECRET_PATH:-config}"
@@ -36,6 +39,9 @@ Environment overrides:
   STUDIO_KEYCLOAK_CLIENT_ID   Default: studio
   STUDIO_URL                  Default: http://localhost:3000
   OPENSHELL_OIDC_AUDIENCE     Default: openshell-cli
+  CONTROLPLANE_OIDC_AUDIENCE  Default: controlplane
+  CONTROLPLANE_ADMIN_USER     Default: khaopad
+  CONTROLPLANE_WRITER_USER    Default: khaosoi
   VAULT_ADDR                 Default: https://vault.mizuumi.test
   VAULT_CACERT               Default: k8s/auth/tls/ca.crt
   VAULT_KV_MOUNT             Default: pi-custom-openai
@@ -192,6 +198,55 @@ if ! printf '%s' "$audience_mappers" | jq -e 'any(.[]; .name == "unitycatalog-au
   kc POST "/admin/realms/$realm/clients/$client_uuid/protocol-mappers/models" "$audience_payload" >/dev/null
   echo "Added the Unity Catalog audience to Studio access tokens."
 fi
+
+controlplane_audience_payload="$(jq -cn --arg audience "$controlplane_audience" \
+  '{name:"controlplane-audience",protocol:"openid-connect",protocolMapper:"oidc-audience-mapper",consentRequired:false,config:{"included.client.audience":$audience,"access.token.claim":"true","id.token.claim":"false"}}')"
+controlplane_audience_mapper_id="$(printf '%s' "$audience_mappers" | jq -r '[.[] | select(.name == "controlplane-audience")][0].id // empty')"
+if [[ -z "$controlplane_audience_mapper_id" ]]; then
+  kc POST "/admin/realms/$realm/clients/$client_uuid/protocol-mappers/models" "$controlplane_audience_payload" >/dev/null
+  echo "Added the Control Plane audience to Studio access tokens."
+else
+  controlplane_audience_payload="$(printf '%s' "$controlplane_audience_payload" | jq -c --arg id "$controlplane_audience_mapper_id" '.id=$id')"
+  kc PUT "/admin/realms/$realm/clients/$client_uuid/protocol-mappers/models/$controlplane_audience_mapper_id" "$controlplane_audience_payload" >/dev/null
+  echo "Updated the Control Plane audience for Studio access tokens."
+fi
+
+controlplane_clients="$(kc GET "/admin/realms/$realm/clients?clientId=$controlplane_audience")"
+controlplane_uuid="$(printf '%s' "$controlplane_clients" | jq -r --arg id "$controlplane_audience" '[.[] | select(.clientId == $id)][0].id // empty')"
+if [[ -z "$controlplane_uuid" ]]; then
+  controlplane_client_payload="$(jq -cn --arg id "$controlplane_audience" \
+    '{clientId:$id,name:"Mizuumi Control Plane",enabled:true,protocol:"openid-connect",bearerOnly:true,publicClient:false,standardFlowEnabled:false,directAccessGrantsEnabled:false,serviceAccountsEnabled:false}')"
+  kc POST "/admin/realms/$realm/clients" "$controlplane_client_payload" >/dev/null
+  controlplane_uuid="$(kc GET "/admin/realms/$realm/clients?clientId=$controlplane_audience" | jq -er --arg id "$controlplane_audience" '[.[] | select(.clientId == $id)][0].id')"
+  echo "Created the Control Plane resource client."
+fi
+
+for role in controlplane-reader controlplane-writer controlplane-admin; do
+  role_status="$(curl -sS --cacert "$keycloak_ca" -o /dev/null -w '%{http_code}' \
+    -H "Authorization: Bearer $admin_token" \
+    "$keycloak_url/admin/realms/$realm/clients/$controlplane_uuid/roles/$role")"
+  case "$role_status" in
+    200) ;;
+    404)
+      role_payload="$(jq -cn --arg name "$role" '{name:$name}')"
+      kc POST "/admin/realms/$realm/clients/$controlplane_uuid/roles" "$role_payload" >/dev/null
+      echo "Created Control Plane client role $role."
+      ;;
+    *) echo "Could not inspect Control Plane client role $role (HTTP $role_status)." >&2; exit 1 ;;
+  esac
+done
+
+assign_controlplane_role() {
+  local username="$1" role="$2" users user_id role_mapping
+  users="$(kc GET "/admin/realms/$realm/users?username=$username&exact=true")"
+  user_id="$(printf '%s' "$users" | jq -er --arg username "$username" '[.[] | select(.username == $username)][0].id')"
+  role_mapping="$(kc GET "/admin/realms/$realm/clients/$controlplane_uuid/roles/$role" | jq -c '[.]')"
+  kc POST "/admin/realms/$realm/users/$user_id/role-mappings/clients/$controlplane_uuid" "$role_mapping" >/dev/null
+  echo "Granted $role to Keycloak user $username."
+}
+
+assign_controlplane_role "$controlplane_admin_user" controlplane-admin
+assign_controlplane_role "$controlplane_writer_user" controlplane-writer
 
 # Keycloak only allows a resource client to introspect tokens intended for it.
 # Keep Unity Catalog as an audience and add Duck server independently so both

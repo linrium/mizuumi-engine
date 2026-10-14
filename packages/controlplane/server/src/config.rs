@@ -15,6 +15,20 @@ pub struct Settings {
     pub duck_query: DuckQuerySettings,
     #[serde(default)]
     pub auth: AuthSettings,
+    #[serde(default)]
+    pub chronicle: ChronicleSettings,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ChronicleSettings {
+    #[serde(default = "default_chronicle_enabled")]
+    pub enabled: bool,
+    #[serde(default = "default_chronicle_endpoint")]
+    pub endpoint: String,
+    #[serde(default = "default_chronicle_service_name")]
+    pub service_name: String,
+    #[serde(default = "default_chronicle_timeout_ms")]
+    pub timeout_ms: u64,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -161,6 +175,17 @@ impl Default for AuthSettings {
     }
 }
 
+impl Default for ChronicleSettings {
+    fn default() -> Self {
+        Self {
+            enabled: default_chronicle_enabled(),
+            endpoint: default_chronicle_endpoint(),
+            service_name: default_chronicle_service_name(),
+            timeout_ms: default_chronicle_timeout_ms(),
+        }
+    }
+}
+
 fn default_host() -> IpAddr {
     [0, 0, 0, 0].into()
 }
@@ -239,4 +264,20 @@ fn default_writer_role() -> String {
 
 fn default_admin_role() -> String {
     "controlplane-admin".to_owned()
+}
+
+fn default_chronicle_enabled() -> bool {
+    false
+}
+
+fn default_chronicle_endpoint() -> String {
+    "http://chronicle.chronicle.svc.cluster.local".to_owned()
+}
+
+fn default_chronicle_service_name() -> String {
+    "controlplane-server".to_owned()
+}
+
+fn default_chronicle_timeout_ms() -> u64 {
+    2000
 }

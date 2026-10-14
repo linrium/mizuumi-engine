@@ -40,3 +40,9 @@ data:
     writer_role = {{ .Values.auth.writerRole | quote }}
     admin_role = {{ .Values.auth.adminRole | quote }}
 
+    [chronicle]
+    enabled = {{ .Values.chronicle.enabled }}
+    endpoint = {{ .Values.chronicle.endpoint | quote }}
+    service_name = {{ .Values.chronicle.serviceName | quote }}
+    timeout_ms = {{ .Values.chronicle.timeoutMs }}
+

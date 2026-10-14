@@ -55,6 +55,14 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.unityCatalog.credentialsSecretName | quote }}
                   key: {{ .Values.unityCatalog.clientSecretKey | quote }}
+            - name: CONTROLPLANE__CHRONICLE__ENABLED
+              value: {{ .Values.chronicle.enabled | quote }}
+            - name: CONTROLPLANE__CHRONICLE__ENDPOINT
+              value: {{ .Values.chronicle.endpoint | quote }}
+            - name: CONTROLPLANE__CHRONICLE__SERVICE_NAME
+              value: {{ .Values.chronicle.serviceName | quote }}
+            - name: CONTROLPLANE__CHRONICLE__TIMEOUT_MS
+              value: {{ .Values.chronicle.timeoutMs | quote }}
           volumeMounts:
             - name: config
               mountPath: {{ dir .Values.server.configPath }}

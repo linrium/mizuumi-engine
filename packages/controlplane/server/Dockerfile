@@ -4,6 +4,8 @@ FROM rust:1.95-bookworm AS builder
 WORKDIR /app
 
 COPY Cargo.toml Cargo.lock ./
+COPY chronicle-audit ./chronicle-audit
+COPY chronicle-audit-macros ./chronicle-audit-macros
 COPY cornucopia ./cornucopia
 COPY src ./src
 COPY queries ./queries

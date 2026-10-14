@@ -66,6 +66,11 @@ approval.
 only exposes metadata in Unity Catalog; data access still requires `SELECT` and the normal catalog
 and schema usage privileges.
 
+Access-request handlers append audit records to Chronicle when `[chronicle].enabled` is true.
+Configure `endpoint`, `service_name`, and `timeout_ms` in `config.toml`, or use the equivalent
+`CONTROLPLANE__CHRONICLE__*` environment variables. Audit records include the authenticated
+principal, action-specific request fields, timestamps, and the success or error outcome.
+
 The initial API contract accepts `created_by`, `requested_by`, and `reviewer` explicitly. These
 fields must be replaced by authenticated principal and team claims when Keycloak middleware is
 added; they are not an authorization boundary by themselves.

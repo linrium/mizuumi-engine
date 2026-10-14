@@ -40,6 +40,12 @@ auth:
   writerRole: controlplane-writer
   adminRole: controlplane-admin
 
+chronicle:
+  enabled: true
+  endpoint: http://chronicle.chronicle.svc.cluster.local
+  serviceName: controlplane-server
+  timeoutMs: 2000
+
 postgresql:
   enabled: true
   image:
