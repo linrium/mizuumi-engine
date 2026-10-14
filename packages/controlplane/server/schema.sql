@@ -315,6 +315,9 @@ CREATE TABLE IF NOT EXISTS access_requests (
     contract_evaluation_status TEXT NOT NULL DEFAULT 'NOT_APPLICABLE'
         CHECK (contract_evaluation_status IN ('NOT_APPLICABLE', 'PASSED', 'WARNING')),
     contract_evaluated_at TIMESTAMPTZ,
+    blast_radius JSONB NOT NULL DEFAULT '{"status":"DISABLED"}'::jsonb
+        CHECK (jsonb_typeof(blast_radius) = 'object'),
+    blast_radius_evaluated_at TIMESTAMPTZ,
     reason TEXT NOT NULL CONSTRAINT access_requests_reason_required
         CHECK (BTRIM(reason) <> ''),
     status TEXT NOT NULL DEFAULT 'PENDING' CHECK (
@@ -366,7 +369,9 @@ ALTER TABLE access_requests
     ADD COLUMN IF NOT EXISTS contract_snapshot JSONB NOT NULL DEFAULT '{}'::jsonb,
     ADD COLUMN IF NOT EXISTS contract_evaluations JSONB NOT NULL DEFAULT '[]'::jsonb,
     ADD COLUMN IF NOT EXISTS contract_evaluation_status TEXT NOT NULL DEFAULT 'NOT_APPLICABLE',
-    ADD COLUMN IF NOT EXISTS contract_evaluated_at TIMESTAMPTZ;
+    ADD COLUMN IF NOT EXISTS contract_evaluated_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS blast_radius JSONB NOT NULL DEFAULT '{"status":"DISABLED"}'::jsonb,
+    ADD COLUMN IF NOT EXISTS blast_radius_evaluated_at TIMESTAMPTZ;
 
 DO $$
 BEGIN
@@ -717,7 +722,10 @@ CREATE TABLE IF NOT EXISTS access_request_events (
             'EXPIRED',
             'ACCESS_REVOKED',
             'CONTRACT_BOUND',
-            'CONTRACT_TERMS_ACKNOWLEDGED'
+            'CONTRACT_TERMS_ACKNOWLEDGED',
+            'CONTRACT_VALIDATION_FAILED',
+            'BLAST_RADIUS_EVALUATED',
+            'BLAST_RADIUS_SKIPPED'
         )
     ),
     actor TEXT NOT NULL CHECK (BTRIM(actor) <> ''),
@@ -745,7 +753,10 @@ ALTER TABLE access_request_events
             'EXPIRED',
             'ACCESS_REVOKED',
             'CONTRACT_BOUND',
-            'CONTRACT_TERMS_ACKNOWLEDGED'
+            'CONTRACT_TERMS_ACKNOWLEDGED',
+            'CONTRACT_VALIDATION_FAILED',
+            'BLAST_RADIUS_EVALUATED',
+            'BLAST_RADIUS_SKIPPED'
         )
     );
 

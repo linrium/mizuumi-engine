@@ -76,6 +76,32 @@ export type ChronicleAccessRequestEvidence = {
   verification_error?: string | null
 }
 
+export type BlastRadiusFactor = {
+  category: string
+  severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL"
+  explanation: string
+  evidence: string[]
+}
+
+export type BlastRadiusAffectedAsset = {
+  name: string
+  direction: "TARGET" | "UPSTREAM" | "DOWNSTREAM"
+  impact: string
+}
+
+export type BlastRadiusAssessment = {
+  status: "COMPLETED" | "DISABLED"
+  model?: string | null
+  risk_level: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL" | "UNKNOWN"
+  risk_score: number
+  recommendation: "APPROVE" | "REVIEW" | "DENY"
+  summary: string
+  factors: BlastRadiusFactor[]
+  affected_assets: BlastRadiusAffectedAsset[]
+  mitigations: string[]
+  confidence: number
+}
+
 export type AccessRequest = {
   id: string
   template_id: string
@@ -96,6 +122,8 @@ export type AccessRequest = {
     snapshot: Record<string, unknown>
     evaluations: ContractEvaluation[]
   } | null
+  blast_radius?: BlastRadiusAssessment | null
+  blast_radius_evaluated_at?: string | null
   purpose_code?: string | null
   consumer_context: {
     consumer_domain?: string

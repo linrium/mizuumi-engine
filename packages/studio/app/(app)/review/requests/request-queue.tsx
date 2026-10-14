@@ -45,7 +45,11 @@ import {
   getAccessRequestChronicleEvidence,
   reviewAccessRequest,
 } from "../actions"
-import type { AccessRequest, ChronicleAccessRequestEvidence } from "../types"
+import type {
+  AccessRequest,
+  BlastRadiusAssessment,
+  ChronicleAccessRequestEvidence,
+} from "../types"
 
 type RequestQueueProps = {
   initialRequests: AccessRequest[]
@@ -105,6 +109,37 @@ function statusVariant(
     default:
       return "outline"
   }
+}
+
+function riskVariant(
+  risk: BlastRadiusAssessment["risk_level"],
+): "default" | "secondary" | "outline" | "destructive" {
+  switch (risk) {
+    case "HIGH":
+    case "CRITICAL":
+      return "destructive"
+    case "MEDIUM":
+      return "secondary"
+    default:
+      return "outline"
+  }
+}
+
+function recommendationVariant(
+  recommendation: "APPROVE" | "REVIEW" | "DENY",
+): "default" | "secondary" | "destructive" {
+  switch (recommendation) {
+    case "APPROVE":
+      return "default"
+    case "DENY":
+      return "destructive"
+    default:
+      return "secondary"
+  }
+}
+
+function clampPercentage(value: number) {
+  return Math.max(0, Math.min(100, Math.round(value)))
 }
 
 function chronicleActionForEvent(eventType: string) {
@@ -373,7 +408,7 @@ export function RequestQueue({
           if (!open && !isReviewing) setSelected(null)
         }}
       >
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-3xl">
           {selected ? (
             <>
               <DialogHeader>
@@ -444,6 +479,164 @@ export function RequestQueue({
                     {selected.reason}
                   </p>
                 </div>
+
+                {selected.blast_radius ? (
+                  <div>
+                    <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      LLM blast radius
+                    </h3>
+                    {selected.blast_radius.status === "COMPLETED" ? (
+                      <div className="space-y-4 rounded-md border bg-card p-4 text-sm">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge
+                            variant={riskVariant(
+                              selected.blast_radius.risk_level,
+                            )}
+                          >
+                            {selected.blast_radius.risk_level} risk
+                          </Badge>
+                          <Badge
+                            variant={recommendationVariant(
+                              selected.blast_radius.recommendation,
+                            )}
+                          >
+                            {selected.blast_radius.recommendation}
+                          </Badge>
+                          <span className="text-xs text-muted-foreground">
+                            {clampPercentage(
+                              selected.blast_radius.confidence * 100,
+                            )}
+                            % confidence
+                          </span>
+                        </div>
+
+                        <div>
+                          <div className="mb-1 flex items-center justify-between text-xs">
+                            <span className="font-medium">Risk score</span>
+                            <span className="font-mono">
+                              {clampPercentage(
+                                selected.blast_radius.risk_score,
+                              )}
+                              /100
+                            </span>
+                          </div>
+                          <div className="h-2 overflow-hidden rounded-full bg-muted">
+                            <div
+                              className="h-full rounded-full bg-primary transition-[width]"
+                              style={{
+                                width: `${clampPercentage(selected.blast_radius.risk_score)}%`,
+                              }}
+                            />
+                          </div>
+                        </div>
+
+                        <p className="leading-relaxed">
+                          {selected.blast_radius.summary}
+                        </p>
+
+                        {selected.blast_radius.factors.length > 0 ? (
+                          <div>
+                            <div className="mb-2 text-xs font-medium text-muted-foreground">
+                              Risk factors
+                            </div>
+                            <div className="space-y-2">
+                              {selected.blast_radius.factors.map((factor) => (
+                                <div
+                                  key={`${factor.category}:${factor.severity}:${factor.explanation}`}
+                                  className="rounded-md bg-muted/40 p-3"
+                                >
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div className="font-medium">
+                                      {factor.category}
+                                    </div>
+                                    <Badge
+                                      variant={riskVariant(factor.severity)}
+                                    >
+                                      {factor.severity}
+                                    </Badge>
+                                  </div>
+                                  <p className="mt-1 text-xs text-muted-foreground">
+                                    {factor.explanation}
+                                  </p>
+                                  {factor.evidence.length > 0 ? (
+                                    <ul className="mt-2 list-disc space-y-1 pl-4 text-xs text-muted-foreground">
+                                      {factor.evidence.map((evidence) => (
+                                        <li key={evidence}>{evidence}</li>
+                                      ))}
+                                    </ul>
+                                  ) : null}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
+
+                        {selected.blast_radius.affected_assets.length > 0 ? (
+                          <div>
+                            <div className="mb-2 text-xs font-medium text-muted-foreground">
+                              Affected assets
+                            </div>
+                            <div className="space-y-2">
+                              {selected.blast_radius.affected_assets.map(
+                                (asset) => (
+                                  <div
+                                    key={`${asset.direction}:${asset.name}:${asset.impact}`}
+                                    className="flex items-start justify-between gap-3 rounded-md border px-3 py-2"
+                                  >
+                                    <div className="min-w-0">
+                                      <div className="break-all font-mono text-xs font-medium">
+                                        {asset.name}
+                                      </div>
+                                      <div className="mt-1 text-xs text-muted-foreground">
+                                        {asset.impact}
+                                      </div>
+                                    </div>
+                                    <Badge variant="outline">
+                                      {asset.direction}
+                                    </Badge>
+                                  </div>
+                                ),
+                              )}
+                            </div>
+                          </div>
+                        ) : null}
+
+                        {selected.blast_radius.mitigations.length > 0 ? (
+                          <div>
+                            <div className="mb-2 text-xs font-medium text-muted-foreground">
+                              Suggested mitigations
+                            </div>
+                            <ul className="list-disc space-y-1 pl-4 text-xs text-muted-foreground">
+                              {selected.blast_radius.mitigations.map(
+                                (mitigation) => (
+                                  <li key={mitigation}>{mitigation}</li>
+                                ),
+                              )}
+                            </ul>
+                          </div>
+                        ) : null}
+
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 border-t pt-3 text-xs text-muted-foreground">
+                          <span>
+                            Model: {selected.blast_radius.model ?? "Unknown"}
+                          </span>
+                          {selected.blast_radius_evaluated_at ? (
+                            <span>
+                              Evaluated{" "}
+                              {formatDate(selected.blast_radius_evaluated_at)}
+                            </span>
+                          ) : null}
+                          <span>Advisory only</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-start gap-2 rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
+                        <IconAlertTriangle className="mt-0.5 size-4 shrink-0" />
+                        {selected.blast_radius.summary}
+                      </div>
+                    )}
+                  </div>
+                ) : null}
 
                 {selected.contract ? (
                   <div>

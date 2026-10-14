@@ -33,6 +33,15 @@ compute:
   namespace: duck-server
   labelSelector: app.kubernetes.io/name=duck-server
 
+blastRadius:
+  enabled: false
+  credentialsSecretName: controlplane-blast-radius
+  apiKeySecretKey: api-key
+  baseUrlSecretKey: base-url
+  modelSecretKey: model
+  timeoutMs: 30000
+  dagsterGraphqlUrl: http://dagster-dagster-webserver.dagster.svc.cluster.local/graphql
+
 auth:
   enabled: true
   issuer: https://auth.mizuumi.test/realms/sovico

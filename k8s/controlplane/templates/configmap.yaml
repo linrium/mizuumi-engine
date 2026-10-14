@@ -33,6 +33,14 @@ data:
     namespace = {{ .Values.compute.namespace | quote }}
     label_selector = {{ .Values.compute.labelSelector | quote }}
 
+    [blast_radius]
+    enabled = {{ .Values.blastRadius.enabled }}
+    api_key = ""
+    base_url = ""
+    model = ""
+    timeout_ms = {{ .Values.blastRadius.timeoutMs }}
+    dagster_graphql_url = {{ .Values.blastRadius.dagsterGraphqlUrl | quote }}
+
     [auth]
     enabled = {{ .Values.auth.enabled }}
     issuer = {{ .Values.auth.issuer | quote }}

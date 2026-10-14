@@ -23,6 +23,14 @@ url = "http://127.0.0.1:9495/api/query"
 namespace = "duck-server"
 label_selector = "app.kubernetes.io/name=duck-server"
 
+[blast_radius]
+enabled = false
+api_key = ""
+base_url = ""
+model = ""
+timeout_ms = 30000
+dagster_graphql_url = "http://dagster-dagster-webserver.dagster.svc.cluster.local/graphql"
+
 [auth]
 enabled = true
 issuer = "https://auth.mizuumi.test/realms/sovico"

@@ -69,6 +69,23 @@ spec:
                   name: {{ .Values.signoz.apiKeySecretName | quote }}
                   key: {{ .Values.signoz.apiKeySecretKey | quote }}
                   optional: true
+            {{- if .Values.blastRadius.enabled }}
+            - name: CONTROLPLANE__BLAST_RADIUS__API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.blastRadius.credentialsSecretName | quote }}
+                  key: {{ .Values.blastRadius.apiKeySecretKey | quote }}
+            - name: CONTROLPLANE__BLAST_RADIUS__BASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.blastRadius.credentialsSecretName | quote }}
+                  key: {{ .Values.blastRadius.baseUrlSecretKey | quote }}
+            - name: CONTROLPLANE__BLAST_RADIUS__MODEL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.blastRadius.credentialsSecretName | quote }}
+                  key: {{ .Values.blastRadius.modelSecretKey | quote }}
+            {{- end }}
           volumeMounts:
             - name: config
               mountPath: {{ dir .Values.server.configPath }}

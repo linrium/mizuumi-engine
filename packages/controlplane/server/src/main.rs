@@ -17,7 +17,10 @@ use crate::{
     app_state::AppState,
     config::Settings,
     features::{
-        access_requests::{DefaultAccessRequestService, access_request_router},
+        access_requests::{
+            BlastRadiusEvaluator, DefaultAccessRequestService, DisabledBlastRadiusEvaluator,
+            RigBlastRadiusEvaluator, access_request_router,
+        },
         auth::{AuthService, auth_router, authorize},
         computes::{DefaultComputeService, compute_router},
         data_contracts::{DefaultDataContractService, data_contract_router},
@@ -36,6 +39,7 @@ use crate::{
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    install_crypto_provider().context("failed to install rustls crypto provider")?;
     init_tracing();
 
     let settings = Settings::load().context("failed to load configuration")?;
@@ -68,11 +72,20 @@ async fn main() -> anyhow::Result<()> {
         HttpUnityCatalog::new(&settings.unity_catalog)
             .context("failed to configure Unity Catalog client")?,
     );
+    let blast_radius: Arc<dyn BlastRadiusEvaluator> = if settings.blast_radius.enabled {
+        Arc::new(
+            RigBlastRadiusEvaluator::new(&settings.blast_radius, unity_catalog.clone())
+                .context("failed to configure blast-radius evaluator")?,
+        )
+    } else {
+        Arc::new(DisabledBlastRadiusEvaluator)
+    };
 
     let state = AppState {
         access_requests: Arc::new(DefaultAccessRequestService::new(
             pool.clone(),
             unity_catalog.clone(),
+            blast_radius,
         )),
         data_contracts: Arc::new(DefaultDataContractService::new(
             pool.clone(),
@@ -135,6 +148,15 @@ async fn main() -> anyhow::Result<()> {
         .context("server failed")?;
     tracing::info!("control plane server stopped");
 
+    Ok(())
+}
+
+fn install_crypto_provider() -> anyhow::Result<()> {
+    if rustls::crypto::CryptoProvider::get_default().is_none() {
+        rustls::crypto::ring::default_provider()
+            .install_default()
+            .map_err(|_| anyhow::anyhow!("a rustls crypto provider was installed concurrently"))?;
+    }
     Ok(())
 }
 

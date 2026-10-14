@@ -30,8 +30,9 @@ pub struct CreateAccessRequestParams<
     T14: crate::JsonSql,
     T15: crate::JsonSql,
     T16: crate::StringSql,
-    T17: crate::StringSql,
+    T17: crate::JsonSql,
     T18: crate::StringSql,
+    T19: crate::StringSql,
 > {
     pub template_id: T1,
     pub template_version: i32,
@@ -50,10 +51,11 @@ pub struct CreateAccessRequestParams<
     pub contract_snapshot: T14,
     pub contract_evaluations: T15,
     pub contract_evaluation_status: T16,
-    pub reason: T17,
+    pub blast_radius: T17,
+    pub reason: T18,
     pub auto_approve: bool,
     pub requested_duration_seconds: i64,
-    pub idempotency_key: T18,
+    pub idempotency_key: T19,
 }
 #[derive(Debug)]
 pub struct GetActiveContractForAccessRequestParams<
@@ -337,6 +339,8 @@ pub struct ListAccessRequests {
     pub target_securable_type: String,
     pub target_full_name: String,
     pub reason: String,
+    pub blast_radius: serde_json::Value,
+    pub blast_radius_evaluated_at: String,
     pub status: String,
     pub requested_duration_seconds: i64,
     pub submitted_at: String,
@@ -355,6 +359,8 @@ pub struct ListAccessRequestsBorrowed<'a> {
     pub target_securable_type: &'a str,
     pub target_full_name: &'a str,
     pub reason: &'a str,
+    pub blast_radius: postgres_types::Json<&'a serde_json::value::RawValue>,
+    pub blast_radius_evaluated_at: &'a str,
     pub status: &'a str,
     pub requested_duration_seconds: i64,
     pub submitted_at: &'a str,
@@ -375,6 +381,8 @@ impl<'a> From<ListAccessRequestsBorrowed<'a>> for ListAccessRequests {
             target_securable_type,
             target_full_name,
             reason,
+            blast_radius,
+            blast_radius_evaluated_at,
             status,
             requested_duration_seconds,
             submitted_at,
@@ -394,6 +402,8 @@ impl<'a> From<ListAccessRequestsBorrowed<'a>> for ListAccessRequests {
             target_securable_type: target_securable_type.into(),
             target_full_name: target_full_name.into(),
             reason: reason.into(),
+            blast_radius: serde_json::from_str(blast_radius.0.get()).unwrap(),
+            blast_radius_evaluated_at: blast_radius_evaluated_at.into(),
             status: status.into(),
             requested_duration_seconds,
             submitted_at: submitted_at.into(),
@@ -472,6 +482,8 @@ pub struct GetAccessRequest {
     pub contract_evaluations: serde_json::Value,
     pub contract_evaluation_status: String,
     pub contract_evaluated_at: String,
+    pub blast_radius: serde_json::Value,
+    pub blast_radius_evaluated_at: String,
     pub reason: String,
     pub status: String,
     pub requested_duration_seconds: i64,
@@ -502,6 +514,8 @@ pub struct GetAccessRequestBorrowed<'a> {
     pub contract_evaluations: postgres_types::Json<&'a serde_json::value::RawValue>,
     pub contract_evaluation_status: &'a str,
     pub contract_evaluated_at: &'a str,
+    pub blast_radius: postgres_types::Json<&'a serde_json::value::RawValue>,
+    pub blast_radius_evaluated_at: &'a str,
     pub reason: &'a str,
     pub status: &'a str,
     pub requested_duration_seconds: i64,
@@ -534,6 +548,8 @@ impl<'a> From<GetAccessRequestBorrowed<'a>> for GetAccessRequest {
             contract_evaluations,
             contract_evaluation_status,
             contract_evaluated_at,
+            blast_radius,
+            blast_radius_evaluated_at,
             reason,
             status,
             requested_duration_seconds,
@@ -565,6 +581,8 @@ impl<'a> From<GetAccessRequestBorrowed<'a>> for GetAccessRequest {
             contract_evaluations: serde_json::from_str(contract_evaluations.0.get()).unwrap(),
             contract_evaluation_status: contract_evaluation_status.into(),
             contract_evaluated_at: contract_evaluated_at.into(),
+            blast_radius: serde_json::from_str(blast_radius.0.get()).unwrap(),
+            blast_radius_evaluated_at: blast_radius_evaluated_at.into(),
             reason: reason.into(),
             status: status.into(),
             requested_duration_seconds,
@@ -2039,7 +2057,7 @@ impl<
 pub struct CreateAccessRequestStmt(&'static str, Option<tokio_postgres::Statement>);
 pub fn create_access_request() -> CreateAccessRequestStmt {
     CreateAccessRequestStmt(
-        "INSERT INTO access_requests ( template_id, template_version, template_name, approval_strategy, requested_by, requested_for, routed_for_team, target_securable_type, target_full_name, contract_id, contract_version, contract_document_hash, purpose_code, consumer_context, contract_snapshot, contract_evaluations, contract_evaluation_status, contract_evaluated_at, reason, status, requested_duration_seconds, idempotency_key, decided_by, decided_at, decision_comment, access_expires_at ) VALUES ( NULLIF($1::text, ''), CASE WHEN $1::text = '' THEN NULL ELSE $2::integer END, $3::text, $4::text, $5::text, $6::text, $7::text, $8::text, $9::text, NULLIF($10::text, ''), NULLIF($11::text, ''), NULLIF($12::text, ''), NULLIF($13::text, ''), $14, $15, $16, $17::text, CASE WHEN $10::text = '' THEN NULL ELSE NOW() END, $18::text, CASE WHEN $19::boolean THEN 'APPROVED' ELSE 'AWAITING_APPROVAL' END, $20::bigint, NULLIF($21::text, ''), CASE WHEN $19::boolean THEN 'system:auto-approve' END, CASE WHEN $19::boolean THEN NOW() END, CASE WHEN $19::boolean THEN 'Automatically approved by policy template' END, CASE WHEN $19::boolean THEN NOW() + ($20::bigint * INTERVAL '1 second') END ) RETURNING id",
+        "INSERT INTO access_requests ( template_id, template_version, template_name, approval_strategy, requested_by, requested_for, routed_for_team, target_securable_type, target_full_name, contract_id, contract_version, contract_document_hash, purpose_code, consumer_context, contract_snapshot, contract_evaluations, contract_evaluation_status, contract_evaluated_at, blast_radius, blast_radius_evaluated_at, reason, status, requested_duration_seconds, idempotency_key, decided_by, decided_at, decision_comment, access_expires_at ) VALUES ( NULLIF($1::text, ''), CASE WHEN $1::text = '' THEN NULL ELSE $2::integer END, $3::text, $4::text, $5::text, $6::text, $7::text, $8::text, $9::text, NULLIF($10::text, ''), NULLIF($11::text, ''), NULLIF($12::text, ''), NULLIF($13::text, ''), $14, $15, $16, $17::text, CASE WHEN $10::text = '' THEN NULL ELSE NOW() END, $18, CASE WHEN ($18::jsonb)->>'status' = 'COMPLETED' THEN NOW() END, $19::text, CASE WHEN $20::boolean THEN 'APPROVED' ELSE 'AWAITING_APPROVAL' END, $21::bigint, NULLIF($22::text, ''), CASE WHEN $20::boolean THEN 'system:auto-approve' END, CASE WHEN $20::boolean THEN NOW() END, CASE WHEN $20::boolean THEN 'Automatically approved by policy template' END, CASE WHEN $20::boolean THEN NOW() + ($21::bigint * INTERVAL '1 second') END ) RETURNING id",
         None,
     )
 }
@@ -2072,8 +2090,9 @@ impl CreateAccessRequestStmt {
         T14: crate::JsonSql,
         T15: crate::JsonSql,
         T16: crate::StringSql,
-        T17: crate::StringSql,
+        T17: crate::JsonSql,
         T18: crate::StringSql,
+        T19: crate::StringSql,
     >(
         &'s self,
         client: &'c C,
@@ -2094,11 +2113,12 @@ impl CreateAccessRequestStmt {
         contract_snapshot: &'a T14,
         contract_evaluations: &'a T15,
         contract_evaluation_status: &'a T16,
-        reason: &'a T17,
+        blast_radius: &'a T17,
+        reason: &'a T18,
         auto_approve: &'a bool,
         requested_duration_seconds: &'a i64,
-        idempotency_key: &'a T18,
-    ) -> StringQuery<'c, 'a, 's, C, String, 21> {
+        idempotency_key: &'a T19,
+    ) -> StringQuery<'c, 'a, 's, C, String, 22> {
         StringQuery {
             client,
             params: [
@@ -2119,6 +2139,7 @@ impl CreateAccessRequestStmt {
                 contract_snapshot,
                 contract_evaluations,
                 contract_evaluation_status,
+                blast_radius,
                 reason,
                 auto_approve,
                 requested_duration_seconds,
@@ -2152,8 +2173,9 @@ impl<
     T14: crate::JsonSql,
     T15: crate::JsonSql,
     T16: crate::StringSql,
-    T17: crate::StringSql,
+    T17: crate::JsonSql,
     T18: crate::StringSql,
+    T19: crate::StringSql,
 >
     crate::client::async_::Params<
         'c,
@@ -2178,8 +2200,9 @@ impl<
             T16,
             T17,
             T18,
+            T19,
         >,
-        StringQuery<'c, 'a, 's, C, String, 21>,
+        StringQuery<'c, 'a, 's, C, String, 22>,
         C,
     > for CreateAccessRequestStmt
 {
@@ -2205,8 +2228,9 @@ impl<
             T16,
             T17,
             T18,
+            T19,
         >,
-    ) -> StringQuery<'c, 'a, 's, C, String, 21> {
+    ) -> StringQuery<'c, 'a, 's, C, String, 22> {
         self.bind(
             client,
             &params.template_id,
@@ -2226,6 +2250,7 @@ impl<
             &params.contract_snapshot,
             &params.contract_evaluations,
             &params.contract_evaluation_status,
+            &params.blast_radius,
             &params.reason,
             &params.auto_approve,
             &params.requested_duration_seconds,
@@ -2811,7 +2836,7 @@ impl<
 pub struct ListAccessRequestsStmt(&'static str, Option<tokio_postgres::Statement>);
 pub fn list_access_requests() -> ListAccessRequestsStmt {
     ListAccessRequestsStmt(
-        "SELECT requests.id, COALESCE(requests.template_id, '') AS template_id, COALESCE(requests.template_version, 0) AS template_version, requests.template_name, requests.requested_by, requests.requested_for, COALESCE(requests.routed_for_team, '') AS routed_for_team, requests.target_securable_type, requests.target_full_name, requests.reason, requests.status, requests.requested_duration_seconds, requests.submitted_at::text AS submitted_at, COALESCE(requests.decided_by, '') AS decided_by, COALESCE(requests.decided_at::text, '') AS decided_at, COALESCE(requests.decision_comment, '') AS decision_comment FROM access_requests requests WHERE ($1::text = '' OR requests.status = $1::text) AND ($2::text = '' OR requests.requested_by = $2::text) AND ($3::text = '' OR requests.requested_for = $3::text) AND ( $4::text = '' OR EXISTS ( SELECT 1 FROM access_request_approval_teams approval WHERE approval.request_id = requests.id AND approval.team = $4::text ) ) ORDER BY requests.submitted_at DESC, requests.id",
+        "SELECT requests.id, COALESCE(requests.template_id, '') AS template_id, COALESCE(requests.template_version, 0) AS template_version, requests.template_name, requests.requested_by, requests.requested_for, COALESCE(requests.routed_for_team, '') AS routed_for_team, requests.target_securable_type, requests.target_full_name, requests.reason, requests.blast_radius, COALESCE(requests.blast_radius_evaluated_at::text, '') AS blast_radius_evaluated_at, requests.status, requests.requested_duration_seconds, requests.submitted_at::text AS submitted_at, COALESCE(requests.decided_by, '') AS decided_by, COALESCE(requests.decided_at::text, '') AS decided_at, COALESCE(requests.decision_comment, '') AS decision_comment FROM access_requests requests WHERE ($1::text = '' OR requests.status = $1::text) AND ($2::text = '' OR requests.requested_by = $2::text) AND ($3::text = '' OR requests.requested_for = $3::text) AND ( $4::text = '' OR EXISTS ( SELECT 1 FROM access_request_approval_teams approval WHERE approval.request_id = requests.id AND approval.team = $4::text ) ) ORDER BY requests.submitted_at DESC, requests.id",
         None,
     )
 }
@@ -2859,12 +2884,14 @@ impl ListAccessRequestsStmt {
                     target_securable_type: row.try_get(7)?,
                     target_full_name: row.try_get(8)?,
                     reason: row.try_get(9)?,
-                    status: row.try_get(10)?,
-                    requested_duration_seconds: row.try_get(11)?,
-                    submitted_at: row.try_get(12)?,
-                    decided_by: row.try_get(13)?,
-                    decided_at: row.try_get(14)?,
-                    decision_comment: row.try_get(15)?,
+                    blast_radius: row.try_get(10)?,
+                    blast_radius_evaluated_at: row.try_get(11)?,
+                    status: row.try_get(12)?,
+                    requested_duration_seconds: row.try_get(13)?,
+                    submitted_at: row.try_get(14)?,
+                    decided_by: row.try_get(15)?,
+                    decided_at: row.try_get(16)?,
+                    decision_comment: row.try_get(17)?,
                 })
             },
             mapper: |it| ListAccessRequests::from(it),
@@ -3315,7 +3342,7 @@ impl<
 pub struct ExpireAccessRequestStmt(&'static str, Option<tokio_postgres::Statement>);
 pub fn expire_access_request() -> ExpireAccessRequestStmt {
     ExpireAccessRequestStmt(
-        "UPDATE access_requests SET status = 'EXPIRED' WHERE id = $1::text AND status = 'FULFILLED'",
+        "WITH expired AS ( UPDATE access_requests SET status = 'EXPIRED' WHERE id = $1::text AND status = 'FULFILLED' RETURNING id ), event AS ( INSERT INTO access_request_events (request_id, event_type, actor, comment) SELECT id, 'EXPIRED', 'system:expiry', 'Requested access duration elapsed; Unity Catalog grants revoked' FROM expired RETURNING request_id ) SELECT request_id FROM event",
         None,
     )
 }
@@ -3327,12 +3354,19 @@ impl ExpireAccessRequestStmt {
         self.1 = Some(client.prepare(self.0).await?);
         Ok(self)
     }
-    pub async fn bind<'c, 'a, 's, C: GenericClient, T1: crate::StringSql>(
+    pub fn bind<'c, 'a, 's, C: GenericClient, T1: crate::StringSql>(
         &'s self,
         client: &'c C,
         request_id: &'a T1,
-    ) -> Result<u64, tokio_postgres::Error> {
-        client.execute(self.0, &[request_id]).await
+    ) -> StringQuery<'c, 'a, 's, C, String, 1> {
+        StringQuery {
+            client,
+            params: [request_id],
+            query: self.0,
+            cached: self.1.as_ref(),
+            extractor: |row| Ok(row.try_get(0)?),
+            mapper: |it| it.into(),
+        }
     }
 }
 pub struct ExpireUnfulfilledAccessRequestsStmt(&'static str, Option<tokio_postgres::Statement>);
@@ -3367,7 +3401,7 @@ impl ExpireUnfulfilledAccessRequestsStmt {
 pub struct GetAccessRequestStmt(&'static str, Option<tokio_postgres::Statement>);
 pub fn get_access_request() -> GetAccessRequestStmt {
     GetAccessRequestStmt(
-        "SELECT requests.id, COALESCE(requests.template_id, '') AS template_id, COALESCE(requests.template_version, 0) AS template_version, requests.template_name, requests.approval_strategy, requests.requested_by, requests.requested_for, COALESCE(requests.routed_for_team, '') AS routed_for_team, requests.target_securable_type, requests.target_full_name, COALESCE(requests.contract_id, '') AS contract_id, COALESCE(requests.contract_version, '') AS contract_version, COALESCE(requests.contract_document_hash, '') AS contract_document_hash, COALESCE(requests.purpose_code, '') AS purpose_code, requests.consumer_context, requests.contract_snapshot, requests.contract_evaluations, requests.contract_evaluation_status, COALESCE(requests.contract_evaluated_at::text, '') AS contract_evaluated_at, requests.reason, requests.status, requests.requested_duration_seconds, requests.submitted_at::text AS submitted_at, COALESCE(requests.decided_by, '') AS decided_by, COALESCE(requests.decided_at::text, '') AS decided_at, COALESCE(requests.decision_comment, '') AS decision_comment, COALESCE(requests.fulfilled_at::text, '') AS fulfilled_at, COALESCE(requests.access_expires_at::text, '') AS access_expires_at FROM access_requests requests WHERE requests.id = $1::text",
+        "SELECT requests.id, COALESCE(requests.template_id, '') AS template_id, COALESCE(requests.template_version, 0) AS template_version, requests.template_name, requests.approval_strategy, requests.requested_by, requests.requested_for, COALESCE(requests.routed_for_team, '') AS routed_for_team, requests.target_securable_type, requests.target_full_name, COALESCE(requests.contract_id, '') AS contract_id, COALESCE(requests.contract_version, '') AS contract_version, COALESCE(requests.contract_document_hash, '') AS contract_document_hash, COALESCE(requests.purpose_code, '') AS purpose_code, requests.consumer_context, requests.contract_snapshot, requests.contract_evaluations, requests.contract_evaluation_status, COALESCE(requests.contract_evaluated_at::text, '') AS contract_evaluated_at, requests.blast_radius, COALESCE(requests.blast_radius_evaluated_at::text, '') AS blast_radius_evaluated_at, requests.reason, requests.status, requests.requested_duration_seconds, requests.submitted_at::text AS submitted_at, COALESCE(requests.decided_by, '') AS decided_by, COALESCE(requests.decided_at::text, '') AS decided_at, COALESCE(requests.decision_comment, '') AS decision_comment, COALESCE(requests.fulfilled_at::text, '') AS fulfilled_at, COALESCE(requests.access_expires_at::text, '') AS access_expires_at FROM access_requests requests WHERE requests.id = $1::text",
         None,
     )
 }
@@ -3412,15 +3446,17 @@ impl GetAccessRequestStmt {
                     contract_evaluations: row.try_get(16)?,
                     contract_evaluation_status: row.try_get(17)?,
                     contract_evaluated_at: row.try_get(18)?,
-                    reason: row.try_get(19)?,
-                    status: row.try_get(20)?,
-                    requested_duration_seconds: row.try_get(21)?,
-                    submitted_at: row.try_get(22)?,
-                    decided_by: row.try_get(23)?,
-                    decided_at: row.try_get(24)?,
-                    decision_comment: row.try_get(25)?,
-                    fulfilled_at: row.try_get(26)?,
-                    access_expires_at: row.try_get(27)?,
+                    blast_radius: row.try_get(19)?,
+                    blast_radius_evaluated_at: row.try_get(20)?,
+                    reason: row.try_get(21)?,
+                    status: row.try_get(22)?,
+                    requested_duration_seconds: row.try_get(23)?,
+                    submitted_at: row.try_get(24)?,
+                    decided_by: row.try_get(25)?,
+                    decided_at: row.try_get(26)?,
+                    decision_comment: row.try_get(27)?,
+                    fulfilled_at: row.try_get(28)?,
+                    access_expires_at: row.try_get(29)?,
                 })
             },
             mapper: |it| GetAccessRequest::from(it),

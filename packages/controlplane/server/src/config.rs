@@ -21,6 +21,24 @@ pub struct Settings {
     pub signoz: SignozSettings,
     #[serde(default)]
     pub compute: ComputeSettings,
+    #[serde(default)]
+    pub blast_radius: BlastRadiusSettings,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct BlastRadiusSettings {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default)]
+    pub api_key: String,
+    #[serde(default)]
+    pub base_url: String,
+    #[serde(default)]
+    pub model: String,
+    #[serde(default = "default_blast_radius_timeout_ms")]
+    pub timeout_ms: u64,
+    #[serde(default = "default_dagster_graphql_url")]
+    pub dagster_graphql_url: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -225,6 +243,27 @@ impl Default for ComputeSettings {
             label_selector: default_compute_label_selector(),
         }
     }
+}
+
+impl Default for BlastRadiusSettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            api_key: String::new(),
+            base_url: String::new(),
+            model: String::new(),
+            timeout_ms: default_blast_radius_timeout_ms(),
+            dagster_graphql_url: default_dagster_graphql_url(),
+        }
+    }
+}
+
+fn default_blast_radius_timeout_ms() -> u64 {
+    30_000
+}
+
+fn default_dagster_graphql_url() -> String {
+    "http://dagster-dagster-webserver.dagster.svc.cluster.local/graphql".to_owned()
 }
 
 fn default_host() -> IpAddr {

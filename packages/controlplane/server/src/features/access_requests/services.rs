@@ -10,6 +10,7 @@ use tokio_postgres::error::SqlState;
 use crate::error::AppError;
 use crate::infrastructure::unity_catalog::UnityCatalog;
 
+use super::blast_radius::{BlastRadiusEvaluator, BlastRadiusInput};
 use super::dtos::{
     AccessRequest, AccessRequestSummary, CancelAccessRequest, ConsumerContext, CreateAccessRequest,
     ListAccessRequestsRequest, ListAccessRequestsResponse, RequestApprovalTeam,
@@ -113,6 +114,10 @@ fn privileges_for(securable_type: &str) -> &'static [&'static str] {
     }
 }
 
+fn needs_revocation(fulfillment_status: &str) -> bool {
+    matches!(fulfillment_status, "GRANTING" | "GRANTED" | "UNCHANGED")
+}
+
 #[async_trait]
 pub trait AccessRequestService: Send + Sync {
     async fn create_access_request(
@@ -149,13 +154,19 @@ pub trait AccessRequestService: Send + Sync {
 pub struct DefaultAccessRequestService {
     pool: Pool,
     unity_catalog: Arc<dyn UnityCatalog>,
+    blast_radius: Arc<dyn BlastRadiusEvaluator>,
 }
 
 impl DefaultAccessRequestService {
-    pub fn new(pool: Pool, unity_catalog: Arc<dyn UnityCatalog>) -> Self {
+    pub fn new(
+        pool: Pool,
+        unity_catalog: Arc<dyn UnityCatalog>,
+        blast_radius: Arc<dyn BlastRadiusEvaluator>,
+    ) -> Self {
         Self {
             pool,
             unity_catalog,
+            blast_radius,
         }
     }
 
@@ -412,17 +423,30 @@ impl DefaultAccessRequestService {
         request_id: &str,
         requested_for: &str,
     ) -> Result<(), AppError> {
-        let client = self.pool.get().await?;
+        let mut client = self.pool.get().await?;
+        let transaction = client.transaction().await?;
+        queries::lock_access_request()
+            .bind(&transaction, &request_id)
+            .opt()
+            .await?
+            .ok_or_else(|| AppError::NotFound(format!("access request {request_id}")))?;
         let grants = queries::list_access_request_grants()
-            .bind(&client, &request_id)
+            .bind(&transaction, &request_id)
             .all()
             .await?;
+        let has_pending_revocation = grants
+            .iter()
+            .any(|grant| needs_revocation(&grant.fulfillment_status));
+        if !has_pending_revocation {
+            transaction.commit().await?;
+            return Ok(());
+        }
 
         for grant in &grants {
             if matches!(grant.fulfillment_status.as_str(), "GRANTING" | "GRANTED") {
                 let still_required = queries::has_other_active_managed_grant()
                     .bind(
-                        &client,
+                        &transaction,
                         &request_id,
                         &requested_for,
                         &grant.securable_type,
@@ -448,7 +472,7 @@ impl DefaultAccessRequestService {
         for grant in &grants {
             queries::set_access_request_grant_status()
                 .bind(
-                    &client,
+                    &transaction,
                     &"REVOKED",
                     &"",
                     &request_id,
@@ -460,13 +484,14 @@ impl DefaultAccessRequestService {
         }
         queries::create_access_request_event()
             .bind(
-                &client,
+                &transaction,
                 &request_id,
                 &"ACCESS_REVOKED",
                 &"system:unity-catalog",
                 &"Control-plane-managed Unity Catalog grants revoked",
             )
             .await?;
+        transaction.commit().await?;
         record_access_request_event(request_id, "ACCESS_REVOKED", "system:unity-catalog");
         Ok(())
     }
@@ -479,19 +504,13 @@ impl DefaultAccessRequestService {
         self.revoke_access_request_grants(request_id, requested_for)
             .await?;
         let client = self.pool.get().await?;
-        queries::expire_access_request()
+        let expired_request_id = queries::expire_access_request()
             .bind(&client, &request_id)
+            .opt()
             .await?;
-        queries::create_access_request_event()
-            .bind(
-                &client,
-                &request_id,
-                &"EXPIRED",
-                &"system:expiry",
-                &"Requested access duration elapsed; Unity Catalog grants revoked",
-            )
-            .await?;
-        record_access_request_event(request_id, "EXPIRED", "system:expiry");
+        if let Some(expired_request_id) = expired_request_id {
+            record_access_request_event(&expired_request_id, "EXPIRED", "system:expiry");
+        }
         Ok(())
     }
 
@@ -652,10 +671,9 @@ impl AccessRequestService for DefaultAccessRequestService {
         validate_create_request(&request)?;
 
         let mut client = self.pool.get().await?;
-        let transaction = client.transaction().await?;
         let template = queries::resolve_request_policy()
             .bind(
-                &transaction,
+                &client,
                 &request.routed_for_team,
                 &request.target_securable_type,
                 &request.target_full_name,
@@ -667,7 +685,7 @@ impl AccessRequestService for DefaultAccessRequestService {
             let (catalog_name, schema_name, table_name) =
                 split_table_name(&request.target_full_name)?;
             let contract = queries::get_active_contract_for_access_request()
-                .bind(&transaction, &catalog_name, &schema_name, &table_name)
+                .bind(&client, &catalog_name, &schema_name, &table_name)
                 .opt()
                 .await?
                 .ok_or_else(|| {
@@ -751,7 +769,22 @@ impl AccessRequestService for DefaultAccessRequestService {
             .as_ref()
             .map(|contract| contract.status)
             .unwrap_or("NOT_APPLICABLE");
+        let blast_radius = self
+            .blast_radius
+            .evaluate(BlastRadiusInput {
+                request: &request,
+                contract: evaluated_contract
+                    .as_ref()
+                    .map(|contract| &contract.snapshot),
+                contract_evaluations: evaluated_contract
+                    .as_ref()
+                    .map(|contract| &contract.evaluations),
+            })
+            .await
+            .map_err(|error| AppError::BlastRadius(error.to_string()))?;
+        let blast_radius_json = serde_json::to_value(&blast_radius)?;
         let purpose_code = request.purpose_code.as_deref().unwrap_or_default();
+        let transaction = client.transaction().await?;
         let request_id = queries::create_access_request()
             .bind(
                 &transaction,
@@ -772,6 +805,7 @@ impl AccessRequestService for DefaultAccessRequestService {
                 &contract_snapshot,
                 &contract_evaluations,
                 &contract_evaluation_status,
+                &blast_radius_json,
                 &reason,
                 &auto_approve,
                 &requested_duration,
@@ -877,6 +911,26 @@ impl AccessRequestService for DefaultAccessRequestService {
                 )
                 .await?;
         }
+        let blast_radius_event = if blast_radius.status == "COMPLETED" {
+            "BLAST_RADIUS_EVALUATED"
+        } else {
+            "BLAST_RADIUS_SKIPPED"
+        };
+        queries::create_access_request_event()
+            .bind(
+                &transaction,
+                &request_id,
+                &blast_radius_event,
+                &"system:blast-radius-agent",
+                &format!(
+                    "{} risk (score {}), recommendation {}: {}",
+                    blast_radius.risk_level,
+                    blast_radius.risk_score,
+                    blast_radius.recommendation,
+                    blast_radius.summary
+                ),
+            )
+            .await?;
         if auto_approve {
             queries::create_access_request_event()
                 .bind(
@@ -898,6 +952,7 @@ impl AccessRequestService for DefaultAccessRequestService {
                 &request.requested_by,
             );
         }
+        record_access_request_event(&request_id, blast_radius_event, "system:blast-radius-agent");
         if auto_approve {
             record_access_request_event(&request_id, "APPROVED", "system:auto-approve");
         }
@@ -1164,6 +1219,8 @@ async fn load_access_request(client: &Object, request_id: &str) -> Result<Access
             snapshot: row.contract_snapshot,
             evaluations: row.contract_evaluations,
         }),
+        blast_radius: row.blast_radius,
+        blast_radius_evaluated_at: non_empty(row.blast_radius_evaluated_at),
         purpose_code: non_empty(row.purpose_code),
         consumer_context: row.consumer_context,
         reason: row.reason,
@@ -1195,6 +1252,8 @@ fn summary_from_row(row: queries::ListAccessRequests) -> AccessRequestSummary {
         target_securable_type: row.target_securable_type,
         target_full_name: row.target_full_name,
         reason: row.reason,
+        blast_radius: row.blast_radius,
+        blast_radius_evaluated_at: non_empty(row.blast_radius_evaluated_at),
         status: row.status,
         requested_duration_seconds: row.requested_duration_seconds,
         submitted_at: row.submitted_at,
@@ -1530,6 +1589,16 @@ mod tests {
         assert!(!can_cancel_request("APPROVED"));
         assert!(!can_cancel_request("FULFILLED"));
         assert!(!can_cancel_request("REJECTED"));
+    }
+
+    #[test]
+    fn completed_revocation_is_not_repeated() {
+        for status in ["GRANTING", "GRANTED", "UNCHANGED"] {
+            assert!(needs_revocation(status));
+        }
+        for status in ["PENDING", "FAILED", "REVOKED"] {
+            assert!(!needs_revocation(status));
+        }
     }
 
     #[test]

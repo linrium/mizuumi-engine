@@ -38,6 +38,8 @@ INSERT INTO access_requests (
     contract_evaluations,
     contract_evaluation_status,
     contract_evaluated_at,
+    blast_radius,
+    blast_radius_evaluated_at,
     reason,
     status,
     requested_duration_seconds,
@@ -66,6 +68,8 @@ VALUES (
     :contract_evaluations,
     :contract_evaluation_status::text,
     CASE WHEN :contract_id::text = '' THEN NULL ELSE NOW() END,
+    :blast_radius,
+    CASE WHEN (:blast_radius::jsonb)->>'status' = 'COMPLETED' THEN NOW() END,
     :reason::text,
     CASE WHEN :auto_approve::boolean THEN 'APPROVED' ELSE 'AWAITING_APPROVAL' END,
     :requested_duration_seconds::bigint,
@@ -218,6 +222,8 @@ SELECT
     requests.target_securable_type,
     requests.target_full_name,
     requests.reason,
+    requests.blast_radius,
+    COALESCE(requests.blast_radius_evaluated_at::text, '') AS blast_radius_evaluated_at,
     requests.status,
     requests.requested_duration_seconds,
     requests.submitted_at::text AS submitted_at,
@@ -314,10 +320,24 @@ SELECT EXISTS (
 ) AS active;
 
 --! expire_access_request
-UPDATE access_requests
-SET status = 'EXPIRED'
-WHERE id = :request_id::text
-  AND status = 'FULFILLED';
+WITH expired AS (
+    UPDATE access_requests
+    SET status = 'EXPIRED'
+    WHERE id = :request_id::text
+      AND status = 'FULFILLED'
+    RETURNING id
+), event AS (
+    INSERT INTO access_request_events (request_id, event_type, actor, comment)
+    SELECT
+        id,
+        'EXPIRED',
+        'system:expiry',
+        'Requested access duration elapsed; Unity Catalog grants revoked'
+    FROM expired
+    RETURNING request_id
+)
+SELECT request_id
+FROM event;
 
 --! expire_unfulfilled_access_requests
 WITH expired AS (
@@ -357,6 +377,8 @@ SELECT
     requests.contract_evaluations,
     requests.contract_evaluation_status,
     COALESCE(requests.contract_evaluated_at::text, '') AS contract_evaluated_at,
+    requests.blast_radius,
+    COALESCE(requests.blast_radius_evaluated_at::text, '') AS blast_radius_evaluated_at,
     requests.reason,
     requests.status,
     requests.requested_duration_seconds,

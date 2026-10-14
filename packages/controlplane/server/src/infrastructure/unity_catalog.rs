@@ -34,6 +34,12 @@ pub trait UnityCatalog: Send + Sync {
         privilege: &str,
     ) -> Result<bool, UnityCatalogError>;
 
+    async fn get_permissions(
+        &self,
+        securable_type: &str,
+        full_name: &str,
+    ) -> Result<Vec<PrivilegeAssignment>, UnityCatalogError>;
+
     async fn grant(
         &self,
         securable_type: &str,
@@ -250,6 +256,31 @@ impl UnityCatalog for HttpUnityCatalog {
         }))
     }
 
+    async fn get_permissions(
+        &self,
+        securable_type: &str,
+        full_name: &str,
+    ) -> Result<Vec<PrivilegeAssignment>, UnityCatalogError> {
+        let token = self.access_token().await?;
+        let response = self
+            .client
+            .get(self.permissions_url(securable_type, full_name)?)
+            .bearer_auth(token)
+            .send()
+            .await?;
+        let status = response.status();
+        if !status.is_success() {
+            return Err(UnityCatalogError::Response {
+                status: status.as_u16(),
+                body: response.text().await.unwrap_or_default(),
+            });
+        }
+        Ok(response
+            .json::<PermissionsResponse>()
+            .await?
+            .privilege_assignments)
+    }
+
     async fn grant(
         &self,
         securable_type: &str,
@@ -290,11 +321,11 @@ struct PermissionsResponse {
     privilege_assignments: Vec<PrivilegeAssignment>,
 }
 
-#[derive(Deserialize)]
-struct PrivilegeAssignment {
-    principal: String,
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct PrivilegeAssignment {
+    pub principal: String,
     #[serde(default)]
-    privileges: Vec<String>,
+    pub privileges: Vec<String>,
 }
 
 #[derive(Serialize)]

@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct CreateAccessRequest {
     pub requested_by: String,
     pub requested_for: Option<String>,
@@ -74,6 +74,8 @@ pub struct AccessRequestSummary {
     pub target_securable_type: String,
     pub target_full_name: String,
     pub reason: String,
+    pub blast_radius: Value,
+    pub blast_radius_evaluated_at: Option<String>,
     pub status: String,
     pub requested_duration_seconds: i64,
     pub submitted_at: String,
@@ -95,6 +97,8 @@ pub struct AccessRequest {
     pub target_securable_type: String,
     pub target_full_name: String,
     pub contract: Option<RequestContractBinding>,
+    pub blast_radius: Value,
+    pub blast_radius_evaluated_at: Option<String>,
     pub purpose_code: Option<String>,
     pub consumer_context: Value,
     pub reason: String,

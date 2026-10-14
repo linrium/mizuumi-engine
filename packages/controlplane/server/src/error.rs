@@ -36,6 +36,8 @@ pub enum AppError {
     SignozNotConfigured,
     #[error("SigNoz metrics query failed: {0}")]
     Signoz(String),
+    #[error("blast-radius evaluation failed: {0}")]
+    BlastRadius(String),
 }
 
 #[derive(Serialize)]
@@ -59,7 +61,8 @@ impl IntoResponse for AppError {
             AppError::Kube(_)
             | AppError::UnityCatalog(_)
             | AppError::DataQuality(_)
-            | AppError::Signoz(_) => StatusCode::BAD_GATEWAY,
+            | AppError::Signoz(_)
+            | AppError::BlastRadius(_) => StatusCode::BAD_GATEWAY,
         };
         if status.is_server_error() {
             tracing::error!(error = %self, "request failed");

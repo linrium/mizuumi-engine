@@ -11,6 +11,10 @@ skip_image_build="${CONTROLPLANE_SKIP_IMAGE_BUILD:-0}"
 unitycatalog_credentials_secret="${UNITYCATALOG_CREDENTIALS_SECRET:-unitycatalog-credentials}"
 trust_secret="${CONTROLPLANE_TRUST_SECRET:-controlplane-trust}"
 signoz_api_key_secret="${CONTROLPLANE_SIGNOZ_SECRET:-controlplane-signoz}"
+blast_radius_secret="${CONTROLPLANE_BLAST_RADIUS_SECRET:-controlplane-blast-radius}"
+vault_kv_mount="${VAULT_KV_MOUNT:-pi-custom-openai}"
+vault_kv_secret_path="${VAULT_KV_SECRET_PATH:-config}"
+blast_radius_enabled=false
 chart="$repo_root/k8s/controlplane"
 server_dir="$repo_root/packages/controlplane/server"
 
@@ -32,6 +36,11 @@ Environment overrides:
   CONTROLPLANE_TRUST_SECRET       Secret containing the Keycloak CA (default: controlplane-trust)
   CONTROLPLANE_SIGNOZ_SECRET      Secret containing a read-only SigNoz API key
                                   under api-key (default: controlplane-signoz)
+  CONTROLPLANE_BLAST_RADIUS_SECRET Kubernetes secret populated from the Pi KV
+                                  (default: controlplane-blast-radius)
+  VAULT_KV_MOUNT                  OpenAI configuration KV mount
+                                  (default: pi-custom-openai)
+  VAULT_KV_SECRET_PATH            OpenAI configuration KV path (default: config)
 EOF
 }
 
@@ -42,9 +51,20 @@ case "${1:-}" in
     ;;
 esac
 
-for command in kubectl helm; do
+for command in kubectl helm jq; do
   command -v "$command" >/dev/null 2>&1 || { echo "Missing required command: $command" >&2; exit 1; }
 done
+
+if [[ ! "$vault_kv_mount" =~ ^[A-Za-z0-9_-]+$ ]]; then
+  echo "VAULT_KV_MOUNT must contain only letters, numbers, underscores, or hyphens." >&2
+  exit 2
+fi
+if [[ ! "$vault_kv_secret_path" =~ ^[A-Za-z0-9._/-]+$ ]] ||
+   [[ "$vault_kv_secret_path" == /* ]] ||
+   [[ "/$vault_kv_secret_path/" == *"/../"* ]]; then
+  echo "VAULT_KV_SECRET_PATH must be a relative Vault path without '..' segments." >&2
+  exit 2
+fi
 if [[ "$skip_image_build" != 1 ]]; then
   command -v docker >/dev/null 2>&1 || { echo "Missing required command: docker" >&2; exit 1; }
 fi
@@ -102,6 +122,24 @@ kubectl -n "$namespace" create secret generic "$trust_secret" \
   --from-file=keycloak-ca.crt="$keycloak_ca" \
   --dry-run=client -o yaml | kubectl apply -f - >/dev/null
 
+if command -v vault >/dev/null 2>&1 && vault token lookup >/dev/null 2>&1; then
+  if vault_config="$(vault kv get -mount="$vault_kv_mount" -format=json "$vault_kv_secret_path" 2>/dev/null)" &&
+     jq -e '.data.data | (.api_key | type == "string" and length > 0) and (.base_url | type == "string" and length > 0) and (.model | type == "string" and length > 0)' <<<"$vault_config" >/dev/null; then
+    jq \
+      --arg namespace "$namespace" \
+      --arg name "$blast_radius_secret" \
+      '{apiVersion:"v1",kind:"Secret",metadata:{namespace:$namespace,name:$name},type:"Opaque",stringData:{"api-key":.data.data.api_key,"base-url":.data.data.base_url,model:.data.data.model}}' \
+      <<<"$vault_config" |
+      kubectl apply -f - >/dev/null
+    blast_radius_enabled=true
+    unset vault_config
+  else
+    echo "Warning: Vault KV $vault_kv_mount/$vault_kv_secret_path is unavailable or incomplete; LLM blast-radius evaluation is disabled." >&2
+  fi
+else
+  echo "Warning: Vault is not authenticated; LLM blast-radius evaluation is disabled." >&2
+fi
+
 if ! kubectl -n "$namespace" get secret "$signoz_api_key_secret" >/dev/null 2>&1; then
   echo "Warning: $namespace/$signoz_api_key_secret was not found; /api/duck-server/metrics will return 503." >&2
 fi
@@ -113,6 +151,8 @@ helm upgrade --install "$release" "$chart" \
   --set-string "unityCatalog.credentialsSecretName=$unitycatalog_credentials_secret" \
   --set-string "unityCatalog.trustSecretName=$trust_secret" \
   --set-string "signoz.apiKeySecretName=$signoz_api_key_secret" \
+  --set-string "blastRadius.credentialsSecretName=$blast_radius_secret" \
+  --set "blastRadius.enabled=$blast_radius_enabled" \
   --wait --timeout 10m "$@"
 
 server_deployment="$(kubectl -n "$namespace" get deployment \

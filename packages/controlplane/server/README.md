@@ -56,6 +56,23 @@ block submission. Quality state and declared AI use are advisory warnings that d
 auto-approval. Approval and fulfillment recheck that the bound version is still active and in
 sync so a changed contract cannot silently authorize a Unity Catalog grant.
 
+When `[blast_radius].enabled` is true, every submission is evaluated by a Rig agent before it is
+stored. The agent receives all submitted modal fields, the frozen contract and deterministic
+contract checks, Unity Catalog table metadata and current permission assignments, and immediate
+Dagster upstream/downstream lineage. Its validated JSON assessment is returned as `blast_radius`
+on request details and recorded with a `BLAST_RADIUS_EVALUATED` event. The result includes a risk
+level and score, recommendation, factors, affected assets, mitigations, and confidence. It is
+advisory: deterministic contract checks, policy routing, approval quorum, and grant enforcement
+remain authoritative. When enabled, a model timeout, provider failure, or malformed response fails
+submission with `502` so requests cannot silently skip evaluation.
+
+Configure `api_key`, `base_url`, `model`, `timeout_ms`, and `dagster_graphql_url` under
+`[blast_radius]`, or use matching `CONTROLPLANE__BLAST_RADIUS__*` variables. The local deployment
+script reads `api_key`, `base_url`, and `model` from the existing Vault KV v2 secret at
+`pi-custom-openai/config` (overridable with `VAULT_KV_MOUNT` and `VAULT_KV_SECRET_PATH`) and copies
+them into a dedicated Kubernetes Secret. If Vault is not authenticated or the KV is incomplete,
+the deployment keeps blast-radius evaluation disabled and emits a warning.
+
 Unity Catalog synchronization uses a Keycloak client-credentials service account with the
 `unitycatalog-admin` role. Configure `[unity_catalog]` (`url`, `token_url`, `client_id`, and
 `client_secret`) or the equivalent `CONTROLPLANE__UNITY_CATALOG__*` environment variables. The
